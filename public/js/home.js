@@ -1,5 +1,5 @@
 // ============================================
-// 首页 JavaScript - 帖子列表与抽屉设置
+// 工作台交互 - 帖子列表、独立设置页面与登录
 // ============================================
 
 document.addEventListener("DOMContentLoaded", function () {
@@ -677,9 +677,8 @@ document.addEventListener("DOMContentLoaded", function () {
     }));
 
     // 测试连接
-    document.getElementById("testRssBtn")?.addEventListener("click", async () => {
+    document.getElementById("testRssBtn")?.addEventListener("click", pendingClick(async () => {
       const rssUrl = document.getElementById("rssUrl").value.trim();
-      Toast.info("正在测试连接...");
 
       const result = await apiRequest("/api/rss/test-connection", {
         method: "POST",
@@ -693,7 +692,7 @@ document.addEventListener("DOMContentLoaded", function () {
           Toast.error("连接失败：" + result.data.message);
         }
       }
-    });
+    }));
   }
 
   // ============================================
@@ -801,8 +800,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }));
 
-    document.getElementById("testTelegramBtn")?.addEventListener("click", async () => {
-      Toast.info("正在测试连接...");
+    document.getElementById("testTelegramBtn")?.addEventListener("click", pendingClick(async () => {
 
       // 1. 先测试 Bot 连接
       const result = await apiRequest("/api/webhook/test-connection", { method: "POST" });
@@ -814,7 +812,6 @@ document.addEventListener("DOMContentLoaded", function () {
       // 2. 如果 Chat ID 已配置，发送测试消息
       const chatId = document.getElementById("chatId").value.trim();
       if (chatId) {
-        Toast.info("连接成功，正在发送测试消息...");
         const testResult = await apiRequest("/api/push/test-send", {
           method: "POST",
           body: JSON.stringify({ message: "◇ SeekFeed · 推送测试\n\n✓ 连接正常，测试通知已送达。" }),
@@ -827,7 +824,7 @@ document.addEventListener("DOMContentLoaded", function () {
       } else {
         Toast.success("Bot 连接测试成功（未配置 Chat ID，跳过消息测试）");
       }
-    });
+    }));
 
     // 交互模式切换
     document.querySelectorAll('input[name="telegramMode"]').forEach((radio) => {
@@ -846,7 +843,6 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
       }
 
-      Toast.info("正在设置 Webhook...");
       const result = await apiRequest("/api/webhook/setup", {
         method: "POST",
         body: JSON.stringify({ webhook_url: webhookUrl }),
@@ -865,14 +861,13 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }));
 
-    el("disableTelegramBtn").addEventListener("click", async () => {
+    el("disableTelegramBtn").addEventListener("click", pendingClick(async () => {
       const result = await apiRequest("/api/webhook/disable", { method: "POST" });
       if (result?.success) { Toast.success("命令交互已停用"); loadTelegramInteractionStatus(); }
       else Toast.error(result?.message || "停用失败");
-    });
+    }));
     // 清除 Webhook
-    document.getElementById("clearWebhookBtn")?.addEventListener("click", async () => {
-      Toast.info("正在清除 Webhook...");
+    document.getElementById("clearWebhookBtn")?.addEventListener("click", pendingClick(async () => {
       const result = await apiRequest("/api/webhook/clear-webhook", { method: "POST" });
       if (result?.success) {
         Toast.success("Webhook 已清除");
@@ -880,22 +875,20 @@ document.addEventListener("DOMContentLoaded", function () {
       } else {
         Toast.error(result?.message || "清除失败");
       }
-    });
+    }));
 
     // 测试 Webhook 连接
-    document.getElementById("testWebhookBtn")?.addEventListener("click", async () => {
-      Toast.info("正在测试 Webhook 连接...");
+    document.getElementById("testWebhookBtn")?.addEventListener("click", pendingClick(async () => {
       const result = await apiRequest("/api/webhook/test-connection", { method: "POST" });
       if (result?.success) {
         Toast.success("Bot 连接正常");
       } else {
         Toast.error(result?.message || "连接测试失败");
       }
-    });
+    }));
 
     // 启动 Polling
-    document.getElementById("startPollingBtn")?.addEventListener("click", async () => {
-      Toast.info("正在启动 Polling...");
+    document.getElementById("startPollingBtn")?.addEventListener("click", pendingClick(async () => {
       const result = await apiRequest("/api/webhook/start-polling", { method: "POST" });
       if (result?.success) {
         Toast.success("Polling 已启动");
@@ -904,11 +897,10 @@ document.addEventListener("DOMContentLoaded", function () {
       } else {
         Toast.error(result?.message || "启动失败");
       }
-    });
+    }));
 
     // 停止 Polling
-    document.getElementById("stopPollingBtn")?.addEventListener("click", async () => {
-      Toast.info("正在停止 Polling...");
+    document.getElementById("stopPollingBtn")?.addEventListener("click", pendingClick(async () => {
       const result = await apiRequest("/api/webhook/stop-polling", { method: "POST" });
       if (result?.success) {
         Toast.success("Polling 已停止");
@@ -916,7 +908,7 @@ document.addEventListener("DOMContentLoaded", function () {
       } else {
         Toast.error(result?.message || "停止失败");
       }
-    });
+    }));
   }
 
   // ============================================
@@ -1075,10 +1067,13 @@ document.addEventListener("DOMContentLoaded", function () {
       else Toast.error(result?.message || '退出失败');
     });
   }
+  function pendingClick(handler) {
+    return e => window.SeekFeedControls.pending(e.currentTarget, () => handler(e));
+  }
   function pendingSubmit(handler) {
     return e => {
       e.preventDefault();
-      return window.SeekFeedControls.pending(e.target.querySelector('[type="submit"]'), () => handler(e), '保存中…');
+      return window.SeekFeedControls.pending(e.target.querySelector('[type="submit"]'), () => handler(e), e.target.id === 'loginForm' ? '登录中…' : e.target.id === 'addSubForm' ? '添加中…' : '保存中…');
     };
   }
 
