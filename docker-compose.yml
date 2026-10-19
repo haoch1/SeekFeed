@@ -1,0 +1,45 @@
+name: seekfeed
+
+services:
+  seekfeed:
+    image: seekfeed:latest
+    build: .
+    container_name: seekfeed
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3010}:3010"
+    environment:
+      NODE_ENV: production
+      PORT: 3010
+      HOST: 0.0.0.0
+      DATABASE_PATH: /usr/src/app/data/seekfeed.db
+      RSS_CHECK_ENABLED: ${RSS_CHECK_ENABLED:-true}
+      RSS_TIMEOUT: ${RSS_TIMEOUT:-30000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3010}
+    volumes:
+      - seekfeed_data:/usr/src/app/data
+      - seekfeed_logs:/usr/src/app/logs
+    networks:
+      - seekfeed_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  seekfeed_data:
+    name: seekfeed_data
+  seekfeed_logs:
+    name: seekfeed_logs
+
+networks:
+  seekfeed_network:
+    name: seekfeed_network
+    driver: bridge

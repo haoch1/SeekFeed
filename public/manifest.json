@@ -1,0 +1,45 @@
+{
+    "id": "/",
+    "name": "SeekFeed",
+    "short_name": "SeekFeed",
+    "description": "SeekFeed · NodeSeek 新帖监控与 Telegram 消息通知",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#4f46e5",
+    "scope": "/",
+    "lang": "zh-CN",
+    "categories": [
+        "utilities",
+        "productivity",
+        "news"
+    ],
+    "icons": [
+        {
+            "src": "/icons/seekfeed-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "/icons/seekfeed-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "最新帖子",
+            "short_name": "最新帖子",
+            "description": "打开 SeekFeed 控制台",
+            "url": "/",
+            "icons": [
+                {
+                    "src": "/icons/seekfeed-192.png",
+                    "sizes": "192x192"
+                }
+            ]
+        }
+    ]
+}

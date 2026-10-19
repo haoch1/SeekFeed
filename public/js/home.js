@@ -1,0 +1,1120 @@
+// ============================================
+// 首页 JavaScript - 帖子列表与抽屉设置
+// ============================================
+
+document.addEventListener("DOMContentLoaded", function () {
+  const sessionId = localStorage.getItem("sessionId");
+  const isLoggedIn = !!sessionId;
+
+  // 根据登录状态显示/隐藏元素
+  const loginBtn = document.getElementById("loginBtn");
+  const settingsDropdown = document.getElementById("settingsDropdown");
+  const subscribedOnlyChip = document.getElementById("subscribedOnlyChip");
+  const filterSubscription = document.getElementById("filterSubscription");
+  
+  if (isLoggedIn) {
+    // 已登录：显示设置菜单和订阅相关功能，隐藏登录按钮
+    if (loginBtn) loginBtn.style.display = "none";
+    if (settingsDropdown) settingsDropdown.style.display = "block";
+    if (subscribedOnlyChip) subscribedOnlyChip.style.display = "inline-flex";
+    if (filterSubscription) filterSubscription.style.display = "block";
+  } else {
+    // 未登录：显示登录按钮，隐藏设置菜单和订阅相关功能
+    if (loginBtn) loginBtn.style.display = "flex";
+    if (settingsDropdown) settingsDropdown.style.display = "none";
+    if (subscribedOnlyChip) subscribedOnlyChip.style.display = "none";
+    if (filterSubscription) filterSubscription.style.display = "none";
+  }
+
+  // ============================================
+  // Toast 通知系统
+  // ============================================
+  function renderIcon(name) {
+    return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="/icons/ui.svg#${name}"/></svg>`;
+  }
+
+  const Toast = {
+    container: null,
+
+    init() {
+      if (!this.container) {
+        this.container = document.getElementById("toastContainer");
+      }
+    },
+
+    show(message, type = "info", duration = 3000) {
+      this.init();
+      if (!this.container) return;
+
+      const toast = document.createElement("div");
+      toast.className = `toast ${type}`;
+      toast.setAttribute("role", type === "error" ? "alert" : "status");
+
+      const icons = {
+        success: "success",
+        error: "error",
+        warning: "warning",
+        info: "info",
+      };
+
+      toast.innerHTML = `
+        <span class="toast-icon">${renderIcon(icons[type] || icons.info)}</span>
+        <div class="toast-content">
+          <div class="toast-message">${escapeHtml(message)}</div>
+        </div>
+        <button class="toast-close" aria-label="关闭提示">${renderIcon("close")}</button>
+      `;
+
+      this.container.appendChild(toast);
+      while (this.container.children.length > 3) this.container.firstElementChild.remove();
+
+      toast.querySelector(".toast-close").addEventListener("click", () => {
+        this.hide(toast);
+      });
+
+      if (duration > 0) {
+        setTimeout(() => this.hide(toast), duration);
+      }
+
+      return toast;
+    },
+
+    hide(toast) {
+      toast.classList.add("toast-exit");
+      setTimeout(() => toast.remove(), 300);
+    },
+
+    success(message, duration) {
+      return this.show(message, "success", duration);
+    },
+    error(message, duration) {
+      return this.show(message, "error", duration);
+    },
+    warning(message, duration) {
+      return this.show(message, "warning", duration);
+    },
+    info(message, duration) {
+      return this.show(message, "info", duration);
+    },
+  };
+
+  // ============================================
+  // API 请求封装
+  // ============================================
+  async function apiRequest(url, options = {}) {
+    const headers = {
+      "Content-Type": "application/json",
+      ...options.headers,
+    };
+
+    if (sessionId) {
+      headers.Authorization = `Bearer ${sessionId}`;
+    }
+
+    const defaultOptions = { headers };
+
+    try {
+      const response = await fetch(url, { ...options, ...defaultOptions });
+      const result = await response.json();
+
+      if (response.status === 401) {
+        if (sessionId) {
+          localStorage.removeItem("sessionId");
+          window.location.reload();
+        }
+        return null;
+      }
+
+      return result;
+    } catch (error) {
+      if (error.name === "AbortError") return null;
+      console.error("API 请求错误:", error);
+      Toast.error("网络错误，请重试");
+      return null;
+    }
+  }
+
+  // ============================================
+  // 主题切换
+  // ============================================
+  function initTheme() {
+    const savedTheme = localStorage.getItem("theme");
+    if (savedTheme) {
+      document.documentElement.setAttribute("data-theme", savedTheme);
+    } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      document.documentElement.setAttribute("data-theme", "dark");
+    }
+
+    const themeButton = document.getElementById("themeToggleBtn");
+    const updateThemeIcon = () => {
+      if (!themeButton) return;
+      const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+      themeButton.innerHTML = renderIcon(isDark ? "sun" : "moon");
+      themeButton.setAttribute("aria-label", isDark ? "切换到浅色模式" : "切换到暗色模式");
+      themeButton.title = themeButton.getAttribute("aria-label");
+    };
+    updateThemeIcon();
+    themeButton?.addEventListener("click", () => {
+      const currentTheme = document.documentElement.getAttribute("data-theme");
+      const newTheme = currentTheme === "dark" ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", newTheme);
+      localStorage.setItem("theme", newTheme);
+      updateThemeIcon();
+      Toast.info(`已切换到${newTheme === "dark" ? "暗色" : "浅色"}模式`);
+    });
+  }
+
+  // ============================================
+  // 抽屉系统
+  // ============================================
+  const Drawer = {
+    overlay: document.getElementById("drawerOverlay"),
+    activeDrawer: null,
+    opener: null,
+    element(name) { return document.getElementById(name === "login" ? "loginModal" : `${name}Drawer`); },
+    init() {
+      document.querySelectorAll(".drawer").forEach(drawer => {
+        drawer.setAttribute("role", "dialog");
+        drawer.setAttribute("aria-modal", "true");
+        const title = drawer.querySelector(".drawer-title");
+        title.id = `${drawer.id}Title`;
+        drawer.setAttribute("aria-labelledby", title.id);
+        drawer.querySelector(".drawer-close")?.setAttribute("aria-label", "关闭面板");
+      });
+      document.querySelectorAll(".drawer-close").forEach(btn => btn.addEventListener("click", () => this.closeAll()));
+      this.overlay?.addEventListener("click", () => this.closeAll());
+      document.addEventListener("keydown", e => {
+        if (!this.activeDrawer) return;
+        if (e.key === "Escape") this.closeAll();
+        if (e.key !== "Tab") return;
+        const items = [...this.element(this.activeDrawer).querySelectorAll('button, input, select, a[href]')].filter(el => !el.disabled && el.getClientRects().length);
+        const first = items[0], last = items.at(-1);
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+      });
+    },
+    open(name) {
+      const drawer = this.element(name);
+      if (!drawer) return;
+      if (this.activeDrawer) this.closeAll(false);
+      this.opener = document.activeElement;
+      this.activeDrawer = name;
+      document.querySelector(".workspace-shell").inert = true;
+      drawer.style.display = "flex";
+      this.overlay.style.display = "block";
+      requestAnimationFrame(() => { drawer.classList.add("drawer-open"); this.overlay.classList.add("overlay-visible"); });
+      document.body.style.overflow = "hidden";
+      drawer.querySelector(".drawer-close")?.focus();
+    },
+    closeAll(restore = true) {
+      if (!this.activeDrawer) return;
+      const drawer = this.element(this.activeDrawer);
+      drawer.classList.remove("drawer-open");
+      drawer.style.display = "none";
+      this.overlay.style.display = "none";
+      this.overlay.classList.remove("overlay-visible");
+      document.body.style.overflow = "";
+      document.querySelector(".workspace-shell").inert = false;
+      this.activeDrawer = null;
+      if (restore) this.opener?.focus();
+    },
+  };
+
+  // ============================================
+  // 帖子列表管理
+  // ============================================
+  let currentPage = 1;
+  let currentFilters = {};
+  let postsController;
+  let postsRequest = 0;
+  const el = id => document.getElementById(id);
+
+  async function loadPosts(page = 1, filters = currentFilters) {
+    postsController?.abort();
+    postsController = new AbortController();
+    const request = ++postsRequest;
+    currentPage = page;
+    currentFilters = { ...filters };
+    el("postsList").setAttribute("aria-busy", "true");
+    const params = new URLSearchParams({ page: String(page), limit: "10",
+      ...Object.fromEntries(Object.entries(currentFilters).filter(([, value]) => value !== "" && value !== undefined)) });
+    const result = await apiRequest(`/api/posts?${params}`, { signal: postsController.signal });
+    if (request !== postsRequest) return;
+    el("postsList").setAttribute("aria-busy", "false");
+    if (!result?.success) {
+      el("postsList").replaceChildren();
+      el("emptyState").style.display = "block";
+      el("emptyState").querySelector(".empty-title").textContent = "加载失败";
+      el("emptyState").querySelector(".empty-desc").textContent = "请检查网络连接，然后点击刷新重试。";
+      el("pagination").style.display = "none";
+      return;
+    }
+    const { posts, total, page: selected, totalPages } = result.data;
+    if (!posts.length && page > 1 && totalPages > 0) return loadPosts(totalPages);
+    el("postsList").replaceChildren(...posts.map(createPostElement));
+    el("emptyState").style.display = posts.length ? "none" : "block";
+    el("emptyState").querySelector(".empty-title").textContent = "暂无文章";
+    el("emptyState").querySelector(".empty-desc").textContent = Object.values(currentFilters).some(Boolean) ? "没有符合条件的帖子，试试清除筛选。" : "同步 RSS 后，最新帖子会显示在这里。";
+    updatePagination(selected, totalPages, total);
+    if (!isLoggedIn && !Object.values(currentFilters).some(Boolean)) el("overviewTotal").textContent = total.toLocaleString();
+  }
+
+  function createPostElement(post) {
+    const item = document.createElement("article");
+    item.className = "post-card";
+    const href = `https://www.nodeseek.com/post-${Number(post.post_id)}-1`;
+    const tags = [post.sub_keyword1, post.sub_keyword2, post.sub_keyword3].filter(Boolean)
+      .map(word => `<span class="tag tag-blue">${escapeHtml(word)}</span>`).join("");
+    const status = { 0: "待匹配", 1: "待推送", 2: "未命中", 3: "已推送" }[post.push_status] || "未知";
+    const date = new Date(post.pub_date);
+    const time = Number.isNaN(date.getTime()) ? "时间未知" : new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+    item.innerHTML = `<div class="post-content"><div class="post-header"><h3 class="post-title"><a href="${href}" target="_blank" rel="noopener noreferrer">${escapeHtml(post.title)}</a></h3></div><p class="post-memo">${escapeHtml(post.memo || "")}</p><div class="post-meta"><span class="post-category">${escapeHtml(getCategoryName(post.category))}</span><span>${escapeHtml(post.creator)}</span><span class="post-date">${time}</span>${tags ? `<span class="post-sub-tags">${tags}</span>` : ""}</div></div><div class="post-actions"><span class="delivery-status" data-status="${Number(post.push_status)}">${status}</span><a class="icon-btn" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="打开帖子">${renderIcon("external")}</a></div>`;
+    return item;
+  }
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+  }
+  const categoryMap = { daily: "日常", tech: "技术", info: "情报", review: "测评", trade: "交易", carpool: "拼车", promotion: "推广", life: "生活", dev: "Dev", "photo-share": "贴图", expose: "曝光", inside: "内版", sandbox: "沙盒" };
+  function getCategoryName(key) { return categoryMap[key] || key || "未分类"; }
+
+  function updatePagination(page, pages, total) {
+    el("pagination").style.display = total ? "flex" : "none";
+    el("paginationInfo").textContent = `共 ${total} 篇 · 第 ${page} / ${Math.max(pages, 1)} 页`;
+    el("firstPageBtn").disabled = el("prevPageBtn").disabled = page <= 1;
+    el("nextPageBtn").disabled = page >= pages;
+    el("pageNumbers").replaceChildren();
+    const start = Math.max(1, Math.min(page - 1, pages - 2));
+    for (let i = start; i <= Math.min(pages, start + 2); i++) {
+      const button = document.createElement("button");
+      button.className = `page-number ${i === page ? "active" : ""}`;
+      button.textContent = i;
+      button.setAttribute("aria-label", `第 ${i} 页`);
+      if (i === page) button.setAttribute("aria-current", "page");
+      button.addEventListener("click", () => loadPosts(i));
+      el("pageNumbers").append(button);
+    }
+  }
+  function setMatched(active) {
+    if (active) { currentFilters.pushStatusIn = "1,3"; delete currentFilters.pushStatus; el("filterStatus").value = ""; }
+    else delete currentFilters.pushStatusIn;
+    el("subscribedOnlyChip").classList.toggle("active", active);
+    el("subscribedOnlyChip").setAttribute("aria-pressed", String(active));
+    el("navMatched").classList.toggle("selected", active);
+    el("navLatest").classList.toggle("selected", !active);
+    ["navLatest", "navMatched"].forEach(id => el(id).removeAttribute("aria-current"));
+    el(active ? "navMatched" : "navLatest").setAttribute("aria-current", "page");
+    el("pageTitle").textContent = el("breadcrumbCurrent").textContent = active ? "命中订阅" : "最新帖子";
+  }
+  function initFilters() {
+    let searchTimer, creatorTimer;
+    el("searchInput").addEventListener("input", e => {
+      clearTimeout(searchTimer);
+      el("clearSearchBtn").style.display = e.target.value ? "block" : "none";
+      searchTimer = setTimeout(() => { currentFilters.search = e.target.value.trim(); loadPosts(1); }, 300);
+    });
+    el("clearSearchBtn").addEventListener("click", () => {
+      clearTimeout(searchTimer); el("searchInput").value = ""; el("clearSearchBtn").style.display = "none";
+      delete currentFilters.search; loadPosts(1);
+    });
+    el("filterToggleBtn").addEventListener("click", () => {
+      const open = el("filterPanel").style.display === "none";
+      el("filterPanel").style.display = open ? "block" : "none";
+      el("filterToggleBtn").setAttribute("aria-expanded", String(open));
+    });
+    [["filterCategory", "category"], ["filterSubscription", "subId"], ["filterStatus", "pushStatus"]].forEach(([id, key]) => {
+      el(id).addEventListener("change", e => {
+        if (key === "pushStatus") setMatched(false);
+        currentFilters[key] = e.target.value; loadPosts(1);
+      });
+    });
+    el("filterCreator").addEventListener("input", e => {
+      clearTimeout(creatorTimer);
+      creatorTimer = setTimeout(() => { currentFilters.creator = e.target.value.trim(); loadPosts(1); }, 300);
+    });
+    el("clearFiltersBtn").addEventListener("click", () => {
+      clearTimeout(searchTimer); clearTimeout(creatorTimer);
+      ["searchInput", "filterCreator", "filterCategory", "filterSubscription", "filterStatus"].forEach(id => el(id).value = "");
+      el("clearSearchBtn").style.display = "none"; currentFilters = {}; setMatched(false); loadPosts(1);
+    });
+    el("subscribedOnlyChip").addEventListener("click", () => { setMatched(!currentFilters.pushStatusIn); loadPosts(1); });
+    el("refreshBtn").addEventListener("click", () => { loadPosts(); updateStats(); updateMonitor(); });
+    el("firstPageBtn").addEventListener("click", () => loadPosts(1));
+    el("prevPageBtn").addEventListener("click", () => loadPosts(Math.max(1, currentPage - 1)));
+    el("nextPageBtn").addEventListener("click", () => loadPosts(currentPage + 1));
+    ["syncNowBtn", "fetchRssBtn"].forEach(id => el(id).addEventListener("click", syncNow));
+  }
+  let syncing = false;
+  async function syncNow() {
+    if (!isLoggedIn) return LoginModal.open();
+    if (syncing) return;
+    syncing = true;
+    ["syncNowBtn", "fetchRssBtn"].forEach(id => { el(id).disabled = true; el(id).classList.add("spin"); });
+    const result = await apiRequest("/api/rss/fetch", { method: "POST" });
+    syncing = false;
+    ["syncNowBtn", "fetchRssBtn"].forEach(id => { el(id).disabled = false; el(id).classList.remove("spin"); });
+    if (result?.success) {
+      const failed = result.data.notifications?.failed || 0;
+      Toast.show(`同步完成，新增 ${result.data.new} 篇，成功推送 ${result.data.notifications?.pushed || 0} 篇${failed ? `；${failed} 篇发送失败，将在后续同步重试` : ""}`, failed ? "warning" : "success");
+      await loadPosts(1); updateStats();
+    } else Toast.error(result?.message || "同步失败，请稍后重试");
+    updateMonitor();
+  }
+  async function updateStats() {
+    const result = await apiRequest("/api/stats/overview");
+    if (!result?.success) return;
+    const data = result.data;
+    const fields = { drawerStatTodayPushed: data.today_pushed, drawerStatTodayPosts: data.today_posts,
+      drawerStatPushed: data.pushed_posts, drawerStatTotalPosts: data.total_posts, overviewTotal: data.total_posts,
+      overviewMatched: data.matched_not_pushed + data.pushed_posts, overviewPushed: data.pushed_posts };
+    Object.entries(fields).forEach(([id, value]) => el(id).textContent = Number(value || 0).toLocaleString());
+  }
+  async function updateMonitor() {
+    const result = await apiRequest("/api/scheduler/status");
+    const status = result?.data?.rssTask;
+    const label = el("monitorStatus");
+    label.dataset.state = !status ? "error" : status.lastError ? "error" : status.running ? "running" : "paused";
+    label.querySelector("span").textContent = !status ? "状态不可用" : status.busy ? "正在同步" : status.lastError ? "同步异常，等待重试" : status.running ? `监控中 · 每 ${status.intervalSeconds} 秒` : "自动监控已关闭";
+    label.title = status?.lastError || "";
+    el("syncDetail").textContent = status?.lastSuccessAt ? `上次同步 ${new Date(status.lastSuccessAt).toLocaleString("zh-CN", { hour12: false })}` : "";
+  }
+
+  // ============================================
+  // 统计图表
+  // ============================================
+  let currentChartDays = -1;
+  let chartRequest = 0;
+
+  const categoryNames = {
+    daily: '日常', tech: '技术', info: '情报', review: '测评',
+    trade: '交易', carpool: '拼车', promotion: '推广', life: '生活',
+    dev: 'Dev', expose: '曝光', inside: '内版', sandbox: '沙盒',
+    'photo-share': '图片',
+  };
+
+  async function loadChartData(days) {
+    const request = ++chartRequest;
+    const result = await apiRequest(`/api/stats/charts?days=${days}`);
+    if (request !== chartRequest || !result?.success) return;
+    renderHourlyChart(result.data.hourly || []);
+    renderCategoryChart(result.data.category || []);
+  }
+
+  function renderHourlyChart(data) {
+    const container = document.getElementById('hourlyChart');
+    if (!container) return;
+
+    if (!data || data.length === 0) {
+      container.innerHTML = '<div class="chart-empty">暂无数据</div>';
+      return;
+    }
+
+    // 最近 24 小时趋势：数据已按时间顺序排列，index 0 = 24h 前，index 23 = 1h 前
+    const chartData = data;
+
+    const maxCount = Math.max(...chartData.map(d => d.count), 1);
+    const width = container.clientWidth || 600;
+    const height = 130;
+    const padding = { top: 10, right: 10, bottom: 20, left: 24 };
+    
+    const innerWidth = width - padding.left - padding.right;
+    const innerHeight = height - padding.top - padding.bottom;
+
+    // 坐标转换函数
+    const getX = (index) => padding.left + (index / (chartData.length - 1 || 1)) * innerWidth;
+    const getY = (count) => padding.top + innerHeight - (count / maxCount) * innerHeight;
+
+    // 构建平滑曲线路径 (Catmull-Rom spline approximation)
+    let linePath = '';
+    let areaPath = '';
+    
+    if (chartData.length > 1) {
+      const points = chartData.map((d, i) => [getX(i), getY(d.count)]);
+      
+      linePath = `M ${points[0][0]},${points[0][1]}`;
+      areaPath = `M ${points[0][0]},${points[0][1]}`;
+      
+      for (let i = 0; i < points.length - 1; i++) {
+        const x0 = i > 0 ? points[i - 1][0] : points[i][0];
+        const y0 = i > 0 ? points[i - 1][1] : points[i][1];
+        const x1 = points[i][0];
+        const y1 = points[i][1];
+        const x2 = points[i + 1][0];
+        const y2 = points[i + 1][1];
+        const x3 = i < chartData.length - 2 ? points[i + 2][0] : points[i + 1][0];
+        const y3 = i < chartData.length - 2 ? points[i + 2][1] : points[i + 1][1];
+        
+        // Tension control (0.5 = Catmull-Rom)
+        const t = 0.25; 
+        
+        const cp1x = x1 + (x2 - x0) * t;
+        const cp1y = y1 + (y2 - y0) * t;
+        const cp2x = x2 - (x3 - x1) * t;
+        const cp2y = y2 - (y3 - y1) * t;
+        
+        linePath += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${x2},${y2}`;
+        areaPath += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${x2},${y2}`;
+      }
+      
+      // 闭合区域路径
+      areaPath += ` L ${points[points.length-1][0]},${padding.top + innerHeight} L ${points[0][0]},${padding.top + innerHeight} Z`;
+    }
+
+    // 生成网格和 Y 标签
+    const gridLines = [];
+    const yLabels = [];
+    const xLabels = [];
+    const yTicks = Math.min(4, maxCount);
+    
+    for (let i = 0; i <= yTicks; i++) {
+      const y = padding.top + innerHeight - (i / yTicks) * innerHeight;
+      const val = Math.round((i / yTicks) * maxCount);
+      gridLines.push(`<line class="chart-grid-line" x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" />`);
+      yLabels.push(`<text class="chart-y-label" x="${padding.left - 6}" y="${y + 3}">${val}</text>`);
+    }
+
+    // 生成 X 标签：显示具体小时 (HH:00)
+    const getHourLabel = (bucketIndex) => {
+      const pastTime = new Date(Date.now() - (24 - bucketIndex) * 60 * 60 * 1000);
+      return String(pastTime.getHours()).padStart(2, '0') + ':00';
+    };
+    [0, 6, 12, 18, 23].forEach((i) => {
+      if (i < chartData.length) {
+        const label = getHourLabel(i);
+        xLabels.push(`<text x="${getX(i)}" y="${height - 4}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${label}</text>`);
+      }
+    });
+
+    // 交互点
+    const dots = chartData.map((d, i) => {
+      const cx = getX(i);
+      const cy = getY(d.count);
+      const hoursAgo = 24 - i;
+      return `<circle class="chart-dot" cx="${cx}" cy="${cy}" r="3" data-index="${i}" data-hours-ago="${hoursAgo}" data-count="${d.count}" />`;
+    }).join('');
+
+    container.innerHTML = `
+      <div class="line-chart-wrap" id="chartInteractionWrap">
+        <svg class="line-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+          <g class="chart-grid">
+            ${gridLines.join('')}
+            ${yLabels.join('')}
+            ${xLabels.join('')}
+          </g>
+          <path class="chart-area-path" d="${areaPath}" />
+          <path class="chart-line-path" d="${linePath}" />
+          <line class="chart-hover-line" id="chartHoverLine" y1="${padding.top}" y2="${padding.top + innerHeight}" />
+          <g class="chart-dots">${dots}</g>
+        </svg>
+        <div class="chart-tooltip" id="chartTooltip">
+          <div class="chart-tooltip-hour" id="tooltipHour"></div>
+          <div class="chart-tooltip-count" id="tooltipCount"></div>
+        </div>
+      </div>
+    `;
+
+    // 绑定交互
+    const wrap = document.getElementById('chartInteractionWrap');
+    const hoverLine = document.getElementById('chartHoverLine');
+    const tooltip = document.getElementById('chartTooltip');
+    const dotEls = wrap.querySelectorAll('.chart-dot');
+
+    wrap.addEventListener('mousemove', (e) => {
+      const rect = wrap.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      
+      // 寻找最近的点
+      let closestIdx = 0;
+      let minDiff = Infinity;
+      
+      chartData.forEach((_, i) => {
+        const diff = Math.abs(getX(i) - mouseX);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestIdx = i;
+        }
+      });
+      
+      const d = chartData[closestIdx];
+      const dotX = getX(closestIdx);
+      const dotY = getY(d.count);
+
+      // 更新悬停线
+      hoverLine.setAttribute('x1', dotX);
+      hoverLine.setAttribute('x2', dotX);
+      hoverLine.classList.add('visible');
+
+      // 更新Tooltip：显示具体小时 (HH:00)
+      const pastTime = new Date(Date.now() - (24 - d.hour) * 60 * 60 * 1000);
+      const hourLabel = String(pastTime.getHours()).padStart(2, '0') + ':00';
+      document.getElementById('tooltipHour').textContent = hourLabel;
+      document.getElementById('tooltipCount').textContent = `${d.count} 篇`;
+      tooltip.style.left = `${dotX}px`;
+      tooltip.style.top = `${dotY - 45}px`;
+      tooltip.classList.add('visible');
+
+      // 激活圆点
+      dotEls.forEach(dot => dot.classList.remove('active'));
+      dotEls[closestIdx].classList.add('active');
+    });
+
+    wrap.addEventListener('mouseleave', () => {
+      hoverLine.classList.remove('visible');
+      tooltip.classList.remove('visible');
+      dotEls.forEach(dot => dot.classList.remove('active'));
+    });
+  }
+
+  function renderCategoryChart(data) {
+    const container = document.getElementById('categoryChart');
+    if (!container) return;
+
+    if (data.length === 0) {
+      container.innerHTML = '<div class="chart-empty">暂无数据</div>';
+      return;
+    }
+
+    const maxCount = Math.max(...data.map(d => d.count), 1);
+    container.innerHTML = data.map(d => {
+      const pct = Math.round((d.count / maxCount) * 100);
+      const label = escapeHtml(categoryNames[d.category] || d.category);
+      return `
+        <div class="category-bar-row">
+          <span class="category-bar-label" title="${label}">${label}</span>
+          <div class="category-bar-track">
+            <div class="category-bar-fill" style="width:${pct}%"></div>
+          </div>
+          <span class="category-bar-count">${d.count}</span>
+        </div>`;
+    }).join('');
+  }
+
+  function initCharts() {
+    const selector = document.getElementById('chartRangeSelector');
+    if (!selector) return;
+
+    selector.querySelectorAll('.chart-range-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selector.querySelectorAll('.chart-range-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentChartDays = parseInt(btn.dataset.days, 10);
+        loadChartData(currentChartDays);
+      });
+    });
+    
+    // 监听窗口大小变化以重绘图表
+    window.addEventListener('resize', () => {
+      if (document.getElementById('hourlyChart')?.innerHTML.includes('line-chart-wrap')) {
+        loadChartData(currentChartDays);
+      }
+    });
+  }
+
+  // ============================================
+  // RSS 配置
+  // ============================================
+  async function loadRssConfig() {
+    const result = await apiRequest("/api/rss/config");
+    if (result?.success) {
+      document.getElementById("rssUrl").value = result.data.rss_url || "";
+      document.getElementById("rssInterval").value = result.data.rss_interval_seconds || 60;
+      document.getElementById("rssProxy").value = result.data.rss_proxy || "";
+    }
+  }
+
+  function initRssConfig() {
+    // 保存配置
+    document.getElementById("rssConfigForm")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const data = {
+        rss_url: document.getElementById("rssUrl").value.trim(),
+        rss_interval_seconds: parseInt(document.getElementById("rssInterval").value, 10),
+        rss_proxy: document.getElementById("rssProxy").value.trim(),
+      };
+
+      const result = await apiRequest("/api/rss/config", {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
+
+      if (result?.success) {
+        Toast.success("RSS 配置已保存");
+        if (data.rss_interval_seconds) {
+          await apiRequest("/api/rss/restart", { method: "POST" });
+        }
+      } else {
+        Toast.error(result?.message || "保存失败");
+      }
+    });
+
+    // 测试连接
+    document.getElementById("testRssBtn")?.addEventListener("click", async () => {
+      const rssUrl = document.getElementById("rssUrl").value.trim();
+      Toast.info("正在测试连接...");
+
+      const result = await apiRequest("/api/rss/test-connection", {
+        method: "POST",
+        body: JSON.stringify({ rss_url: rssUrl }),
+      });
+
+      if (result?.success) {
+        if (result.data.accessible) {
+          Toast.success("RSS 源连接正常");
+        } else {
+          Toast.error("连接失败：" + result.data.message);
+        }
+      }
+    });
+  }
+
+  // ============================================
+  // Telegram 配置
+  // ============================================
+  async function loadTelegramConfig() {
+    const result = await apiRequest("/api/config");
+    if (result?.success) {
+      document.getElementById("botToken").value = result.data.bot_token || "";
+      document.getElementById("chatId").value = result.data.chat_id || "";
+      document.getElementById("stopPush").checked = result.data.stop_push === 1;
+      document.getElementById("onlyTitle").checked = result.data.only_title === 1;
+    }
+    // 同时加载交互模式状态
+    await loadTelegramInteractionStatus();
+  }
+
+  async function loadTelegramInteractionStatus() {
+    const result = await apiRequest("/api/webhook/status");
+    if (!result?.success) return;
+
+    const data = result.data;
+    const mode = data.telegram_mode || "disabled";
+    const pollingActive = data.polling_active || false;
+
+    // 同步模式选择器
+    const radio = document.querySelector(`input[name="telegramMode"][value="${mode}"]`);
+    if (radio) radio.checked = true;
+
+    // 切换面板显示
+    updateTelegramModeUI(mode, pollingActive);
+
+    // 更新状态面板
+    const statusPanel = document.getElementById("telegramStatusPanel");
+    if (statusPanel && data.configured) {
+      statusPanel.style.display = "block";
+      const botStatus = document.getElementById("telegramBotStatus");
+      const webhookStatus = document.getElementById("telegramWebhookStatus");
+      const bindingStatus = document.getElementById("telegramBindingStatus");
+      if (botStatus) botStatus.textContent = data.connected ? "已连接" : "未连接";
+      if (webhookStatus) {
+        if (pollingActive) {
+          webhookStatus.textContent = "Polling 运行中";
+        } else if (data.webhook_set) {
+          webhookStatus.textContent = "已设置";
+        } else {
+          webhookStatus.textContent = "未设置";
+        }
+      }
+      if (bindingStatus) bindingStatus.textContent = data.bound ? "已绑定" : "未绑定";
+    }
+  }
+
+  function updateTelegramModeUI(mode, pollingActive) {
+    const webhookPanel = document.getElementById("webhookModePanel");
+    const pollingPanel = document.getElementById("pollingModePanel");
+    const startBtn = document.getElementById("startPollingBtn");
+    const stopBtn = document.getElementById("stopPollingBtn");
+    const statusIndicator = document.getElementById("pollingStatusIndicator");
+
+    if (webhookPanel) webhookPanel.style.display = mode === "webhook" ? "block" : "none";
+    if (pollingPanel) pollingPanel.style.display = mode === "polling" ? "block" : "none";
+
+    if (pollingActive) {
+      if (startBtn) startBtn.style.display = "none";
+      if (stopBtn) stopBtn.style.display = "inline-flex";
+      if (statusIndicator) {
+        statusIndicator.textContent = "Polling 运行中";
+        statusIndicator.style.background = "var(--success-alpha)";
+        statusIndicator.style.color = "var(--success)";
+      }
+    } else {
+      if (startBtn) startBtn.style.display = "inline-flex";
+      if (stopBtn) stopBtn.style.display = "none";
+      if (statusIndicator) {
+        statusIndicator.textContent = "Polling 未运行";
+        statusIndicator.style.background = "var(--bg-hover)";
+        statusIndicator.style.color = "";
+      }
+    }
+  }
+
+  function initTelegramConfig() {
+    document.getElementById("telegramConfigForm")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const data = {
+        bot_token: document.getElementById("botToken").value.trim(),
+        chat_id: document.getElementById("chatId").value.trim(),
+        stop_push: document.getElementById("stopPush").checked ? 1 : 0,
+        only_title: document.getElementById("onlyTitle").checked ? 1 : 0,
+      };
+
+      const result = await apiRequest("/api/config", {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
+
+      if (result?.success) {
+        Toast.success("Telegram 配置已保存");
+      } else {
+        Toast.error(result?.message || "保存失败");
+      }
+    });
+
+    document.getElementById("testTelegramBtn")?.addEventListener("click", async () => {
+      Toast.info("正在测试连接...");
+
+      // 1. 先测试 Bot 连接
+      const result = await apiRequest("/api/webhook/test-connection", { method: "POST" });
+      if (!result?.success) {
+        Toast.error(result?.message || "连接测试失败");
+        return;
+      }
+
+      // 2. 如果 Chat ID 已配置，发送测试消息
+      const chatId = document.getElementById("chatId").value.trim();
+      if (chatId) {
+        Toast.info("连接成功，正在发送测试消息...");
+        const testResult = await apiRequest("/api/push/test-send", {
+          method: "POST",
+          body: JSON.stringify({ message: "📡 SeekFeed 推送测试" }),
+        });
+        if (testResult?.success) {
+          Toast.success("连接测试成功，测试消息已发送");
+        } else {
+          Toast.warning("连接成功，但测试消息发送失败：" + (testResult?.message || "未知错误"));
+        }
+      } else {
+        Toast.success("Bot 连接测试成功（未配置 Chat ID，跳过消息测试）");
+      }
+    });
+
+    // 交互模式切换
+    document.querySelectorAll('input[name="telegramMode"]').forEach((radio) => {
+      radio.addEventListener("change", (e) => {
+        const mode = e.target.value;
+        updateTelegramModeUI(mode, false);
+      });
+    });
+
+    // Webhook 表单提交
+    document.getElementById("webhookConfigForm")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const webhookUrl = document.getElementById("webhookUrl").value.trim();
+      if (!webhookUrl) {
+        Toast.warning("请输入 Webhook URL");
+        return;
+      }
+
+      Toast.info("正在设置 Webhook...");
+      const result = await apiRequest("/api/webhook/setup", {
+        method: "POST",
+        body: JSON.stringify({ webhook_url: webhookUrl }),
+      });
+
+      if (result?.success) {
+        Toast.success("Webhook 设置成功");
+        // 保存模式
+        await apiRequest("/api/config", {
+          method: "PUT",
+          body: JSON.stringify({ telegram_mode: "webhook" }),
+        });
+        await loadTelegramInteractionStatus();
+      } else {
+        Toast.error(result?.message || "Webhook 设置失败");
+      }
+    });
+
+    // 清除 Webhook
+    document.getElementById("clearWebhookBtn")?.addEventListener("click", async () => {
+      Toast.info("正在清除 Webhook...");
+      const result = await apiRequest("/api/webhook/clear-webhook", { method: "POST" });
+      if (result?.success) {
+        Toast.success("Webhook 已清除");
+        await loadTelegramInteractionStatus();
+      } else {
+        Toast.error(result?.message || "清除失败");
+      }
+    });
+
+    // 测试 Webhook 连接
+    document.getElementById("testWebhookBtn")?.addEventListener("click", async () => {
+      Toast.info("正在测试 Webhook 连接...");
+      const result = await apiRequest("/api/webhook/test-connection", { method: "POST" });
+      if (result?.success) {
+        Toast.success("Bot 连接正常");
+      } else {
+        Toast.error(result?.message || "连接测试失败");
+      }
+    });
+
+    // 启动 Polling
+    document.getElementById("startPollingBtn")?.addEventListener("click", async () => {
+      Toast.info("正在启动 Polling...");
+      const result = await apiRequest("/api/webhook/start-polling", { method: "POST" });
+      if (result?.success) {
+        Toast.success("Polling 已启动");
+        updateTelegramModeUI("polling", true);
+        await loadTelegramInteractionStatus();
+      } else {
+        Toast.error(result?.message || "启动失败");
+      }
+    });
+
+    // 停止 Polling
+    document.getElementById("stopPollingBtn")?.addEventListener("click", async () => {
+      Toast.info("正在停止 Polling...");
+      const result = await apiRequest("/api/webhook/stop-polling", { method: "POST" });
+      if (result?.success) {
+        Toast.success("Polling 已停止");
+        updateTelegramModeUI("polling", false);
+      } else {
+        Toast.error(result?.message || "停止失败");
+      }
+    });
+  }
+
+  // ============================================
+  // 筛选面板订阅下拉框
+  // ============================================
+  async function loadFilterSubscriptions() {
+    if (!isLoggedIn) return;
+    const filterSubscription = document.getElementById("filterSubscription");
+    if (!filterSubscription) return;
+
+    const result = await apiRequest("/api/subscriptions");
+    if (!result?.success) return;
+
+    const subs = result.data;
+    const currentValue = filterSubscription.value;
+
+    filterSubscription.innerHTML = '<option value="">全部订阅</option>';
+    subs.forEach((sub) => {
+      const keywords = [sub.keyword1, sub.keyword2, sub.keyword3].filter(Boolean).join(", ");
+      const extra = [
+        sub.creator ? `作者 ${sub.creator}` : "",
+        sub.category ? getCategoryName(sub.category) : "",
+      ].filter(Boolean).join(" ");
+      const label = [keywords, extra].filter(Boolean).join(" ") || `订阅 #${sub.id}`;
+
+      const option = document.createElement("option");
+      option.value = sub.id;
+      option.textContent = label;
+      filterSubscription.appendChild(option);
+    });
+
+    if (currentValue) filterSubscription.value = currentValue;
+  }
+
+  // ============================================
+  // 订阅管理
+  // ============================================
+  async function loadSubscriptions() {
+    const result = await apiRequest("/api/subscriptions");
+    const container = el("subscriptionsList");
+    if (!result?.success) { container.textContent = "订阅加载失败，请重新打开面板重试。"; return; }
+    container.innerHTML = result.data.length ? result.data.map(sub => `<div class="subscription-item ${sub.enabled === 0 ? "paused" : ""}" data-id="${sub.id}"><div class="subscription-description"><div class="subscription-keywords">${[sub.keyword1, sub.keyword2, sub.keyword3].filter(Boolean).map(word => `<span class="tag tag-blue">${escapeHtml(word)}</span>`).join("") || '<span class="tag">按作者 / 分类订阅</span>'}</div><div class="subscription-filters"><span>${sub.enabled === 0 ? "已暂停" : "监控中"}</span>${sub.creator ? `<span>作者 ${escapeHtml(sub.creator)}</span>` : ""}${sub.category ? `<span>${escapeHtml(getCategoryName(sub.category))}</span>` : ""}</div>${sub.exclude_keywords ? `<div class="subscription-exclusions">屏蔽：${escapeHtml(sub.exclude_keywords)}</div>` : ""}</div><div class="subscription-controls"><button class="btn btn-secondary btn-xs toggle-sub" data-enabled="${sub.enabled === 0 ? 1 : 0}">${sub.enabled === 0 ? "恢复" : "暂停"}</button><button class="btn btn-danger btn-xs delete-sub">删除</button></div></div>`).join("") : '<div class="empty-state-small"><div class="empty-title">还没有订阅</div><p class="form-hint">添加关键词、作者或分类，开始接收有价值的动态。</p></div>';
+    container.querySelectorAll(".toggle-sub").forEach(btn => btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      const result = await apiRequest(`/api/subscriptions/${btn.closest(".subscription-item").dataset.id}`, { method: "PUT", body: JSON.stringify({ enabled: Number(btn.dataset.enabled) }) });
+      if (result?.success) { Toast.success(btn.dataset.enabled === "1" ? "订阅已恢复" : "订阅已暂停"); loadSubscriptions(); loadFilterSubscriptions(); }
+      else { Toast.error(result?.message || "修改失败"); btn.disabled = false; }
+    }));
+    container.querySelectorAll(".delete-sub").forEach(btn => btn.addEventListener("click", async () => {
+      if (btn.dataset.confirm !== "yes") { btn.dataset.confirm = "yes"; btn.textContent = "确认删除"; setTimeout(() => { btn.dataset.confirm = ""; btn.textContent = "删除"; }, 4000); return; }
+      btn.disabled = true;
+      const result = await apiRequest(`/api/subscriptions/${btn.closest(".subscription-item").dataset.id}`, { method: "DELETE" });
+      if (result?.success) { Toast.success("订阅已删除"); loadSubscriptions(); loadFilterSubscriptions(); updateStats(); }
+      else { Toast.error(result?.message || "删除失败"); btn.disabled = false; }
+    }));
+  }
+  function initSubscriptions() {
+    el("addSubForm").addEventListener("submit", async e => {
+      e.preventDefault();
+      const data = { keyword1: el("keyword1").value.trim() || undefined, keyword2: el("keyword2").value.trim() || undefined,
+        keyword3: el("keyword3").value.trim() || undefined, creator: el("subCreator").value.trim() || undefined,
+        category: el("subCategory").value || undefined, exclude_keywords: el("excludeKeywords").value.trim(), enabled: 1 };
+      if (![data.keyword1, data.keyword2, data.keyword3, data.creator, data.category].some(Boolean)) return Toast.warning("请至少填写一个订阅条件");
+      const button = e.submitter; button.disabled = true;
+      const result = await apiRequest("/api/subscriptions", { method: "POST", body: JSON.stringify(data) });
+      button.disabled = false;
+      if (!result?.success) return Toast.error(result?.message || "添加失败");
+      Toast.success("订阅已添加"); el("addSubForm").reset(); loadSubscriptions(); loadFilterSubscriptions(); updateStats();
+    });
+  }
+  function initSettingsDropdown() {
+    const closeSidebar = () => { el("workspaceSidebar").classList.remove("open"); el("sidebarBackdrop").hidden = true; el("sidebarToggle").setAttribute("aria-expanded", "false"); };
+    el("sidebarToggle").addEventListener("click", () => {
+      const open = el("workspaceSidebar").classList.toggle("open");
+      el("sidebarBackdrop").hidden = !open; el("sidebarToggle").setAttribute("aria-expanded", String(open));
+    });
+    el("sidebarBackdrop").addEventListener("click", closeSidebar);
+    document.addEventListener("keydown", e => { if (e.key === "Escape") closeSidebar(); });
+    document.querySelectorAll("[data-auth-only]").forEach(item => item.style.display = isLoggedIn ? "inline-flex" : "none");
+    el("accountLabel").textContent = isLoggedIn ? "管理员" : "访客";
+    document.querySelectorAll("[data-open-drawer]").forEach(button => button.addEventListener("click", () => {
+      closeSidebar();
+      const name = button.dataset.openDrawer;
+      if (!isLoggedIn && name !== "stats") return LoginModal.open();
+      Drawer.open(name);
+      if (name === "subscriptions") loadSubscriptions();
+      if (name === "rss") loadRssConfig();
+      if (name === "telegram") loadTelegramConfig();
+      if (name === "stats") { loadChartData(currentChartDays); updateStats(); }
+    }));
+    ["navLatest", "navMatched"].forEach(id => el(id).addEventListener("click", () => { setMatched(id === "navMatched"); loadPosts(1); closeSidebar(); }));
+  }
+
+  // ============================================
+  // 登录抽屉
+  // ============================================
+  const LoginModal = {
+    modal: null,
+    form: null,
+    message: null,
+
+    init() {
+      this.modal = document.getElementById("loginModal");
+      this.form = document.getElementById("loginForm");
+      this.message = document.getElementById("loginMessage");
+
+      if (!this.modal || !this.form) return;
+
+      // 关闭按钮
+      document.getElementById("closeLoginModal")?.addEventListener("click", () => {
+        this.close();
+      });
+
+      // 表单提交
+      this.form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        await this.handleSubmit();
+      });
+    },
+
+    open() {
+      this.clearMessage(); this.form?.reset(); Drawer.open("login");
+      document.getElementById("loginUsername")?.focus();
+    },
+    close() { Drawer.closeAll(); },
+
+
+    isOpen() {
+      return this.modal?.classList.contains("drawer-open");
+    },
+
+    showMessage(message, type = "info") {
+      if (!this.message) return;
+      this.message.textContent = message;
+      this.message.className = `login-message ${type}`;
+      this.message.style.display = "block";
+    },
+
+    clearMessage() {
+      if (!this.message) return;
+      this.message.style.display = "none";
+      this.message.textContent = "";
+    },
+
+    async handleSubmit() {
+      const username = document.getElementById("loginUsername")?.value?.trim();
+      const password = document.getElementById("loginPassword")?.value;
+
+      if (!username || !password) {
+        this.showMessage("请填写用户名和密码", "error");
+        return;
+      }
+
+      this.showMessage("正在登录...", "info");
+
+      try {
+        const response = await fetch("/auth/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ username, password }),
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          this.showMessage("登录成功！", "success");
+          localStorage.setItem("sessionId", result.sessionId);
+          
+          // 延迟刷新页面以应用登录状态
+          setTimeout(() => {
+            window.location.reload();
+          }, 800);
+        } else {
+          this.showMessage(result.message || "登录失败", "error");
+        }
+      } catch (error) {
+        console.error("登录错误:", error);
+        this.showMessage("网络错误，请重试", "error");
+      }
+    },
+  };
+
+  function initLoginModal() {
+    LoginModal.init();
+
+    // 登录按钮点击打开弹窗
+    document.getElementById("loginBtn")?.addEventListener("click", () => {
+      LoginModal.open();
+    });
+  }
+
+  // ============================================
+  // 退出登录
+  // ============================================
+  function initLogout() {
+    document.getElementById("logoutBtn")?.addEventListener("click", async () => {
+      try {
+        await apiRequest("/auth/logout", {
+          method: "POST",
+          body: JSON.stringify({ sessionId }),
+        });
+      } catch {
+        // Local sign-out still completes if the server session has expired.
+      } finally {
+        localStorage.removeItem("sessionId");
+        window.location.reload();
+      }
+    });
+  }
+
+  // ============================================
+  // 初始化
+  // ============================================
+  function init() {
+    initTheme();
+    Drawer.init();
+    initFilters();
+    initRssConfig();
+    initTelegramConfig();
+    initSubscriptions();
+    initSettingsDropdown();
+    initLoginModal();
+    initLogout();
+    initCharts();
+
+    // 加载初始数据
+    loadPosts();
+    updateStats();
+    loadFilterSubscriptions();
+    updateMonitor();
+    setInterval(() => { if (!document.hidden) { updateMonitor(); updateStats(); } }, 30000);
+  }
+
+  init();
+});
