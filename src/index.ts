@@ -1,3 +1,4 @@
+import { getClientInfo } from './utils/clientInfo';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { serveStatic } from 'hono/bun';
@@ -148,7 +149,7 @@ app.post('/api/scheduler/rss/run', async (c) => {
   try {
     const token = c.req.header('Authorization')?.replace(/^Bearer /, '');
     const verification = token && await c.get('authService').verifySession(token,
-      c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || '127.0.0.1');
+      getClientInfo(c).ipAddress);
     if (!verification || !verification.valid) {
       return c.json({ success: false, message: '请先登录' }, 401);
     }

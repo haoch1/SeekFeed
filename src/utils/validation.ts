@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+const categorySelectionSchema = z.string().max(200, '分类选择过多').transform(value => [...new Set(value.split(',').map(key => key.trim()).filter(Boolean))].join(','));
+
 // 基础配置验证 Schema
 export const baseConfigSchema = z.object({
     username: z.string().min(1, '用户名不能为空').max(50, '用户名不能超过50个字符'),
@@ -47,7 +49,7 @@ export const keywordSubSchema = z.object({
     keyword2: z.string().max(100, '关键词2不能超过100个字符').optional(),
     keyword3: z.string().max(100, '关键词3不能超过100个字符').optional(),
     creator: z.string().max(100, '创建者不能超过100个字符').optional(),
-    category: z.string().max(100, '分类不能超过100个字符').optional(),
+    category: categorySelectionSchema.optional(),
 }).refine(
     (data) => data.keyword1 || data.keyword2 || data.keyword3 || data.creator || data.category,
     {
@@ -63,7 +65,7 @@ export const keywordSubUpdateSchema = z.object({
     keyword2: z.string().max(100).optional(),
     keyword3: z.string().max(100).optional(),
     creator: z.string().max(100).optional(),
-    category: z.string().max(100).optional(),
+    category: categorySelectionSchema.optional(),
 });
 
 // 登录验证 Schema
@@ -99,7 +101,7 @@ export const paginationSchema = z.object({
     pushStatusIn: z.string().optional(),  // 格式: "1,3" 表示同时查询状态 1 和 3
     pushStatusNot: z.coerce.number().int().min(0).max(3).optional(),
     creator: z.string().max(100).optional(),
-    category: z.string().max(100).optional(),
+    category: categorySelectionSchema.optional(),
     search: z.string().max(200).optional(),
     subId: z.coerce.number().int().positive().optional(),
 });

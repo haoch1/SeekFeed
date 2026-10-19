@@ -39,4 +39,12 @@ SeekFeed 品牌使用原创 S 形标识，界面、favicon、Apple 图标与 PWA
 
 非登录输入由 `FieldInput` 统一标记 `data-1p-ignore` 和 `data-op-ignore`；登录表单保留 username/current-password 的语义。选择器支持方向键、Home/End、输入定位和 Escape。保存按钮有忙碌状态，禁止重复提交。
 
-Telegram 使用紧凑单色符号（◇、≡、✓、→、!）、HTML 标题和字段间距；动态文本必须转义，长列表按完整条目拆分消息。
+Telegram 保留语义明确的原生图标（📰 帖子、📋 订阅、👤 账号、🔔 通知、✈️ 测试），不使用试管图标。图标仅置于标题或字段开头，字段间空一行。最近帖子的序号使用等宽 01–10 和统一间距，展示时统一全角方括号；数据库原文保持不变。帖子与订阅通知启用链接预览。原生命令菜单使用 SeekFeed 头像和简短说明；动态文本必须转义，长列表按完整条目拆分消息。
+
+## Surface contrast, aligned settings and category selection
+
+The workspace uses a light neutral canvas with white cards, visible cool-gray borders and subtle elevation. Dark surfaces use separate border tokens. ReUI card/input hierarchy is shared across all seven routes rather than tuned per screenshot. Two-column settings stretch the primary card to the full height of the two related cards, with its actions at the bottom; narrow screens stack naturally.
+
+Category selects use one accessible multi-select with persistent checkboxes, a selected count, select-all and clear actions. Keyboard navigation, Space/Enter toggling and Escape remain available. Category keys are stored as a comma-separated set in the existing field; boards use OR, other conditions use AND. Post pagination applies the exact same SQL IN filter to its result and total queries.
+
+Active devices show the IP recorded at login. Direct deployments use the socket address. Deployments behind a controlled reverse proxy can enable TRUST_PROXY=true; that proxy must overwrite X-Real-IP and keep the application port private. Existing sessions retain their original recorded IP.

@@ -56,6 +56,26 @@ describe('subscription matching', () => {
     });
 });
 
+describe('multi-category monitoring and search', () => {
+    it('matches any selected board while requiring all keywords and respecting exclusions', () => {
+        db.createKeywordSub({ keyword1: 'DMIT', keyword2: '补货', category: 'info,trade', exclude_keywords: '已出' });
+        const matcher = new MatcherService(db);
+        expect(matcher.checkPostMatches(post(1, { category: 'info' }))).toHaveLength(1);
+        expect(matcher.checkPostMatches(post(2, { category: 'trade' }))).toHaveLength(1);
+        expect(matcher.checkPostMatches(post(3, { category: 'tech' }))).toHaveLength(0);
+        expect(matcher.checkPostMatches(post(4, { category: 'trade', title: 'DMIT' }))).toHaveLength(0);
+        expect(matcher.checkPostMatches(post(5, { category: 'trade', title: 'DMIT 补货 已出' }))).toHaveLength(0);
+    });
+    it('filters the union of exact board names with accurate pagination totals', () => {
+        db.batchCreatePosts([post(1, { category: 'info' }), post(2, { category: 'trade' }), post(3, { category: 'tech' }), post(4, { category: 'information' })]);
+        const result = db.getPostsWithPagination(1, 1, { category: 'info,trade', search: 'DMIT' });
+        expect(result.total).toBe(2);
+        expect(result.totalPages).toBe(2);
+        expect(db.getPostsWithPagination(2, 1, { category: 'info,trade' }).posts).toHaveLength(1);
+        expect(db.getPostsWithPagination(1, 10, { category: 'info' }).total).toBe(1);
+    });
+});
+
 describe('notification queue', () => {
     it('rotates retry batches so permanent failures do not block later posts', async () => {
         db.createKeywordSub({ keyword1: 'DMIT' });

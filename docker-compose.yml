@@ -15,6 +15,7 @@ services:
       DATABASE_PATH: /usr/src/app/data/seekfeed.db
       RSS_CHECK_ENABLED: ${RSS_CHECK_ENABLED:-true}
       RSS_TIMEOUT: ${RSS_TIMEOUT:-30000}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3010}
     volumes:
       - seekfeed_data:/usr/src/app/data

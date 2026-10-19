@@ -163,8 +163,8 @@ export class MatcherService {
 
     // 检查分类精确匹配过滤（如果指定了category，必须精确匹配）
     if (subscription.category && subscription.category.trim().length > 0) {
-      const targetCategory = subscription.category.toLowerCase().trim();
-      if (categoryText.trim() !== targetCategory) {
+      const targetCategories = subscription.category.toLowerCase().split(',').map(value => value.trim()).filter(Boolean);
+      if (!targetCategories.includes(categoryText.trim())) {
         return {
           matched: false,
           matchedKeywords: [],

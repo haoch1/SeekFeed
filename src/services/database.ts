@@ -380,8 +380,11 @@ export class DatabaseService {
       }
       
       if (filters.category) {
-        conditions.push('p.category LIKE ?');
-        params.push(`%${filters.category}%`);
+        const categories = filters.category.split(',').map(value => value.trim()).filter(Boolean);
+        if (categories.length) {
+          conditions.push(`p.category IN (${categories.map(() => '?').join(',')})`);
+          params.push(...categories);
+        }
       }
       
       if (filters.search) {

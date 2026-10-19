@@ -5,6 +5,7 @@ import { logger } from "../utils/logger";
 const envSchema = z.object({
   // Server
   PORT: z.string().transform(Number).default("3010"),
+  TRUST_PROXY: z.enum(["true", "false"]).default("false"),
   HOST: z.string().default("0.0.0.0"),
   NODE_ENV: z
     .enum(["development", "production", "test"])

@@ -9,7 +9,7 @@ export class TelegramPushService extends TelegramBaseService {
    */
   async sendMessage(chatId: string | number, text: string, html = false): Promise<boolean> {
     try {
-      await this.bot.api.sendMessage(chatId, text, { ...(html ? { parse_mode: 'HTML' as const } : {}), link_preview_options: { is_disabled: true } });
+      await this.bot.api.sendMessage(chatId, text, { ...(html ? { parse_mode: 'HTML' as const } : {}), link_preview_options: { is_disabled: false, prefer_small_media: true } });
       return true;
     } catch (error) {
       logger.error('发送 Telegram 消息时出错:', error);
@@ -52,7 +52,7 @@ export class TelegramPushService extends TelegramBaseService {
    * 测试发送消息（简化版，仅用于测试连通性）
    */
   async testSendMessage(chatId: string | number, message?: string): Promise<boolean> {
-    const testMessage = message || '◇ SeekFeed · 推送测试\n\n✓ 通知通道工作正常。';
+    const testMessage = message || '✈️ SeekFeed · 推送测试\n\n✅ 通知通道工作正常。';
     return await this.sendMessage(chatId, testMessage);
   }
 }

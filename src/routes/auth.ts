@@ -1,3 +1,4 @@
+import { getClientInfo } from '../utils/clientInfo';
 import { z } from 'zod';
 import * as bcrypt from 'bcryptjs';
 import { Hono } from 'hono'
@@ -43,16 +44,6 @@ authRoutes.get('/check-init', async (c) => {
     }, 500)
   }
 })
-
-// 获取客户端信息的辅助函数
-function getClientInfo(c: any): { ipAddress?: string; userAgent?: string } {
-  const ipAddress = c.req.header('x-forwarded-for') || 
-                   c.req.header('x-real-ip') || 
-                   c.env?.CF_CONNECTING_IP || 
-                   '127.0.0.1';
-  const userAgent = c.req.header('user-agent');
-  return { ipAddress, userAgent };
-}
 
 // 用户注册（初始化）
 authRoutes.post('/register', async (c) => {

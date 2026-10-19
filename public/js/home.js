@@ -291,7 +291,7 @@ document.addEventListener("DOMContentLoaded", function () {
     return String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   }
   const categoryMap = { daily: "日常", tech: "技术", info: "情报", review: "测评", trade: "交易", carpool: "拼车", promotion: "推广", life: "生活", dev: "Dev", "photo-share": "贴图", expose: "曝光", inside: "内版", sandbox: "沙盒" };
-  function getCategoryName(key) { return categoryMap[key] || key || "未分类"; }
+  function getCategoryName(key) { return key ? key.split(",").map(k => categoryMap[k.trim()] || k.trim()).join("、") : "未分类"; }
 
   function updatePagination(page, pages, total) {
     el("pagination").style.display = total ? "flex" : "none";
@@ -354,7 +354,7 @@ document.addEventListener("DOMContentLoaded", function () {
     [["filterCategory", "category"], ["filterSubscription", "subId"], ["filterStatus", "pushStatus"]].forEach(([id, key]) => {
       el(id).addEventListener("change", e => {
         if (key === "pushStatus") setMatched(false);
-        currentFilters[key] = e.target.value; loadPosts(1);
+        currentFilters[key] = e.target.multiple ? [...e.target.selectedOptions].map(o => o.value).filter(Boolean).join(",") : e.target.value; loadPosts(1);
       });
     });
     el("filterCreator").addEventListener("input", e => {
@@ -364,6 +364,7 @@ document.addEventListener("DOMContentLoaded", function () {
     el("clearFiltersBtn").addEventListener("click", () => {
       clearTimeout(searchTimer); clearTimeout(creatorTimer);
       ["searchInput", "filterCreator", "filterCategory", "filterSubscription", "filterStatus"].forEach(id => el(id).value = "");
+      window.SeekFeedControls.refreshSelects();
       el("clearSearchBtn").style.display = "none"; currentFilters = {}; setMatched(false); loadPosts(1);
     });
     el("subscribedOnlyChip").addEventListener("click", () => { setMatched(!currentFilters.pushStatusIn); loadPosts(1); });
@@ -404,6 +405,9 @@ document.addEventListener("DOMContentLoaded", function () {
     label.dataset.state = !status ? "error" : status.lastError ? "error" : status.running ? "running" : "paused";
     label.querySelector("span").textContent = !status ? "状态不可用" : status.busy ? "正在同步" : status.lastError ? "同步异常，等待重试" : status.running ? `监控中 · 每 ${status.intervalSeconds} 秒` : "自动监控已关闭";
     label.title = status?.lastError || "";
+    el("rssRunningStatus").textContent = !status ? "状态不可用" : status.lastError ? "同步异常，等待重试" : status.busy ? "正在同步" : status.running ? "运行中" : "已关闭";
+    el("rssRunningInterval").textContent = status?.intervalSeconds ? `每 ${status.intervalSeconds} 秒` : "—";
+    el("rssLastSuccess").textContent = status?.lastSuccessAt ? new Date(status.lastSuccessAt).toLocaleString("zh-CN", { hour12: false }) : "暂无记录";
     el("syncDetail").textContent = status?.lastSuccessAt ? `上次同步 ${new Date(status.lastSuccessAt).toLocaleString("zh-CN", { hour12: false })}` : "";
   }
 
@@ -814,7 +818,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (chatId) {
         const testResult = await apiRequest("/api/push/test-send", {
           method: "POST",
-          body: JSON.stringify({ message: "◇ SeekFeed · 推送测试\n\n✓ 连接正常，测试通知已送达。" }),
+          body: JSON.stringify({ message: "✈️ SeekFeed · 推送测试\n\n✅ 连接正常，测试通知已送达。" }),
         });
         if (testResult?.success) {
           Toast.success("连接测试成功，测试消息已发送");
@@ -970,7 +974,7 @@ document.addEventListener("DOMContentLoaded", function () {
       e.preventDefault();
       const data = { keyword1: el("keyword1").value.trim() || undefined, keyword2: el("keyword2").value.trim() || undefined,
         keyword3: el("keyword3").value.trim() || undefined, creator: el("subCreator").value.trim() || undefined,
-        category: el("subCategory").value || undefined, exclude_keywords: el("excludeKeywords").value.trim(), enabled: 1 };
+        category: [...el("subCategory").selectedOptions].map(o => o.value).filter(Boolean).join(",") || undefined, exclude_keywords: el("excludeKeywords").value.trim(), enabled: 1 };
       if (![data.keyword1, data.keyword2, data.keyword3, data.creator, data.category].some(Boolean)) return Toast.warning("请至少填写一个订阅条件");
       const button = e.submitter; button.disabled = true;
       const result = await apiRequest("/api/subscriptions", { method: "POST", body: JSON.stringify(data) });
@@ -1044,7 +1048,7 @@ document.addEventListener("DOMContentLoaded", function () {
     el('sessionsList').innerHTML = response.data.map(session => {
       const agent = session.userAgent || '未知浏览器';
       const browser = /Edg/.test(agent) ? 'Microsoft Edge' : /Firefox/.test(agent) ? 'Firefox' : /Chrome/.test(agent) ? 'Chrome' : /Safari/.test(agent) ? 'Safari' : '浏览器 / 客户端';
-      return `<div class="session-item"><span class="session-icon">${renderIcon('user')}</span><div><strong>${browser}${session.current ? '<span class="tag tag-blue">当前设备</span>' : ''}</strong><p>登录于 ${escapeHtml(new Date(session.createdAt).toLocaleString('zh-CN'))}</p><p>到期于 ${escapeHtml(new Date(session.expiresAt).toLocaleString('zh-CN'))}</p></div></div>`;
+      return `<div class="session-item"><span class="session-icon">${renderIcon('user')}</span><div><strong>${browser}${session.current ? '<span class="tag tag-blue">当前设备</span>' : ''}</strong><p class="session-ip">登录 IP · ${escapeHtml(session.ipAddress || "未记录（重新登录后记录）")}</p><p>登录于 ${escapeHtml(new Date(session.createdAt).toLocaleString('zh-CN'))}</p><p>到期于 ${escapeHtml(new Date(session.expiresAt).toLocaleString('zh-CN'))}</p></div></div>`;
     }).join('');
   }
   function initAccount() {

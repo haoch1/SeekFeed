@@ -51,7 +51,7 @@ export const DashboardSurface: FC<PropsWithChildren<{ path?: string }>> = ({ chi
                     <div class="feed-panel-heading"><h2>帖子动态</h2><span id="monitorStatus" class="monitor-status"><i></i><span>读取监控状态</span></span></div>
                     <div class="feed-toolbar">
                         <div class="search-box"><Icon name="search" /><FieldInput type="search" id="searchInput" placeholder="搜索标题、作者…" aria-label="搜索标题、作者" class="search-input" /><button id="clearSearchBtn" class="search-clear" aria-label="清除搜索" style="display:none"><Icon name="close" /></button></div>
-                        <select data-1p-ignore="true" data-op-ignore="true" id="filterCategory" class="filter-select" aria-label="分类筛选"><option value="">全部分类</option>{categories.map(([value, label]) => <option value={value}>{label}</option>)}</select>
+                        <select data-1p-ignore="true" data-op-ignore="true" id="filterCategory" multiple class="filter-select" aria-label="分类筛选"><option value="">全部分类</option>{categories.map(([value, label]) => <option value={value}>{label}</option>)}</select>
                         <select data-1p-ignore="true" data-op-ignore="true" id="filterStatus" class="filter-select" aria-label="推送状态筛选"><option value="">全部状态</option><option value="0">待匹配</option><option value="1">待推送</option><option value="3">已推送</option><option value="2">未命中</option></select>
                         <button id="filterToggleBtn" class="btn btn-secondary" aria-expanded="false" aria-controls="filterPanel"><Icon name="filter" />筛选</button>
                         <button id="refreshBtn" class="icon-btn" title="刷新列表" aria-label="刷新列表"><Icon name="sync" /></button>

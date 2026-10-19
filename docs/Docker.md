@@ -84,3 +84,8 @@ docker build -t seekfeed:latest .
 ```
 
 Dockerfile 使用 `bun.lock` 安装依赖，构建入口为 `src/seekfeed.ts`，镜像包含启动时所需 SQL 文件和静态资源。健康检查访问 `/health`。
+
+
+### Login IP behind a reverse proxy
+
+By default, device history records the TCP peer IP. When Nginx is the only public entry point, set `TRUST_PROXY=true` in `.env`, retain `SEEKFEED_BIND_ADDRESS=127.0.0.1`, and configure `proxy_set_header X-Real-IP $remote_addr;`. Nginx must overwrite this header rather than forwarding a caller-supplied value. Public/direct application ports must use `TRUST_PROXY=false`. Existing sessions keep the IP captured when they were created.

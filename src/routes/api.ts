@@ -1,3 +1,4 @@
+import { getClientInfo } from '../utils/clientInfo';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { DatabaseService } from '../services/database';
@@ -155,10 +156,7 @@ const sessionMiddleware = async (c: any, next: any) => {
     const authService = c.get('authService');
 
     // 获取客户端IP地址用于验证
-    const ipAddress = c.req.header('x-forwarded-for') ||
-                     c.req.header('x-real-ip') ||
-                     c.env?.CF_CONNECTING_IP ||
-                     '127.0.0.1';
+    const { ipAddress } = getClientInfo(c);
 
     const verification = await authService.verifySession(sessionId, ipAddress);
     if (!verification.valid) {
@@ -576,7 +574,7 @@ apiRoutes.post('/telegram/send-test', createValidationMiddleware(z.object({
 
         const telegramService = new TelegramPushService(dbService, config.bot_token);
         
-        const testMessage = message || `◇ SeekFeed · 推送测试\n\n✓ 通知通道工作正常。\n\n时间  ${new Date().toLocaleString('zh-CN')}`;
+        const testMessage = message || `✈️ SeekFeed · 推送测试\n\n✅ 通知通道工作正常。\n\n时间  ${new Date().toLocaleString('zh-CN')}`;
         const result = await telegramService.sendMessage(config.chat_id, testMessage);
 
         if (result) {

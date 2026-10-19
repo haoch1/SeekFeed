@@ -103,7 +103,7 @@ export class SessionService {
 
       // 可选：检查IP地址是否匹配（增强安全性）
       if (row.ip_address && ipAddress && row.ip_address !== ipAddress) {
-        logger.warn(`Session ${sessionId} IP地址不匹配: ${row.ip_address} vs ${ipAddress}`);
+        logger.warn(`登录设备的请求 IP 已变化: ${row.ip_address} vs ${ipAddress}`);
         // 可以选择是否严格检查IP，这里仅记录警告
       }
 

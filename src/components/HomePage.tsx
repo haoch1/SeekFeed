@@ -34,9 +34,9 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/" }) => {
                 <FieldInput type="text" id="subCreator" class="input-field" placeholder="作者名" />
               </div>
               <div class="sub-form-group">
-                <label for="subCategory" class="sub-form-label">分类</label>
-                <select data-1p-ignore="true" data-op-ignore="true" id="subCategory" class="input-field">
-                  <option value="">全部</option>
+                <label for="subCategory" class="sub-form-label">分类（可多选）</label>
+                <select data-1p-ignore="true" data-op-ignore="true" id="subCategory" multiple class="input-field">
+                  <option value="">全部分类</option>
                   <option value="daily">日常</option>
                   <option value="tech">技术</option>
                   <option value="info">情报</option>
@@ -52,7 +52,7 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/" }) => {
                 </select>
               </div>
             </div>
-            <div class="sub-form-row"><div class="sub-form-group" style="width:100%"><label for="excludeKeywords" class="sub-form-label">屏蔽词</label><FieldInput type="text" id="excludeKeywords" class="input-field" placeholder="如：出号, 求购, 已出（用逗号分隔）" maxlength="500" /><span class="form-hint">标题或正文包含任一屏蔽词时不通知。多个关键词需同时命中。</span></div></div>
+            <div class="sub-form-row"><div class="sub-form-group" style="width:100%"><label for="excludeKeywords" class="sub-form-label">屏蔽词</label><FieldInput type="text" id="excludeKeywords" class="input-field" placeholder="如：出号, 求购, 已出（用逗号分隔）" maxlength="500" /><span class="form-hint">分类之间任一符合即可；多个关键词需同时命中，包含屏蔽词时不通知。</span></div></div>
             {/* 第三行：添加按钮 */}
             <div class="sub-form-row sub-form-row-action">
               <button type="submit" class="btn btn-primary">添加订阅</button>
@@ -102,7 +102,8 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/" }) => {
             </div>
           </form>
           <div class="rss-sync-section"><div class="section-heading"><h2>手动同步</h2><p>保存源配置后，可立即抓取新帖。自动监控会按照设定的间隔持续运行。</p></div>
-            <button id="fetchRssBtn" class="btn btn-primary" style="width: 100%;">
+            <dl class="diagnostic-list rss-diagnostics"><div><dt>自动监控</dt><dd id="rssRunningStatus">读取状态中</dd></div><div><dt>抓取频率</dt><dd id="rssRunningInterval">—</dd></div><div><dt>上次成功同步</dt><dd id="rssLastSuccess">—</dd></div></dl>
+            <button id="fetchRssBtn" class="btn btn-primary">
               立即抓取 RSS
             </button>
           </div>

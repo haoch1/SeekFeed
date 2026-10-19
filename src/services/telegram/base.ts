@@ -54,7 +54,7 @@ export abstract class TelegramBaseService {
       'expose': '曝光',
       'sandbox': '沙盒'
     };
-    return categoryMap[category] || category;
+    return category.split(',').map(value => categoryMap[value.trim()] || value.trim()).join('、');
   }
 
   /**

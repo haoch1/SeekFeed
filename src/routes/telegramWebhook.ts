@@ -184,8 +184,6 @@ telegramWebhookRoutes.post('/setup', createValidationMiddleware(setupWebhookSche
       // 保存新的 bot_token
       dbService.updateBaseConfig({ bot_token });
       
-      // 设置 Bot 命令菜单
-      await telegramService.setBotCommands();
     }
     
     // 设置 Webhook
@@ -208,6 +206,7 @@ telegramWebhookRoutes.post('/setup', createValidationMiddleware(setupWebhookSche
     const webhookResult = await telegramService.setWebhook(finalWebhookUrl);
     
     if (webhookResult.success) {
+      await telegramService.setBotCommands();
       dbService.updateBaseConfig({ telegram_mode: 'webhook' });
       return c.json(createSuccessResponse({
         webhook_url: finalWebhookUrl,
@@ -323,7 +322,7 @@ telegramWebhookRoutes.post('/send-admin-message', async (c) => {
     }
     
     const telegramService = new TelegramWebhookService(dbService, config.bot_token);
-    const adminMessage = `◇ SeekFeed · 管理通知\n\n${message}\n\n时间  ${new Date().toLocaleString('zh-CN')}`;
+    const adminMessage = `📣 SeekFeed · 管理通知\n\n${message}\n\n时间  ${new Date().toLocaleString('zh-CN')}`;
     
     const success = await telegramService.sendMessage(targetChatId, adminMessage);
     

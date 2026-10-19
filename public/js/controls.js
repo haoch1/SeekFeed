@@ -29,14 +29,22 @@
         const state = { select, button, menu: null, index: 0 };
         const refresh = () => {
             button.innerHTML = `<span></span>${icon('chevron-down')}`;
-            button.firstElementChild.textContent = select.selectedOptions[0]?.textContent || '请选择';
+            const chosen = [...select.selectedOptions].filter(option => option.value);
+            button.firstElementChild.textContent = select.multiple ? (chosen.length === 0 ? select.options[0].textContent : chosen.length === 1 ? chosen[0].textContent : `已选 ${chosen.length} 个分类`) : select.selectedOptions[0]?.textContent || '请选择';
+            button.dataset.selected = String(select.multiple && chosen.length > 0);
+            button.title = select.multiple && chosen.length ? chosen.map(option => option.textContent).join('、') : '';
+            if (state.menu) [...state.menu.querySelectorAll('[role="option"]')].forEach((row, index) => {
+                const selected = select.options[index].value ? select.options[index].selected : !chosen.length;
+                row.setAttribute('aria-selected', String(selected));
+                if (select.multiple) row.firstElementChild.innerHTML = selected ? icon('check') : '';
+            });
             button.disabled = select.disabled;
             button.hidden = select.style.display === 'none' || select.hidden;
         };
         state.refresh = refresh;
         selects.set(select, state);
         const highlight = index => {
-            const options = [...state.menu.children];
+            const options = [...state.menu.querySelectorAll('[role="option"]')];
             state.index = (index + options.length) % options.length;
             options.forEach((option, i) => option.classList.toggle('highlighted', i === state.index));
             const current = options[state.index];
@@ -45,8 +53,11 @@
         };
         const choose = index => {
             if (select.options[index].disabled) return;
-            select.selectedIndex = index;
-            refresh(); close();
+            if (select.multiple) {
+                if (!select.options[index].value) [...select.options].forEach(option => { option.selected = false; });
+                else { select.options[0].selected = false; select.options[index].selected = !select.options[index].selected; }
+                refresh();
+            } else { select.selectedIndex = index; refresh(); close(); }
             select.dispatchEvent(new Event('change', { bubbles: true }));
             button.focus({ preventScroll: true });
         };
@@ -56,6 +67,7 @@
             menu.id = `${select.id}Menu`;
             menu.className = 'select-menu';
             menu.setAttribute('role', 'listbox');
+            if (select.multiple) { menu.dataset.multiple = 'true'; menu.setAttribute('aria-multiselectable', 'true'); }
             menu.setAttribute('aria-label', button.getAttribute('aria-label'));
             [...select.options].forEach((option, i) => {
                 const row = document.createElement('div');
@@ -64,22 +76,32 @@
                 row.setAttribute('role', 'option');
                 row.setAttribute('aria-selected', String(option.selected));
                 row.setAttribute('aria-disabled', String(option.disabled));
-                row.innerHTML = `<span></span>${option.selected ? icon('check') : ''}`;
-                row.firstElementChild.textContent = option.textContent;
+                row.innerHTML = select.multiple ? '<span class="select-check" aria-hidden="true"></span><span></span>' : `<span></span>${option.selected ? icon('check') : ''}`;
+                (select.multiple ? row.lastElementChild : row.firstElementChild).textContent = option.textContent;
                 row.addEventListener('pointerdown', e => e.preventDefault());
                 row.addEventListener('click', () => choose(i));
                 row.addEventListener('pointermove', () => highlight(i));
                 menu.append(row);
             });
+            if (select.multiple) {
+                const actions = document.createElement('div'); actions.className = 'select-menu-actions'; actions.setAttribute('role', 'group'); actions.setAttribute('aria-label', '分类批量选择');
+                for (const [text, checked] of [['全选', true], ['清空', false]]) {
+                    const action = document.createElement('button'); action.type = 'button'; action.className = 'btn btn-text'; action.textContent = text;
+                    action.addEventListener('click', () => { [...select.options].forEach(option => { option.selected = Boolean(option.value) && checked; }); refresh(); select.dispatchEvent(new Event('change', { bubbles: true })); button.focus({ preventScroll: true }); });
+                    actions.append(action);
+                }
+                menu.append(actions);
+            }
             document.body.append(menu);
             const rect = button.getBoundingClientRect();
             const height = Math.min(menu.scrollHeight, 260);
+            const width = Math.min(innerWidth - 16, Math.max(rect.width, select.multiple ? 210 : 140));
             const below = innerHeight - rect.bottom - 12;
-            menu.style.width = `${Math.max(rect.width, 140)}px`;
-            menu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - Math.max(rect.width, 140) - 8))}px`;
+            menu.style.width = `${width}px`;
+            menu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - width - 8))}px`;
             menu.style.maxHeight = `${Math.max(80, Math.min(260, Math.max(below, rect.top - 12)))}px`;
             menu.style.top = `${below >= height || below >= rect.top ? rect.bottom + 5 : Math.max(8, rect.top - Math.min(height, rect.top - 12) - 5)}px`;
-            state.menu = menu; active = state;
+            state.menu = menu; active = state; refresh();
             button.setAttribute('aria-expanded', 'true');
             highlight(Math.max(0, select.selectedIndex));
         };
