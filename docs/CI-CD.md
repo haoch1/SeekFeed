@@ -7,6 +7,9 @@
 - Buildx 构建 `linux/amd64` 与 `linux/arm64` 镜像。
 - PR 只构建；分支/标签构建成功后发布到当前仓库所有者的 GHCR 空间，镜像名固定为 `seekfeed`。
 - `main` 生成 `latest`，`develop` 生成 `develop`，版本标签 `v1.2.3` 生成 `1.2.3`。
+- 每个提交额外生成 `sha-<短提交号>`，可固定部署版本。
+
+当前公开镜像：[ghcr.io/haoch1/seekfeed](https://github.com/haoch1/SeekFeed/pkgs/container/seekfeed)。生产 Compose 默认使用此镜像。
 
 工作流读取当前 `github.repository_owner`，没有硬编码个人账号。使用 GitHub 提供的 `GITHUB_TOKEN`；仓库 Actions 需允许写入 Packages。
 

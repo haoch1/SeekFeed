@@ -39,10 +39,13 @@ Compose 将主机 `PORT` 映射到容器内固定的 3010。RSS URL、间隔、�
 ## 生产部署
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
 ```
 
-生产配置包含 CPU/内存限制和滚动日志。对外访问时按实际域名配置反向代理和 HTTPS。如使用自己的镜像仓库，设置 `SEEKFEED_IMAGE` 并执行 `pull`、`up -d --no-build`；无需构建本地源码。
+生产配置拉取公开镜像 `ghcr.io/haoch1/seekfeed:latest`，包含 CPU/内存限制和滚动日志，默认只监听 `127.0.0.1:3010`。对外访问时按实际域名配置反向代理和 HTTPS。`SEEKFEED_BIND_ADDRESS` 可修改监听地址；如使用其他镜像仓库或固定摘要，设置 `SEEKFEED_IMAGE`。
+
+推送 `main` 后 GitHub Actions 自动测试并发布 `latest`、`main` 和 `sha-<短提交号>` 标签。更新时再次执行上面的 `pull` 和 `up -d`，无需在服务器编译源码。
 
 ## 日常维护
 

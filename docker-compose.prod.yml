@@ -2,12 +2,11 @@ name: seekfeed
 
 services:
   seekfeed:
-    image: ${SEEKFEED_IMAGE:-seekfeed:latest}
-    build: .
+    image: ${SEEKFEED_IMAGE:-ghcr.io/haoch1/seekfeed:latest}
     container_name: seekfeed
     restart: unless-stopped
     ports:
-      - "${PORT:-3010}:3010"
+      - "${SEEKFEED_BIND_ADDRESS:-127.0.0.1}:${PORT:-3010}:3010"
     environment:
       NODE_ENV: production
       PORT: 3010

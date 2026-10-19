@@ -1,5 +1,7 @@
 # SeekFeed
 
+[![SeekFeed CI](https://github.com/haoch1/SeekFeed/actions/workflows/docker-build.yml/badge.svg)](https://github.com/haoch1/SeekFeed/actions/workflows/docker-build.yml)
+
 NodeSeek 新帖监控、关键词筛选与 Telegram 消息通知。基于 **Bun + Hono + SQLite**，提供统一的 ReUI 风格控制台、明暗主题和移动端布局。
 
 ## 功能
@@ -30,13 +32,16 @@ docker run -d --name seekfeed -p 3010:3010 \
   -v seekfeed_data:/usr/src/app/data seekfeed:latest
 ```
 
-生产部署：
+生产部署直接使用 GitHub Actions 构建的公开镜像，支持 `amd64` 和 `arm64`：
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
 ```
 
-详见 [Docker 部署](docs/Docker.md) 和 [CI/CD 配置](docs/CI-CD.md)。仓库不预设任何个人镜像空间。
+默认镜像为 `ghcr.io/haoch1/seekfeed:latest`。生产配置监听 `127.0.0.1:3010`，通过 Nginx 等反向代理提供 HTTPS；可用 `SEEKFEED_IMAGE` 和 `SEEKFEED_BIND_ADDRESS` 覆盖。更新时再次执行 `pull` 和 `up -d`，数据卷会保留。
+
+详见 [Docker 部署](docs/Docker.md) 和 [CI/CD 配置](docs/CI-CD.md)。
 
 ## 本地运行
 
