@@ -48,3 +48,5 @@ The workspace uses a light neutral canvas with white cards, visible cool-gray bo
 Category selects use one accessible multi-select with persistent checkboxes, a selected count, select-all and clear actions. Keyboard navigation, Space/Enter toggling and Escape remain available. Category keys are stored as a comma-separated set in the existing field; boards use OR, other conditions use AND. Post pagination applies the exact same SQL IN filter to its result and total queries.
 
 Active devices show the IP recorded at login. Direct deployments use the socket address. Deployments behind a controlled reverse proxy can enable TRUST_PROXY=true; that proxy must overwrite X-Real-IP and keep the application port private. Existing sessions retain their original recorded IP.
+
+The feed polls current results every 10 seconds while visible and refreshes on returning to the tab. Page one reconciles keyed post rows without a loading flash, preserving the visible post anchor. Older pages retain their contents and show a compact new-post action. Filters and page selection remain intact; hidden tabs and settings pages do not poll the post list.

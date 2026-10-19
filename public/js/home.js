@@ -102,6 +102,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // API 请求封装
   // ============================================
   async function apiRequest(url, options = {}) {
+    const { silent = false, ...requestOptions } = options;
     const headers = {
       "Content-Type": "application/json",
       ...options.headers,
@@ -114,7 +115,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const defaultOptions = { headers };
 
     try {
-      const response = await fetch(url, { ...options, ...defaultOptions });
+      const response = await fetch(url, { ...requestOptions, ...defaultOptions });
       const result = await response.json();
 
       if (response.status === 401) {
@@ -128,8 +129,7 @@ document.addEventListener("DOMContentLoaded", function () {
       return result;
     } catch (error) {
       if (error.name === "AbortError") return null;
-      console.error("API 请求错误:", error);
-      Toast.error("网络错误，请重试");
+      if (!silent) { console.error("API 请求错误:", error); Toast.error("网络错误，请重试"); }
       return null;
     }
   }
@@ -228,10 +228,16 @@ document.addEventListener("DOMContentLoaded", function () {
   let postsController;
   let postsRequest = 0;
   let renderedFilters = '';
+  let latestSeenPostId = null;
+  let liveRefreshing = false;
   const el = id => document.getElementById(id);
 
-  async function loadPosts(page = currentPage, filters = currentFilters) {
+  async function loadPosts(page = currentPage, filters = currentFilters, quiet = false) {
     const list = el("postsList");
+    if (quiet && (list.getAttribute('aria-busy') === 'true' || list.contains(document.activeElement) || el('pagination').contains(document.activeElement))) return;
+    const anchor = quiet && window.scrollY > 0 ? [...list.querySelectorAll('.post-card')].find(item => item.getBoundingClientRect().bottom > 0) : null;
+    const anchorId = anchor?.dataset.postId;
+    const anchorTop = anchor?.getBoundingClientRect().top;
     const sameFilters = JSON.stringify(filters) === renderedFilters;
     if (sameFilters && list.querySelector('.post-card')) {
       list.style.minHeight = `${list.getBoundingClientRect().height}px`;
@@ -243,10 +249,10 @@ document.addEventListener("DOMContentLoaded", function () {
     postsController = new AbortController();
     const request = ++postsRequest;
     currentFilters = { ...filters };
-    el("postsList").setAttribute("aria-busy", "true");
+    if (!quiet) el("postsList").setAttribute("aria-busy", "true");
     const params = new URLSearchParams({ page: String(page), limit: "10",
       ...Object.fromEntries(Object.entries(currentFilters).filter(([, value]) => value !== "" && value !== undefined)) });
-    const result = await apiRequest(`/api/posts?${params}`, { signal: postsController.signal });
+    const result = await apiRequest(`/api/posts?${params}`, { signal: postsController.signal, silent: quiet });
     if (request !== postsRequest) return;
     el("postsList").setAttribute("aria-busy", "false");
     if (!result?.success) {
@@ -267,7 +273,21 @@ document.addEventListener("DOMContentLoaded", function () {
     if (totalPages <= 1) list.style.minHeight = '';
     el('feedError').hidden = true;
     if (!posts.length && page > 1 && totalPages > 0) return loadPosts(totalPages);
-    el("postsList").replaceChildren(...posts.map(createPostElement));
+    const existing = new Map([...list.querySelectorAll('.post-card')].map(item => [item.dataset.postId, item]));
+    const keep = new Set();
+    posts.forEach((post, index) => {
+      const key = String(post.post_id);
+      const previous = existing.get(key);
+      const item = previous?.dataset.signature === JSON.stringify(post) ? previous : createPostElement(post);
+      keep.add(item);
+      if (list.children[index] !== item) list.insertBefore(item, list.children[index] || null);
+    });
+    [...list.children].filter(item => !keep.has(item)).forEach(item => item.remove());
+    if (selected === 1) { latestSeenPostId = posts[0]?.post_id || null; el('newPostsBtn').hidden = true; }
+    if (anchorId) {
+      const kept = [...list.children].find(item => item.dataset.postId === anchorId);
+      if (kept) window.scrollBy({ top: kept.getBoundingClientRect().top - anchorTop, behavior: 'instant' });
+    }
     el("emptyState").style.display = posts.length ? "none" : "block";
     el("emptyState").querySelector(".empty-title").textContent = "暂无文章";
     el("emptyState").querySelector(".empty-desc").textContent = Object.values(currentFilters).some(Boolean) ? "没有符合条件的帖子，试试清除筛选。" : "同步 RSS 后，最新帖子会显示在这里。";
@@ -275,9 +295,29 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!isLoggedIn && !Object.values(currentFilters).some(Boolean)) el("overviewTotal").textContent = total.toLocaleString();
   }
 
+  async function refreshFeed() {
+    if (liveRefreshing || document.hidden || el('feedPage').hidden || Drawer.activeDrawer || el('postsList').getAttribute('aria-busy') === 'true') return;
+    liveRefreshing = true;
+    try {
+      if (currentPage === 1) await loadPosts(1, currentFilters, true);
+      else {
+        const snapshot = JSON.stringify(currentFilters);
+        const request = postsRequest;
+        const params = new URLSearchParams({ page: '1', limit: '1', ...Object.fromEntries(Object.entries(currentFilters).filter(([, value]) => value !== '' && value !== undefined)) });
+        const result = await apiRequest(`/api/posts?${params}`, { silent: true });
+        if (result?.success && request === postsRequest && snapshot === JSON.stringify(currentFilters)) {
+          const newest = result.data.posts[0]?.post_id;
+          if (latestSeenPostId && newest && newest !== latestSeenPostId) el('newPostsBtn').hidden = false;
+        }
+      }
+    } finally { liveRefreshing = false; }
+  }
+
   function createPostElement(post) {
     const item = document.createElement("article");
     item.className = "post-card";
+    item.dataset.postId = String(post.post_id);
+    item.dataset.signature = JSON.stringify(post);
     const href = `https://www.nodeseek.com/post-${Number(post.post_id)}-1`;
     const tags = [post.sub_keyword1, post.sub_keyword2, post.sub_keyword3].filter(Boolean)
       .map(word => `<span class="tag tag-blue">${escapeHtml(word)}</span>`).join("");
@@ -336,6 +376,7 @@ document.addEventListener("DOMContentLoaded", function () {
     el("pageTitle").textContent = el("breadcrumbCurrent").textContent = active ? "命中订阅" : "最新帖子";
   }
   function initFilters() {
+    el('newPostsBtn').addEventListener('click', async () => { await loadPosts(1); el('feedPage').scrollIntoView({ block: 'start', behavior: 'instant' }); });
     let searchTimer, creatorTimer;
     el("searchInput").addEventListener("input", e => {
       clearTimeout(searchTimer);
@@ -389,8 +430,8 @@ document.addEventListener("DOMContentLoaded", function () {
     } else Toast.error(result?.message || "同步失败，请稍后重试");
     updateMonitor();
   }
-  async function updateStats() {
-    const result = await apiRequest("/api/stats/overview");
+  async function updateStats(quiet = false) {
+    const result = await apiRequest("/api/stats/overview", { silent: quiet });
     if (!result?.success) return;
     const data = result.data;
     const fields = { drawerStatTodayPushed: data.today_pushed, drawerStatTodayPosts: data.today_posts,
@@ -398,8 +439,8 @@ document.addEventListener("DOMContentLoaded", function () {
       overviewMatched: data.matched_not_pushed + data.pushed_posts, overviewPushed: data.pushed_posts };
     Object.entries(fields).forEach(([id, value]) => el(id).textContent = Number(value || 0).toLocaleString());
   }
-  async function updateMonitor() {
-    const result = await apiRequest("/api/scheduler/status");
+  async function updateMonitor(quiet = false) {
+    const result = await apiRequest("/api/scheduler/status", { silent: quiet });
     const status = result?.data?.rssTask;
     const label = el("monitorStatus");
     label.dataset.state = !status ? "error" : status.lastError ? "error" : status.running ? "running" : "paused";
@@ -1234,7 +1275,9 @@ document.addEventListener("DOMContentLoaded", function () {
     updateStats();
     loadFilterSubscriptions();
     updateMonitor();
-    setInterval(() => { if (!document.hidden) { updateMonitor(); updateStats(); } }, 30000);
+    const liveTick = () => { if (!document.hidden) { updateMonitor(true); updateStats(true); refreshFeed(); } };
+    setInterval(liveTick, 10000);
+    document.addEventListener('visibilitychange', liveTick);
   }
 
   init();

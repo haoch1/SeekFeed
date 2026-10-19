@@ -48,7 +48,7 @@ export const DashboardSurface: FC<PropsWithChildren<{ path?: string }>> = ({ chi
                     <div class="metric"><Icon name="send" /><div><span>已成功推送</span><strong id="overviewPushed">—</strong></div></div>
                 </section>
                 <section class="feed-panel" aria-label="帖子动态">
-                    <div class="feed-panel-heading"><h2>帖子动态</h2><span id="monitorStatus" class="monitor-status"><i></i><span>读取监控状态</span></span></div>
+                    <div class="feed-panel-heading"><h2>帖子动态</h2><div class="feed-live-actions"><button type="button" id="newPostsBtn" class="btn btn-secondary btn-xs" hidden><Icon name="arrow-up" />有新帖，查看最新</button><span id="monitorStatus" class="monitor-status"><i></i><span>读取监控状态</span></span></div></div>
                     <div class="feed-toolbar">
                         <div class="search-box"><Icon name="search" /><FieldInput type="search" id="searchInput" placeholder="搜索标题、作者…" aria-label="搜索标题、作者" class="search-input" /><button id="clearSearchBtn" class="search-clear" aria-label="清除搜索" style="display:none"><Icon name="close" /></button></div>
                         <select data-1p-ignore="true" data-op-ignore="true" id="filterCategory" multiple class="filter-select" aria-label="分类筛选"><option value="">全部分类</option>{categories.map(([value, label]) => <option value={value}>{label}</option>)}</select>

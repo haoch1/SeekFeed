@@ -505,3 +505,12 @@ button:disabled { pointer-events: none; }
 @media (max-width: 1050px) {
     #rssPage .rss-sync-section { padding-left: 0; border-left: 0; }
 }
+
+.feed-panel-heading { min-height: 56px; padding-top: 10px; padding-bottom: 10px; }
+.feed-live-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; min-height: 34px; }
+#newPostsBtn { color: var(--primary); border-color: var(--primary); }
+@media (max-width: 760px) {
+    .feed-live-actions { gap: 6px; }
+    #newPostsBtn { font-size: 10px; padding: 4px 6px; }
+    .feed-live-actions:has(#newPostsBtn:not([hidden])) #monitorStatus { display: none; }
+}
