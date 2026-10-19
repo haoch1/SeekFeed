@@ -1,3 +1,4 @@
+import { FieldInput } from './Controls';
 import type { FC } from "hono/jsx";
 import { Layout } from "./Layout";
 import { BrandMark } from "./DashboardSurface";
@@ -14,7 +15,7 @@ export const InitPage: FC = () => {
         <header class="setup-header">
           <a href="/" class="workspace-brand">
             <span class="brand-icon"><BrandMark /></span>
-            <span><strong>SeekFeed</strong><small>NodeSeek 监控</small></span>
+            <span><strong>SeekFeed</strong></span>
           </a>
         </header>
 
@@ -36,7 +37,7 @@ export const InitPage: FC = () => {
                 <label for="username" class="form-label" style="color: var(--text-primary); font-weight: 600;">
                   用户名
                 </label>
-                <input
+                <FieldInput
                   type="text"
                   id="username"
                   name="username"
@@ -53,7 +54,7 @@ export const InitPage: FC = () => {
                 <label for="password" class="form-label" style="color: var(--text-primary); font-weight: 600;">
                   密码
                 </label>
-                <input
+                <FieldInput
                   type="password"
                   id="password"
                   name="password"
@@ -69,7 +70,7 @@ export const InitPage: FC = () => {
                 <label for="confirmPassword" class="form-label" style="color: var(--text-primary); font-weight: 600;">
                   确认密码
                 </label>
-                <input
+                <FieldInput
                   type="password"
                   id="confirmPassword"
                   name="confirmPassword"

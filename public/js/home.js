@@ -30,7 +30,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // Toast 通知系统
   // ============================================
   function renderIcon(name) {
-    return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="/icons/ui.svg#${name}"/></svg>`;
+    return window.SeekFeedControls.icon(name);
   }
 
   const Toast = {
@@ -160,7 +160,7 @@ document.addEventListener("DOMContentLoaded", function () {
       document.documentElement.setAttribute("data-theme", newTheme);
       localStorage.setItem("theme", newTheme);
       updateThemeIcon();
-      Toast.info(`已切换到${newTheme === "dark" ? "暗色" : "浅色"}模式`);
+
     });
   }
 
@@ -204,7 +204,7 @@ document.addEventListener("DOMContentLoaded", function () {
       this.overlay.style.display = "block";
       requestAnimationFrame(() => { drawer.classList.add("drawer-open"); this.overlay.classList.add("overlay-visible"); });
       document.body.style.overflow = "hidden";
-      drawer.querySelector(".drawer-close")?.focus();
+      drawer.querySelector(".drawer-close")?.focus({ preventScroll: true });
     },
     closeAll(restore = true) {
       if (!this.activeDrawer) return;
@@ -216,7 +216,7 @@ document.addEventListener("DOMContentLoaded", function () {
       document.body.style.overflow = "";
       document.querySelector(".workspace-shell").inert = false;
       this.activeDrawer = null;
-      if (restore) this.opener?.focus();
+      if (restore) this.opener?.focus({ preventScroll: true });
     },
   };
 
@@ -227,13 +227,21 @@ document.addEventListener("DOMContentLoaded", function () {
   let currentFilters = {};
   let postsController;
   let postsRequest = 0;
+  let renderedFilters = '';
   const el = id => document.getElementById(id);
 
-  async function loadPosts(page = 1, filters = currentFilters) {
+  async function loadPosts(page = currentPage, filters = currentFilters) {
+    const list = el("postsList");
+    const sameFilters = JSON.stringify(filters) === renderedFilters;
+    if (sameFilters && list.querySelector('.post-card')) {
+      list.style.minHeight = `${list.getBoundingClientRect().height}px`;
+    } else {
+      list.style.minHeight = '';
+    }
+    window.SeekFeedControls?.refreshSelects();
     postsController?.abort();
     postsController = new AbortController();
     const request = ++postsRequest;
-    currentPage = page;
     currentFilters = { ...filters };
     el("postsList").setAttribute("aria-busy", "true");
     const params = new URLSearchParams({ page: String(page), limit: "10",
@@ -242,6 +250,10 @@ document.addEventListener("DOMContentLoaded", function () {
     if (request !== postsRequest) return;
     el("postsList").setAttribute("aria-busy", "false");
     if (!result?.success) {
+      if (list.querySelector('.post-card')) {
+        el('feedError').hidden = false;
+        return;
+      }
       el("postsList").replaceChildren();
       el("emptyState").style.display = "block";
       el("emptyState").querySelector(".empty-title").textContent = "加载失败";
@@ -250,6 +262,10 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
     const { posts, total, page: selected, totalPages } = result.data;
+    currentPage = selected;
+    renderedFilters = JSON.stringify(currentFilters);
+    if (totalPages <= 1) list.style.minHeight = '';
+    el('feedError').hidden = true;
     if (!posts.length && page > 1 && totalPages > 0) return loadPosts(totalPages);
     el("postsList").replaceChildren(...posts.map(createPostElement));
     el("emptyState").style.display = posts.length ? "none" : "block";
@@ -268,7 +284,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const status = { 0: "待匹配", 1: "待推送", 2: "未命中", 3: "已推送" }[post.push_status] || "未知";
     const date = new Date(post.pub_date);
     const time = Number.isNaN(date.getTime()) ? "时间未知" : new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
-    item.innerHTML = `<div class="post-content"><div class="post-header"><h3 class="post-title"><a href="${href}" target="_blank" rel="noopener noreferrer">${escapeHtml(post.title)}</a></h3></div><p class="post-memo">${escapeHtml(post.memo || "")}</p><div class="post-meta"><span class="post-category">${escapeHtml(getCategoryName(post.category))}</span><span>${escapeHtml(post.creator)}</span><span class="post-date">${time}</span>${tags ? `<span class="post-sub-tags">${tags}</span>` : ""}</div></div><div class="post-actions"><span class="delivery-status" data-status="${Number(post.push_status)}">${status}</span><a class="icon-btn" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="打开帖子">${renderIcon("external")}</a></div>`;
+    item.innerHTML = `<div class="post-content"><div class="post-header"><h3 class="post-title"><a href="${href}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(post.title)}">${escapeHtml(post.title)}</a></h3></div><p class="post-memo">${escapeHtml(post.memo || "")}</p><div class="post-meta"><span class="post-category">${escapeHtml(getCategoryName(post.category))}</span><span>${escapeHtml(post.creator)}</span><span class="post-date">${time}</span>${tags ? `<span class="post-sub-tags">${tags}</span>` : ""}</div></div><div class="post-actions"><span class="delivery-status" data-status="${Number(post.push_status)}">${status}</span><a class="icon-btn" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="打开帖子">${renderIcon("external")}</a></div>`;
     return item;
   }
   function escapeHtml(value) {
@@ -280,11 +296,24 @@ document.addEventListener("DOMContentLoaded", function () {
   function updatePagination(page, pages, total) {
     el("pagination").style.display = total ? "flex" : "none";
     el("paginationInfo").textContent = `共 ${total} 篇 · 第 ${page} / ${Math.max(pages, 1)} 页`;
-    el("firstPageBtn").disabled = el("prevPageBtn").disabled = page <= 1;
+    el("prevPageBtn").disabled = page <= 1;
     el("nextPageBtn").disabled = page >= pages;
+    const focusPage = el("pageNumbers").contains(document.activeElement) ? Number(document.activeElement.textContent) : null;
     el("pageNumbers").replaceChildren();
-    const start = Math.max(1, Math.min(page - 1, pages - 2));
-    for (let i = start; i <= Math.min(pages, start + 2); i++) {
+    let numbers;
+    if (pages <= 7) numbers = Array.from({ length: pages }, (_, i) => i + 1);
+    else if (page <= 4) numbers = [1, 2, 3, 4, 5, 'ellipsis-start', pages];
+    else if (page >= pages - 3) numbers = [1, 'ellipsis-end', pages - 4, pages - 3, pages - 2, pages - 1, pages];
+    else numbers = [1, 'ellipsis-start', page - 1, page, page + 1, 'ellipsis-end', pages];
+    for (const i of numbers) {
+      if (typeof i !== 'number') {
+        const gap = document.createElement('span');
+        gap.className = 'page-ellipsis';
+        gap.textContent = '…';
+        gap.setAttribute('aria-hidden', 'true');
+        el('pageNumbers').append(gap);
+        continue;
+      }
       const button = document.createElement("button");
       button.className = `page-number ${i === page ? "active" : ""}`;
       button.textContent = i;
@@ -292,6 +321,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (i === page) button.setAttribute("aria-current", "page");
       button.addEventListener("click", () => loadPosts(i));
       el("pageNumbers").append(button);
+      if (i === focusPage) button.focus({ preventScroll: true });
     }
   }
   function setMatched(active) {
@@ -338,7 +368,6 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     el("subscribedOnlyChip").addEventListener("click", () => { setMatched(!currentFilters.pushStatusIn); loadPosts(1); });
     el("refreshBtn").addEventListener("click", () => { loadPosts(); updateStats(); updateMonitor(); });
-    el("firstPageBtn").addEventListener("click", () => loadPosts(1));
     el("prevPageBtn").addEventListener("click", () => loadPosts(Math.max(1, currentPage - 1)));
     el("nextPageBtn").addEventListener("click", () => loadPosts(currentPage + 1));
     ["syncNowBtn", "fetchRssBtn"].forEach(id => el(id).addEventListener("click", syncNow));
@@ -623,7 +652,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function initRssConfig() {
     // 保存配置
-    document.getElementById("rssConfigForm")?.addEventListener("submit", async (e) => {
+    document.getElementById("rssConfigForm")?.addEventListener("submit", pendingSubmit(async (e) => {
       e.preventDefault();
 
       const data = {
@@ -645,7 +674,7 @@ document.addEventListener("DOMContentLoaded", function () {
       } else {
         Toast.error(result?.message || "保存失败");
       }
-    });
+    }));
 
     // 测试连接
     document.getElementById("testRssBtn")?.addEventListener("click", async () => {
@@ -678,6 +707,7 @@ document.addEventListener("DOMContentLoaded", function () {
       document.getElementById("stopPush").checked = result.data.stop_push === 1;
       document.getElementById("onlyTitle").checked = result.data.only_title === 1;
     }
+    if (!el("webhookUrl").value) el("webhookUrl").value = `${location.origin}/telegram/webhook`;
     // 同时加载交互模式状态
     await loadTelegramInteractionStatus();
   }
@@ -699,12 +729,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // 更新状态面板
     const statusPanel = document.getElementById("telegramStatusPanel");
-    if (statusPanel && data.configured) {
+    if (statusPanel) {
       statusPanel.style.display = "block";
       const botStatus = document.getElementById("telegramBotStatus");
       const webhookStatus = document.getElementById("telegramWebhookStatus");
       const bindingStatus = document.getElementById("telegramBindingStatus");
-      if (botStatus) botStatus.textContent = data.connected ? "已连接" : "未连接";
+      if (botStatus) botStatus.textContent = data.connected ? "已连接" : data.configured ? "连接失败" : "未配置";
       if (webhookStatus) {
         if (pollingActive) {
           webhookStatus.textContent = "Polling 运行中";
@@ -727,6 +757,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (webhookPanel) webhookPanel.style.display = mode === "webhook" ? "block" : "none";
     if (pollingPanel) pollingPanel.style.display = mode === "polling" ? "block" : "none";
+    el("disabledModePanel").style.display = mode === "disabled" ? "block" : "none";
 
     if (pollingActive) {
       if (startBtn) startBtn.style.display = "none";
@@ -748,7 +779,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function initTelegramConfig() {
-    document.getElementById("telegramConfigForm")?.addEventListener("submit", async (e) => {
+    document.getElementById("telegramConfigForm")?.addEventListener("submit", pendingSubmit(async (e) => {
       e.preventDefault();
 
       const data = {
@@ -768,7 +799,7 @@ document.addEventListener("DOMContentLoaded", function () {
       } else {
         Toast.error(result?.message || "保存失败");
       }
-    });
+    }));
 
     document.getElementById("testTelegramBtn")?.addEventListener("click", async () => {
       Toast.info("正在测试连接...");
@@ -786,7 +817,7 @@ document.addEventListener("DOMContentLoaded", function () {
         Toast.info("连接成功，正在发送测试消息...");
         const testResult = await apiRequest("/api/push/test-send", {
           method: "POST",
-          body: JSON.stringify({ message: "📡 SeekFeed 推送测试" }),
+          body: JSON.stringify({ message: "◇ SeekFeed · 推送测试\n\n✓ 连接正常，测试通知已送达。" }),
         });
         if (testResult?.success) {
           Toast.success("连接测试成功，测试消息已发送");
@@ -807,7 +838,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     // Webhook 表单提交
-    document.getElementById("webhookConfigForm")?.addEventListener("submit", async (e) => {
+    document.getElementById("webhookConfigForm")?.addEventListener("submit", pendingSubmit(async (e) => {
       e.preventDefault();
       const webhookUrl = document.getElementById("webhookUrl").value.trim();
       if (!webhookUrl) {
@@ -832,8 +863,13 @@ document.addEventListener("DOMContentLoaded", function () {
       } else {
         Toast.error(result?.message || "Webhook 设置失败");
       }
-    });
+    }));
 
+    el("disableTelegramBtn").addEventListener("click", async () => {
+      const result = await apiRequest("/api/webhook/disable", { method: "POST" });
+      if (result?.success) { Toast.success("命令交互已停用"); loadTelegramInteractionStatus(); }
+      else Toast.error(result?.message || "停用失败");
+    });
     // 清除 Webhook
     document.getElementById("clearWebhookBtn")?.addEventListener("click", async () => {
       Toast.info("正在清除 Webhook...");
@@ -921,7 +957,7 @@ document.addEventListener("DOMContentLoaded", function () {
   async function loadSubscriptions() {
     const result = await apiRequest("/api/subscriptions");
     const container = el("subscriptionsList");
-    if (!result?.success) { container.textContent = "订阅加载失败，请重新打开面板重试。"; return; }
+    if (!result?.success) { container.textContent = "订阅加载失败，请刷新页面重试。"; return; }
     container.innerHTML = result.data.length ? result.data.map(sub => `<div class="subscription-item ${sub.enabled === 0 ? "paused" : ""}" data-id="${sub.id}"><div class="subscription-description"><div class="subscription-keywords">${[sub.keyword1, sub.keyword2, sub.keyword3].filter(Boolean).map(word => `<span class="tag tag-blue">${escapeHtml(word)}</span>`).join("") || '<span class="tag">按作者 / 分类订阅</span>'}</div><div class="subscription-filters"><span>${sub.enabled === 0 ? "已暂停" : "监控中"}</span>${sub.creator ? `<span>作者 ${escapeHtml(sub.creator)}</span>` : ""}${sub.category ? `<span>${escapeHtml(getCategoryName(sub.category))}</span>` : ""}</div>${sub.exclude_keywords ? `<div class="subscription-exclusions">屏蔽：${escapeHtml(sub.exclude_keywords)}</div>` : ""}</div><div class="subscription-controls"><button class="btn btn-secondary btn-xs toggle-sub" data-enabled="${sub.enabled === 0 ? 1 : 0}">${sub.enabled === 0 ? "恢复" : "暂停"}</button><button class="btn btn-danger btn-xs delete-sub">删除</button></div></div>`).join("") : '<div class="empty-state-small"><div class="empty-title">还没有订阅</div><p class="form-hint">添加关键词、作者或分类，开始接收有价值的动态。</p></div>';
     container.querySelectorAll(".toggle-sub").forEach(btn => btn.addEventListener("click", async () => {
       btn.disabled = true;
@@ -938,7 +974,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }));
   }
   function initSubscriptions() {
-    el("addSubForm").addEventListener("submit", async e => {
+    el("addSubForm").addEventListener("submit", pendingSubmit(async e => {
       e.preventDefault();
       const data = { keyword1: el("keyword1").value.trim() || undefined, keyword2: el("keyword2").value.trim() || undefined,
         keyword3: el("keyword3").value.trim() || undefined, creator: el("subCreator").value.trim() || undefined,
@@ -949,29 +985,114 @@ document.addEventListener("DOMContentLoaded", function () {
       button.disabled = false;
       if (!result?.success) return Toast.error(result?.message || "添加失败");
       Toast.success("订阅已添加"); el("addSubForm").reset(); loadSubscriptions(); loadFilterSubscriptions(); updateStats();
+    }));
+  }
+  const routeMap = {
+    '/': ['feed', '最新帖子'], '/matched': ['feed', '命中订阅'],
+    '/subscriptions': ['subscriptions', '订阅管理'], '/statistics': ['stats', '统计信息'],
+    '/settings/account': ['account', '账号与安全'], '/settings/rss': ['rss', 'RSS 配置'], '/settings/telegram': ['telegram', 'Telegram'],
+  };
+  let activePath = null;
+  const routeScroll = new Map();
+  function navigate(path, push = true) {
+    if (path === '/settings') path = '/settings/account';
+    const [name, title] = routeMap[path] || routeMap['/'];
+    if (!isLoggedIn && !['feed', 'stats'].includes(name)) { LoginModal.open(); return; }
+    if (activePath) routeScroll.set(activePath, scrollY);
+    if (push && location.pathname !== path) history.pushState({}, '', path);
+    window.SeekFeedControls.closeSelect();
+    document.querySelectorAll('.route-page').forEach(page => page.hidden = page.id !== `${name}Page`);
+    document.querySelectorAll('.workspace-nav [data-route]').forEach(link => {
+      const selected = link.pathname === path;
+      link.classList.toggle('selected', selected);
+      if (selected) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
     });
+    el('breadcrumbCurrent').textContent = title;
+    document.title = `${title} · SeekFeed`;
+    if (name === 'feed') { setMatched(path === '/matched'); loadPosts(currentPage); }
+    if (name === 'subscriptions') loadSubscriptions();
+    if (name === 'rss') loadRssConfig();
+    if (name === 'telegram') loadTelegramConfig();
+    if (name === 'stats') { loadChartData(currentChartDays); updateStats(); }
+    if (name === 'account') loadAccount();
+    activePath = path;
+    window.scrollTo({ top: routeScroll.get(path) || 0, behavior: 'instant' });
+    if (push) document.querySelector(`#${name}Page h1`)?.focus({ preventScroll: true });
   }
   function initSettingsDropdown() {
-    const closeSidebar = () => { el("workspaceSidebar").classList.remove("open"); el("sidebarBackdrop").hidden = true; el("sidebarToggle").setAttribute("aria-expanded", "false"); };
-    el("sidebarToggle").addEventListener("click", () => {
-      const open = el("workspaceSidebar").classList.toggle("open");
-      el("sidebarBackdrop").hidden = !open; el("sidebarToggle").setAttribute("aria-expanded", String(open));
+    const closeSidebar = () => { el('workspaceSidebar').classList.remove('open'); el('sidebarBackdrop').hidden = true; el('sidebarToggle').setAttribute('aria-expanded', 'false'); };
+    el('sidebarToggle').addEventListener('click', () => {
+      const open = el('workspaceSidebar').classList.toggle('open');
+      el('sidebarBackdrop').hidden = !open; el('sidebarToggle').setAttribute('aria-expanded', String(open));
     });
-    el("sidebarBackdrop").addEventListener("click", closeSidebar);
-    document.addEventListener("keydown", e => { if (e.key === "Escape") closeSidebar(); });
-    document.querySelectorAll("[data-auth-only]").forEach(item => item.style.display = isLoggedIn ? "inline-flex" : "none");
-    el("accountLabel").textContent = isLoggedIn ? "管理员" : "访客";
-    document.querySelectorAll("[data-open-drawer]").forEach(button => button.addEventListener("click", () => {
-      closeSidebar();
-      const name = button.dataset.openDrawer;
-      if (!isLoggedIn && name !== "stats") return LoginModal.open();
-      Drawer.open(name);
-      if (name === "subscriptions") loadSubscriptions();
-      if (name === "rss") loadRssConfig();
-      if (name === "telegram") loadTelegramConfig();
-      if (name === "stats") { loadChartData(currentChartDays); updateStats(); }
+    el('sidebarBackdrop').addEventListener('click', closeSidebar);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSidebar(); });
+    document.querySelectorAll('[data-auth-only]').forEach(item => item.style.display = isLoggedIn ? 'inline-flex' : 'none');
+    el('accountLabel').textContent = isLoggedIn ? '管理员' : '访客';
+    document.querySelectorAll('[data-route]').forEach(link => link.addEventListener('click', e => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+      e.preventDefault(); closeSidebar();
+      if (link.pathname !== activePath && ['/', '/matched'].includes(link.pathname)) currentPage = 1;
+      navigate(link.pathname);
     }));
-    ["navLatest", "navMatched"].forEach(id => el(id).addEventListener("click", () => { setMatched(id === "navMatched"); loadPosts(1); closeSidebar(); }));
+    document.querySelectorAll('.route-page h1').forEach(h => h.tabIndex = -1);
+    history.scrollRestoration = 'manual';
+    addEventListener('popstate', () => navigate(location.pathname, false));
+  }
+  async function loadAccount() {
+    const result = await apiRequest('/auth/account');
+    if (result?.success) {
+      el('accountUsername').value = result.data.username;
+      el('accountLabel').textContent = result.data.username;
+      el('sessionHours').value = String(result.data.session_expiry_hours);
+      window.SeekFeedControls.refreshSelects();
+    }
+    const response = await apiRequest('/auth/sessions');
+    if (!response?.success) return;
+    el('sessionsList').innerHTML = response.data.map(session => {
+      const agent = session.userAgent || '未知浏览器';
+      const browser = /Edg/.test(agent) ? 'Microsoft Edge' : /Firefox/.test(agent) ? 'Firefox' : /Chrome/.test(agent) ? 'Chrome' : /Safari/.test(agent) ? 'Safari' : '浏览器 / 客户端';
+      return `<div class="session-item"><span class="session-icon">${renderIcon('user')}</span><div><strong>${browser}${session.current ? '<span class="tag tag-blue">当前设备</span>' : ''}</strong><p>登录于 ${escapeHtml(new Date(session.createdAt).toLocaleString('zh-CN'))}</p><p>到期于 ${escapeHtml(new Date(session.expiresAt).toLocaleString('zh-CN'))}</p></div></div>`;
+    }).join('');
+  }
+  function initAccount() {
+    el('accountForm').addEventListener('submit', pendingSubmit(async e => {
+      e.preventDefault();
+      if (el('accountNewPassword').value !== el('accountConfirmPassword').value) return Toast.error('两次输入的新密码不一致。');
+      const result = await apiRequest('/auth/account', { method: 'PUT', body: JSON.stringify({ username: el('accountUsername').value.trim(), currentPassword: el('accountCurrentPassword').value, newPassword: el('accountNewPassword').value }) });
+      if (!result?.success) return Toast.error(result?.message || '保存失败');
+      localStorage.removeItem('sessionId'); localStorage.removeItem('user'); location.href = '/';
+    }));
+    el('sessionSettingsForm').addEventListener('submit', pendingSubmit(async e => {
+      e.preventDefault();
+      const result = await apiRequest('/auth/preferences', { method: 'PUT', body: JSON.stringify({ session_expiry_hours: Number(el('sessionHours').value) }) });
+      if (result?.success) Toast.success(result.message); else Toast.error(result?.message || '保存失败');
+    }));
+    el('logoutAllBtn').addEventListener('click', async () => {
+      if (!await confirmAction('退出所有设备？', '当前设备也会退出，所有设备都需要重新登录。', '确认退出')) return;
+      const result = await apiRequest('/auth/logout-all', { method: 'POST' });
+      if (result?.success) { localStorage.removeItem('sessionId'); localStorage.removeItem('user'); location.href = '/'; }
+      else Toast.error(result?.message || '退出失败');
+    });
+  }
+  function pendingSubmit(handler) {
+    return e => {
+      e.preventDefault();
+      return window.SeekFeedControls.pending(e.target.querySelector('[type="submit"]'), () => handler(e), '保存中…');
+    };
+  }
+
+  function confirmAction(title, description, label) {
+    return new Promise(resolve => {
+      const opener = document.activeElement;
+      const dialog = document.createElement('dialog');
+      dialog.className = 'confirm-dialog';
+      dialog.setAttribute('aria-labelledby', 'confirmationTitle');
+      dialog.setAttribute('aria-describedby', 'confirmationDescription');
+      dialog.innerHTML = `<h2 id="confirmationTitle">${escapeHtml(title)}</h2><p id="confirmationDescription">${escapeHtml(description)}</p><form method="dialog" class="form-actions"><button class="btn btn-secondary" value="cancel" autofocus>取消</button><button class="btn btn-danger" value="confirm">${escapeHtml(label)}</button></form>`;
+      dialog.addEventListener('close', () => { const confirmed = dialog.returnValue === 'confirm'; dialog.remove(); opener?.focus({ preventScroll: true }); resolve(confirmed); }, { once: true });
+      document.body.append(dialog); dialog.showModal();
+    });
   }
 
   // ============================================
@@ -995,15 +1116,15 @@ document.addEventListener("DOMContentLoaded", function () {
       });
 
       // 表单提交
-      this.form.addEventListener("submit", async (e) => {
+      this.form.addEventListener("submit", pendingSubmit(async (e) => {
         e.preventDefault();
         await this.handleSubmit();
-      });
+      }));
     },
 
     open() {
       this.clearMessage(); this.form?.reset(); Drawer.open("login");
-      document.getElementById("loginUsername")?.focus();
+      document.getElementById("loginUsername")?.focus({ preventScroll: true });
     },
     close() { Drawer.closeAll(); },
 
@@ -1108,8 +1229,9 @@ document.addEventListener("DOMContentLoaded", function () {
     initLogout();
     initCharts();
 
+    initAccount();
+    navigate(location.pathname, false);
     // 加载初始数据
-    loadPosts();
     updateStats();
     loadFilterSubscriptions();
     updateMonitor();

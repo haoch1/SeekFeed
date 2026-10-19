@@ -1,4 +1,5 @@
 import type { FC, PropsWithChildren } from "hono/jsx";
+import iconPaths from './icons.json';
 
 interface LayoutProps {
   title?: string;
@@ -62,6 +63,8 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
       </head>
       <body>
         {children}
+        <script id="seekfeedIcons" type="application/json" dangerouslySetInnerHTML={{ __html: JSON.stringify(iconPaths).replace(/</g, '\\u003c') }} />
+        <script src="/js/controls.js"></script>
         {/* PWA Scripts */}
         <script src="/js/pwa-register.js" defer></script>
 

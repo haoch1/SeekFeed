@@ -7,7 +7,7 @@ export const PwaCheckPage: FC = () => (
         <main class="setup-page">
             <div class="setup-content">
             <section class="setup-card">
-                <a href="/" class="workspace-brand"><span class="brand-icon"><BrandMark /></span><span><strong>SeekFeed</strong><small>NodeSeek 监控</small></span></a>
+                <a href="/" class="workspace-brand"><span class="brand-icon"><BrandMark /></span><span><strong>SeekFeed</strong></span></a>
                 <h1>PWA 状态检查</h1>
                 <p class="setup-description">在浏览器菜单中选择安装应用，即可添加到桌面。</p>
                 <dl class="diagnostic-list">

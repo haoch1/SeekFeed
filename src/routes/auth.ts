@@ -1,3 +1,5 @@
+import { z } from 'zod';
+import * as bcrypt from 'bcryptjs';
 import { Hono } from 'hono'
 import { AuthService } from '../services/auth'
 import { DatabaseService } from '../services/database'
@@ -258,50 +260,6 @@ authRoutes.get('/sessions', async (c) => {
   }
 })
 
-// 修改密码
-authRoutes.post('/change-password', async (c) => {
-  try {
-    const body = await c.req.json()
-    const { token, oldPassword, newPassword } = body
-    
-    if (!token || !oldPassword || !newPassword) {
-      return c.json({
-        success: false,
-        message: '请填写所有必填字段'
-      }, 400)
-    }
-    
-    const authService = c.get('authService')
-    
-    // 验证token
-    const verification = await authService.verifyToken(token)
-    if (!verification.valid || !verification.payload) {
-      return c.json({
-        success: false,
-        message: verification.message || 'Token无效'
-      }, 401)
-    }
-    
-    // 修改密码
-    const result = await authService.changePassword(
-      verification.payload.username,
-      oldPassword,
-      newPassword
-    )
-    
-    if (result.success) {
-      return c.json(result)
-    } else {
-      return c.json(result, 400)
-    }
-  } catch (error) {
-    return c.json({
-      success: false,
-      message: `修改密码失败: ${error}`
-    }, 500)
-  }
-})
-
 // 初始化系统（与注册相同的逻辑，但使用不同的端点）
 authRoutes.post('/init', async (c) => {
   try {
@@ -343,3 +301,40 @@ authRoutes.post('/init', async (c) => {
     }, 500)
   }
 })
+
+
+// Account changes require the current password and revoke every existing session.
+for (const path of ['/account', '/preferences']) authRoutes.use(path, requireSession);
+
+authRoutes.get('/account', c => {
+    const config = c.get('dbService').getBaseConfig();
+    return c.json({ success: true, data: { username: config?.username, session_expiry_hours: config?.session_expiry_hours || 168 } });
+});
+
+const accountSchema = z.object({
+    username: z.string().trim().min(3).max(50),
+    currentPassword: z.string().min(1).max(50),
+    newPassword: z.union([z.literal(''), z.string().min(8).max(50)]).optional(),
+});
+authRoutes.put('/account', async c => {
+    const parsed = accountSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ success: false, message: '用户名需为 3–50 个字符，新密码需为 8–50 个字符。' }, 400);
+    const db = c.get('dbService');
+    const config = db.getBaseConfig();
+    if (!config || !await bcrypt.compare(parsed.data.currentPassword, config.password)) {
+        return c.json({ success: false, message: '当前密码不正确。' }, 400);
+    }
+    const password = parsed.data.newPassword ? await bcrypt.hash(parsed.data.newPassword, 12) : config.password;
+    db.db.transaction(() => {
+        db.updateBaseConfig({ username: parsed.data.username, password });
+        db.db.query('DELETE FROM sessions').run();
+    })();
+    return c.json({ success: true, message: '账号信息已保存，请重新登录。' });
+});
+
+authRoutes.put('/preferences', async c => {
+    const parsed = z.object({ session_expiry_hours: z.union([z.literal(1), z.literal(24), z.literal(168), z.literal(720)]) }).strict().safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ success: false, message: '请选择 1 小时、1 天、7 天或 30 天。' }, 400);
+    c.get('dbService').updateBaseConfig(parsed.data);
+    return c.json({ success: true, message: '登录有效期已保存，对新登录的会话生效。' });
+});

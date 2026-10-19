@@ -24,7 +24,7 @@ export class SessionService {
    */
   private calculateExpiryDate(): string {
     const expiry = new Date();
-    expiry.setHours(expiry.getHours() + this.SESSION_EXPIRY_HOURS);
+    expiry.setHours(expiry.getHours() + (this.dbService.getBaseConfig()?.session_expiry_hours || this.SESSION_EXPIRY_HOURS));
     return expiry.toISOString();
   }
 
@@ -92,7 +92,7 @@ export class SessionService {
       // 查询session
       const stmt = this.dbService.db.prepare(`
         SELECT * FROM sessions 
-        WHERE session_id = ? AND expires_at > datetime('now')
+        WHERE session_id = ? AND julianday(expires_at) > julianday('now')
       `);
 
       const row = stmt.get(sessionId) as any;
@@ -224,7 +224,7 @@ export class SessionService {
    */
   cleanupExpiredSessions(userId?: number): number {
     try {
-      let sql = `DELETE FROM sessions WHERE expires_at <= datetime('now')`;
+      let sql = `DELETE FROM sessions WHERE julianday(expires_at) <= julianday('now')`;
       let params: any[] = [];
       
       if (userId) {
@@ -255,7 +255,7 @@ export class SessionService {
       // 获取用户当前活跃session数量
       const countStmt = this.dbService.db.prepare(`
         SELECT COUNT(*) as count FROM sessions 
-        WHERE user_id = ? AND expires_at > datetime('now')
+        WHERE user_id = ? AND julianday(expires_at) > julianday('now')
       `);
       
       const { count } = countStmt.get(userId) as { count: number };
@@ -264,9 +264,10 @@ export class SessionService {
         // 删除最旧的session
         const deleteStmt = this.dbService.db.prepare(`
           DELETE FROM sessions 
-          WHERE user_id = ? 
-          ORDER BY last_accessed_at ASC 
-          LIMIT ?
+          WHERE session_id IN (
+            SELECT session_id FROM sessions WHERE user_id = ?
+            ORDER BY julianday(last_accessed_at) ASC, rowid ASC LIMIT ?
+          )
         `);
         
         const toDelete = count - this.MAX_SESSIONS_PER_USER + 1;
@@ -286,8 +287,8 @@ export class SessionService {
     try {
       const stmt = this.dbService.db.prepare(`
         SELECT * FROM sessions 
-        WHERE user_id = ? AND expires_at > datetime('now')
-        ORDER BY last_accessed_at DESC
+        WHERE user_id = ? AND julianday(expires_at) > julianday('now')
+        ORDER BY julianday(last_accessed_at) DESC, rowid DESC
       `);
       
       const rows = stmt.all(userId) as any[];
@@ -324,7 +325,7 @@ export class SessionService {
 
       const activeStmt = this.dbService.db.prepare(`
         SELECT COUNT(*) as count FROM sessions 
-        WHERE expires_at > datetime('now')
+        WHERE julianday(expires_at) > julianday('now')
       `);
       const { count: activeSessions } = activeStmt.get() as { count: number };
 

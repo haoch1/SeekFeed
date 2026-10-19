@@ -35,6 +35,22 @@ const clearSettingsSchema = z.object({
 // 单例 polling 服务（需要保持长连接状态）
 let pollingService: TelegramWebhookService | null = null;
 
+telegramWebhookRoutes.post('/disable', async c => {
+    const db = c.get('dbService');
+    const token = db.getBaseConfig()?.bot_token;
+    if (pollingService) {
+        const result = await pollingService.stopPolling();
+        if (!result.success) return c.json(createErrorResponse('停止 Polling 失败'), 500);
+        pollingService = null;
+    }
+    if (token) {
+        const result = await new TelegramWebhookService(db, token).clearWebhook();
+        if (!result.success) return c.json(createErrorResponse('清除 Webhook 失败'), 500);
+    }
+    db.updateBaseConfig({ telegram_mode: 'disabled' });
+    return c.json(createSuccessResponse({ telegram_mode: 'disabled' }));
+});
+
 // 获取 Webhook 状态
 telegramWebhookRoutes.get('/status', async (c) => {
   try {
@@ -183,9 +199,16 @@ telegramWebhookRoutes.post('/setup', createValidationMiddleware(setupWebhookSche
       finalWebhookUrl = `${url.protocol}//${url.host}/telegram/webhook`;
     }
     
+    // End the active getUpdates request before registering the mutually exclusive webhook.
+    if (pollingService) {
+      const stopped = await pollingService.stopPolling();
+      if (!stopped.success) return c.json(createErrorResponse('停止 Polling 失败'), 500);
+      pollingService = null;
+    }
     const webhookResult = await telegramService.setWebhook(finalWebhookUrl);
     
     if (webhookResult.success) {
+      dbService.updateBaseConfig({ telegram_mode: 'webhook' });
       return c.json(createSuccessResponse({
         webhook_url: finalWebhookUrl,
         webhook_set: true
@@ -256,8 +279,8 @@ telegramWebhookRoutes.post('/manage-binding', createValidationMiddleware(manageB
       // 解除绑定
       dbService.updateBaseConfig({
         chat_id: '',
-        bound_user_name: undefined,
-        bound_user_username: undefined
+        bound_user_name: '',
+        bound_user_username: ''
       });
       
       return c.json(createSuccessResponse({
@@ -300,7 +323,7 @@ telegramWebhookRoutes.post('/send-admin-message', async (c) => {
     }
     
     const telegramService = new TelegramWebhookService(dbService, config.bot_token);
-    const adminMessage = `🔧 **管理员消息**\n\n${message}\n\n⏰ ${new Date().toLocaleString('zh-CN')}`;
+    const adminMessage = `◇ SeekFeed · 管理通知\n\n${message}\n\n时间  ${new Date().toLocaleString('zh-CN')}`;
     
     const success = await telegramService.sendMessage(targetChatId, adminMessage);
     
@@ -328,6 +351,7 @@ telegramWebhookRoutes.post('/clear-webhook', async (c) => {
     const result = await telegramService.clearWebhook();
     
     if (result.success) {
+      dbService.updateBaseConfig({ telegram_mode: 'disabled' });
       return c.json(createSuccessResponse({
         webhook_cleared: true
       }, 'Webhook 清除成功'));
@@ -390,8 +414,8 @@ telegramWebhookRoutes.post('/clear-settings', createValidationMiddleware(clearSe
     // 清空用户绑定
     if (clearBinding) {
       updateData.chat_id = '';
-      updateData.bound_user_name = undefined;
-      updateData.bound_user_username = undefined;
+      updateData.bound_user_name = '';
+      updateData.bound_user_username = '';
       results.binding_cleared = true;
     }
     

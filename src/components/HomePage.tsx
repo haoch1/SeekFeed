@@ -1,47 +1,41 @@
+import { AccountSettings } from './AccountSettings';
+import { TelegramSettings } from './TelegramSettings';
+import { FieldInput } from './Controls';
 import type { FC } from "hono/jsx";
 import { Layout } from "./Layout";
 import { DashboardSurface, Icon } from "./DashboardSurface";
 
-export const HomePage: FC = () => {
+export const HomePage: FC<{ path?: string }> = ({ path = "/" }) => {
   return (
     <Layout
       title="SeekFeed"
       description="NodeSeek RSS 文章列表"
       scriptSrc="/js/home.js"
     >
-      <DashboardSurface />
+      <DashboardSurface path={path}>
 
-      {/* 抽屉遮罩 */}
-      <div id="drawerOverlay" class="drawer-overlay" style="display: none;"></div>
-
-      {/* 订阅管理抽屉 */}
-      <div id="subscriptionsDrawer" class="drawer drawer-large" style="display: none;">
-        <div class="drawer-header">
-          <h3 class="drawer-title">订阅管理</h3>
-          <button class="drawer-close" aria-label="关闭面板" data-drawer="subscriptions">
-            <Icon name="close" />
-          </button>
-        </div>
-        <div class="drawer-content">
+      {/* 订阅管理页面 */}
+      <section id="subscriptionsPage" class="route-page" hidden={path !== "/subscriptions"}><div class="workspace-heading"><div><h1>订阅管理</h1><p>创建关键词规则，让重要的新帖自动找到你。</p></div></div>
+        <div class="page-body">
           {/* 添加订阅表单 */}
-          <form id="addSubForm" class="sub-form">
+          <form id="addSubForm" class="sub-form" method="post">
             {/* 第一行：关键词 */}
-            <div class="sub-form-row">
-              <div class="sub-keywords-inputs">
-                <input type="text" id="keyword1" class="input-field" placeholder="关键词1，如 DMIT" aria-label="关键词1" maxlength="100" />
-                <input type="text" id="keyword2" class="input-field" placeholder="关键词2（同时命中）" aria-label="关键词2" maxlength="100" />
-                <input type="text" id="keyword3" class="input-field" placeholder="关键词3（同时命中）" aria-label="关键词3" maxlength="100" />
+            <div class="section-heading"><h2>新建订阅</h2><p>填写至少一个关键词、作者或分类。多个关键词需要同时命中。</p></div><div class="sub-form-row"><label class="form-label" for="keyword1">匹配关键词</label></div>
+            <div class="sub-form-row"><div class="sub-keywords-inputs">
+                <FieldInput type="text" id="keyword1" class="input-field" placeholder="关键词1，如 DMIT" aria-label="关键词1" maxlength="100" />
+                <FieldInput type="text" id="keyword2" class="input-field" placeholder="关键词2（同时命中）" aria-label="关键词2" maxlength="100" />
+                <FieldInput type="text" id="keyword3" class="input-field" placeholder="关键词3（同时命中）" aria-label="关键词3" maxlength="100" />
               </div>
             </div>
             {/* 第二行：作者和分类 */}
             <div class="sub-form-row">
               <div class="sub-form-group">
                 <label for="subCreator" class="sub-form-label">作者</label>
-                <input type="text" id="subCreator" class="input-field" placeholder="作者名" />
+                <FieldInput type="text" id="subCreator" class="input-field" placeholder="作者名" />
               </div>
               <div class="sub-form-group">
                 <label for="subCategory" class="sub-form-label">分类</label>
-                <select id="subCategory" class="input-field">
+                <select data-1p-ignore="true" data-op-ignore="true" id="subCategory" class="input-field">
                   <option value="">全部</option>
                   <option value="daily">日常</option>
                   <option value="tech">技术</option>
@@ -58,7 +52,7 @@ export const HomePage: FC = () => {
                 </select>
               </div>
             </div>
-            <div class="sub-form-row"><div class="sub-form-group" style="width:100%"><label for="excludeKeywords" class="sub-form-label">屏蔽词</label><input type="text" id="excludeKeywords" class="input-field" placeholder="如：出号, 求购, 已出（用逗号分隔）" maxlength="500" /><span class="form-hint">标题或正文包含任一屏蔽词时不通知。多个关键词需同时命中。</span></div></div>
+            <div class="sub-form-row"><div class="sub-form-group" style="width:100%"><label for="excludeKeywords" class="sub-form-label">屏蔽词</label><FieldInput type="text" id="excludeKeywords" class="input-field" placeholder="如：出号, 求购, 已出（用逗号分隔）" maxlength="500" /><span class="form-hint">标题或正文包含任一屏蔽词时不通知。多个关键词需同时命中。</span></div></div>
             {/* 第三行：添加按钮 */}
             <div class="sub-form-row sub-form-row-action">
               <button type="submit" class="btn btn-primary">添加订阅</button>
@@ -77,31 +71,25 @@ export const HomePage: FC = () => {
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* RSS 配置抽屉 */}
-      <div id="rssDrawer" class="drawer" style="display: none;">
-        <div class="drawer-header">
-          <h3 class="drawer-title">RSS 配置</h3>
-          <button class="drawer-close" aria-label="关闭面板" data-drawer="rss">
-            <Icon name="close" />
-          </button>
-        </div>
-        <div class="drawer-content">
-          <form id="rssConfigForm" class="form-stack">
+      {/* RSS 配置页面 */}
+      <section id="rssPage" class="route-page" hidden={path !== "/settings/rss"}><div class="workspace-heading"><div><h1>RSS 配置</h1><p>管理内容来源、抓取频率与网络连接。</p></div></div>
+        <div class="page-body">
+          <form id="rssConfigForm" class="form-stack" method="post">
             <div class="form-group">
               <label for="rssUrl" class="form-label">RSS 源地址</label>
-              <input type="url" id="rssUrl" class="input-field" placeholder="https://rss.nodeseek.com/" />
+              <FieldInput type="url" id="rssUrl" class="input-field" placeholder="https://rss.nodeseek.com/" />
               <span class="form-hint">填写 NodeSeek RSS 源地址，支持 RSS 格式</span>
             </div>
             <div class="form-group">
               <label for="rssInterval" class="form-label">抓取间隔（秒）</label>
-              <input type="number" id="rssInterval" class="input-field" min="10" max="3600" placeholder="60" />
+              <FieldInput type="number" id="rssInterval" class="input-field" min="10" max="3600" placeholder="60" />
               <span class="form-hint">最小 10 秒，建议 60 秒以上</span>
             </div>
             <div class="form-group">
               <label for="rssProxy" class="form-label">代理地址（可选）</label>
-              <input type="text" id="rssProxy" class="input-field" placeholder="http://127.0.0.1:7890" />
+              <FieldInput type="text" id="rssProxy" class="input-field" placeholder="http://127.0.0.1:7890" />
               <span class="form-hint">HTTP/HTTPS 代理，留空则不使用代理</span>
             </div>
             <div class="form-actions">
@@ -113,158 +101,20 @@ export const HomePage: FC = () => {
               </button>
             </div>
           </form>
-          <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-light);">
+          <div class="rss-sync-section"><div class="section-heading"><h2>手动同步</h2><p>保存源配置后，可立即抓取新帖。自动监控会按照设定的间隔持续运行。</p></div>
             <button id="fetchRssBtn" class="btn btn-primary" style="width: 100%;">
               立即抓取 RSS
             </button>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Telegram 配置抽屉 */}
-      <div id="telegramDrawer" class="drawer drawer-large" style="display: none;">
-        <div class="drawer-header">
-          <h3 class="drawer-title">Telegram 配置</h3>
-          <button class="drawer-close" aria-label="关闭面板" data-drawer="telegram">
-            <Icon name="close" />
-          </button>
-        </div>
-        <div class="drawer-content">
-          {/* 推送服务配置 */}
-          <div class="form-card">
-            <h4 class="form-section-title">推送服务配置</h4>
-            <form id="telegramConfigForm" class="form-stack">
-              <div class="form-group">
-                <label for="botToken" class="form-label">Bot Token</label>
-                <input type="password" autocomplete="off" id="botToken" class="input-field" placeholder="从 @BotFather 获取" />
-                <span class="form-hint">格式: 123456:ABC-DEF...</span>
-              </div>
-              <div class="form-group">
-                <label for="chatId" class="form-label">用户 Chat ID</label>
-                <input type="text" id="chatId" class="input-field" placeholder="用户或群组的 Chat ID" />
-                <span class="form-hint">可通过 /start 命令自动获取（需开启交互服务）</span>
-              </div>
-              <div class="form-group">
-                <div class="checkbox-wrapper">
-                  <input type="checkbox" id="stopPush" />
-                  <div class="checkbox-content">
-                    <label for="stopPush" class="checkbox-label">停止推送</label>
-                    <div class="checkbox-description">暂停所有 Telegram 消息推送</div>
-                  </div>
-                </div>
-              </div>
-              <div class="form-group">
-                <div class="checkbox-wrapper">
-                  <input type="checkbox" id="onlyTitle" />
-                  <div class="checkbox-content">
-                    <label for="onlyTitle" class="checkbox-label">仅匹配标题</label>
-                    <div class="checkbox-description">只在文章标题中搜索关键词</div>
-                  </div>
-                </div>
-              </div>
-              <div class="form-actions">
-                <button type="button" id="testTelegramBtn" class="btn btn-secondary">
-                  测试连接
-                </button>
-                <button type="submit" class="btn btn-primary">
-                  保存配置
-                </button>
-              </div>
-            </form>
-          </div>
+      <TelegramSettings active={path === "/settings/telegram"} />
+      <AccountSettings active={path === "/settings/account"} />
 
-          {/* 交互服务配置 */}
-          <div class="form-card" style={{ marginTop: "24px" }}>
-            <h4 class="form-section-title">交互服务配置（可选）</h4>
-            <div class="form-hint" style={{ background: "var(--bg-primary)", padding: "12px", borderRadius: "8px", marginBottom: "16px" }}>
-              <strong>说明：</strong>交互服务允许通过 Telegram Bot 命令管理订阅、查看文章等。
-              可以选择 Webhook 模式（需要 HTTPS 公网域名）或 Polling 模式（无需公网，适合内网部署）。
-            </div>
-            {/* 模式选择 */}
-            <div class="form-group" style={{ marginBottom: "16px" }}>
-              <label class="form-label">交互模式</label>
-              <div class="mode-selector" id="telegramModeSelector">
-                <label class="mode-option">
-                  <input type="radio" name="telegramMode" value="disabled" checked />
-                  <span class="mode-label">关闭</span>
-                </label>
-                <label class="mode-option">
-                  <input type="radio" name="telegramMode" value="polling" />
-                  <span class="mode-label">Polling</span>
-                </label>
-                <label class="mode-option">
-                  <input type="radio" name="telegramMode" value="webhook" />
-                  <span class="mode-label">Webhook</span>
-                </label>
-              </div>
-            </div>
-            {/* Webhook 模式内容 */}
-            <div id="webhookModePanel" style="display: none;">
-              <form id="webhookConfigForm" class="form-stack">
-                <div class="form-group">
-                  <label for="webhookUrl" class="form-label">Webhook URL</label>
-                  <input type="url" id="webhookUrl" class="input-field" placeholder="https://your-domain.com/telegram/webhook" />
-                  <span class="form-hint">需要 HTTPS，用于接收 Telegram 命令</span>
-                </div>
-                <div class="form-actions">
-                  <button type="button" id="testWebhookBtn" class="btn btn-secondary">
-                    测试连接
-                  </button>
-                  <button type="button" id="clearWebhookBtn" class="btn btn-danger">
-                    清除 Webhook
-                  </button>
-                  <button type="submit" class="btn btn-primary">
-                    设置 Webhook
-                  </button>
-                </div>
-              </form>
-            </div>
-            {/* Polling 模式内容 */}
-            <div id="pollingModePanel" style="display: none;">
-              <div class="form-hint" style={{ background: "var(--bg-primary)", padding: "12px", borderRadius: "8px", marginBottom: "12px" }}>
-                Polling 模式不需要公网域名，服务会主动向 Telegram 服务器轮询消息。适合内网或 NAT 环境。
-              </div>
-              <div id="pollingStatusIndicator" class="form-hint" style={{ padding: "10px 12px", borderRadius: "8px", marginBottom: "12px", background: "var(--bg-hover)", fontWeight: "500" }}>
-                Polling 未运行
-              </div>
-              <div class="form-actions">
-                <button type="button" id="startPollingBtn" class="btn btn-primary">
-                  启动 Polling
-                </button>
-                <button type="button" id="stopPollingBtn" class="btn btn-danger" style="display: none;">
-                  停止 Polling
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* 状态信息 */}
-          <div id="telegramStatusPanel" class="form-card" style={{ marginTop: "24px", display: "none" }}>
-            <h4 class="form-section-title">服务状态</h4>
-            <div class="info-grid">
-              <div class="info-item">
-                <strong>Bot 状态:</strong> <span id="telegramBotStatus">-</span>
-              </div>
-              <div class="info-item">
-                <strong>Webhook 状态:</strong> <span id="telegramWebhookStatus">-</span>
-              </div>
-              <div class="info-item">
-                <strong>用户绑定:</strong> <span id="telegramBindingStatus">-</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 统计信息抽屉 */}
-      <div id="statsDrawer" class="drawer drawer-large" style="display: none;">
-        <div class="drawer-header">
-          <h3 class="drawer-title">统计信息</h3>
-          <button class="drawer-close" aria-label="关闭面板" data-drawer="stats">
-            <Icon name="close" />
-          </button>
-        </div>
-        <div class="drawer-content">
+      {/* 统计页面 */}
+      <section id="statsPage" class="route-page" hidden={path !== "/statistics"}><div class="workspace-heading"><div><h1>统计信息</h1><p>了解收录趋势与通知发送情况。</p></div></div>
+        <div class="page-body">
           {/* 数字统计卡片 */}
           <p class="form-hint" style="margin-bottom:12px">今日统计时区：UTC</p>
           <div class="stats-grid-simple">
@@ -315,9 +165,11 @@ export const HomePage: FC = () => {
             <button class="chart-range-btn" data-days="0">全部</button>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* 登录抽屉 */}
+      </DashboardSurface>
+      <div id="drawerOverlay" class="drawer-overlay" style="display:none"></div>
+      {/* 登录对话框 */}
       <div id="loginModal" class="drawer" style="display: none;">
         <div class="drawer-header">
           <h3 class="drawer-title">用户登录</h3>
@@ -326,12 +178,12 @@ export const HomePage: FC = () => {
           </button>
         </div>
         <div class="drawer-content">
-          <form id="loginForm" class="form-stack">
+          <form id="loginForm" class="form-stack" method="post" action="/auth/login">
             <div class="form-group">
               <label for="loginUsername" class="form-label">用户名</label>
               <input
                 type="text"
-                id="loginUsername" autocomplete="username"
+                id="loginUsername" name="username" autocomplete="username"
                 class="input-field"
                 placeholder="请输入用户名"
                 required
@@ -341,7 +193,7 @@ export const HomePage: FC = () => {
               <label for="loginPassword" class="form-label">密码</label>
               <input
                 type="password"
-                id="loginPassword" autocomplete="current-password"
+                id="loginPassword" name="password" autocomplete="current-password"
                 class="input-field"
                 placeholder="请输入密码"
                 required

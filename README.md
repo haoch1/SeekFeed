@@ -77,7 +77,7 @@ bun run db:resetuser # 重置管理员账号
 | `RSS_TIMEOUT` | `30000` | 抓取超时，毫秒 |
 | `TELEGRAM_WEBHOOK_URL` | 无 | 可选 Webhook URL |
 
-RSS 地址、抓取间隔、代理、Bot Token 与消息接收账号在控制台设置。PWA 只缓存静态资源，消息通知通过 Telegram 发送。
+RSS 地址、抓取间隔、代理、Bot Token 与消息接收账号分别在独立设置页管理。「账号与安全」支持修改用户名和密码、设置 1 小时/1 天/7 天/30 天的登录有效期、查看活跃设备与退出所有设备。修改账号需验证当前密码并重新登录。PWA 只缓存静态资源，消息通知通过 Telegram 发送。
 
 ## 关键词规则
 

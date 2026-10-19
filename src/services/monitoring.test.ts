@@ -18,7 +18,7 @@ const post = (id = 1, changes: Partial<Post> = {}): Post => ({
 });
 beforeEach(() => {
     const sqlite = new Database(':memory:');
-    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls']) {
+    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences']) {
         sqlite.exec(readFileSync(new URL(`../database/migrations/${name}.sql`, import.meta.url), 'utf8'));
     }
     db = new DatabaseService(sqlite);

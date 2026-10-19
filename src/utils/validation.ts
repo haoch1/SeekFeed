@@ -14,8 +14,7 @@ export const baseConfigSchema = z.object({
 
 // 基础配置更新验证 Schema
 export const baseConfigUpdateSchema = z.object({
-    username: z.string().min(1).max(50).optional(),
-    password: z.string().min(6).max(100).optional(),
+    telegram_mode: z.enum(['disabled', 'webhook', 'polling']).optional(),
     bot_token: z.string().optional(),
     chat_id: z.string().optional(),
     bound_user_name: z.string().optional(),
@@ -25,7 +24,7 @@ export const baseConfigUpdateSchema = z.object({
     rss_url: z.string().url('RSS URL格式不正确').optional(),
     rss_interval_seconds: z.number().int().min(10).max(3600).optional(),
     rss_proxy: z.string().optional(),
-});
+}).strict();
 
 // 文章验证 Schema
 export const postSchema = z.object({

@@ -262,7 +262,7 @@ apiRoutes.post('/bot-token', createValidationMiddleware(botTokenSchema), async (
         }
 
         // 更新配置
-        const config = dbService.updateBaseConfig({ bot_token });
+        const config = dbService.updateBaseConfig({ bot_token, ...(webhookResult.success ? { telegram_mode: 'webhook' as const } : {}) });
 
         if (!config) {
             return c.json(createErrorResponse('保存 Bot Token 失败'), 500);
@@ -518,7 +518,7 @@ apiRoutes.post('/telegram/test', async (c) => {
 
         // 如果有绑定的 chat_id，发送测试消息
         if (config.chat_id) {
-            const testMessage = `🤖 **NodeSeek RSS Bot 测试消息**\n\n⏰ **时间:** ${new Date().toLocaleString('zh-CN')}\n✅ Bot 连接正常`;
+            const testMessage = `◇ SeekFeed · 连接测试\n\n✓ Bot 连接正常。\n\n时间  ${new Date().toLocaleString('zh-CN')}`;
             const sendResult = await telegramService.sendMessage(config.chat_id, testMessage);
             
             return c.json(createSuccessResponse({
@@ -576,7 +576,7 @@ apiRoutes.post('/telegram/send-test', createValidationMiddleware(z.object({
 
         const telegramService = new TelegramPushService(dbService, config.bot_token);
         
-        const testMessage = message || `🧪 **测试消息**\n\n⏰ **时间:** ${new Date().toLocaleString('zh-CN')}`;
+        const testMessage = message || `◇ SeekFeed · 推送测试\n\n✓ 通知通道工作正常。\n\n时间  ${new Date().toLocaleString('zh-CN')}`;
         const result = await telegramService.sendMessage(config.chat_id, testMessage);
 
         if (result) {

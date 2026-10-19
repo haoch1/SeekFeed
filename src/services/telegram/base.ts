@@ -37,27 +37,6 @@ export abstract class TelegramBaseService {
   }
 
   /**
-   * 获取分类对应的图标
-   */
-  protected getCategoryIcon(category: string): string {
-    const categoryMap: { [key: string]: string } = {
-      'daily': '📅',
-      'tech': '💻',
-      'info': 'ℹ️',
-      'review': '⭐',
-      'trade': '💰',
-      'carpool': '🚗',
-      'promotion': '📢',
-      'life': '🏠',
-      'dev': '⚡',
-      'photo': '📷',
-      'expose': '🚨',
-      'sandbox': '🏖️'
-    };
-    return categoryMap[category] || '📂';
-  }
-
-  /**
    * 获取分类名称
    */
   protected getCategoryName(category: string): string {
@@ -71,7 +50,7 @@ export abstract class TelegramBaseService {
       'promotion': '推广',
       'life': '生活',
       'dev': 'Dev',
-      'photo': '贴图',
+      'photo-share': '贴图', 'inside': '内版',
       'expose': '曝光',
       'sandbox': '沙盒'
     };

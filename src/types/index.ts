@@ -13,6 +13,7 @@ export interface BaseConfig {
   rss_interval_seconds?: number;
   rss_proxy?: string;
   telegram_mode?: string; // 'disabled' | 'webhook' | 'polling'
+  session_expiry_hours?: number;
   created_at?: string;
   updated_at?: string;
 }

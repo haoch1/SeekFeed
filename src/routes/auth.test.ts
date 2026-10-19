@@ -7,6 +7,8 @@ import { telegramRoutes } from './telegram';
 import { AuthService } from '../services/auth';
 import { DatabaseService } from '../services/database';
 import { SessionService } from '../services/session';
+import * as bcrypt from 'bcryptjs';
+import { apiRoutes } from './api';
 
 let app: Hono;
 let db: DatabaseService;
@@ -15,7 +17,7 @@ let sessionId: string;
 
 beforeEach(() => {
     const sqlite = new Database(':memory:');
-    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls']) {
+    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences']) {
         sqlite.exec(readFileSync(new URL(`../database/migrations/${name}.sql`, import.meta.url), 'utf8'));
     }
     db = new DatabaseService(sqlite);
@@ -30,6 +32,83 @@ beforeEach(() => {
     });
     app.route('/auth', authRoutes);
     app.route('/telegram', telegramRoutes);
+    app.route('/api', apiRoutes);
+});
+
+describe('account settings and session expiry', () => {
+    const headers = () => ({ Authorization: `Bearer ${sessionId}`, 'Content-Type': 'application/json' });
+
+    it('requires authentication for account details, credentials and preferences', async () => {
+        for (const [path, method] of [['/auth/account', 'GET'], ['/auth/account', 'PUT'], ['/auth/preferences', 'PUT']]) {
+            const response = await app.request(path, { method });
+            expect(response.status).toBe(401);
+        }
+    });
+
+    it('preserves existing sessions while applying the saved lifetime to a new login', async () => {
+        const original = sessions.verifySession(sessionId).sessionData!.expiresAt;
+        const response = await app.request('/auth/preferences', { method: 'PUT', headers: headers(), body: JSON.stringify({ session_expiry_hours: 1 }) });
+        expect(response.status).toBe(200);
+        expect(db.getBaseConfig()!.session_expiry_hours).toBe(1);
+        expect(sessions.verifySession(sessionId).sessionData!.expiresAt).toBe(original);
+        const next = sessions.createSession(1, 'tester');
+        expect(Date.parse(next.expiresAt) - Date.now()).toBeGreaterThan(3590000);
+        expect(Date.parse(next.expiresAt) - Date.now()).toBeLessThanOrEqual(3600000);
+        const invalid = await app.request('/auth/preferences', { method: 'PUT', headers: headers(), body: JSON.stringify({ session_expiry_hours: 99999 }) });
+        expect(invalid.status).toBe(400);
+        expect(db.getBaseConfig()!.session_expiry_hours).toBe(1);
+    });
+
+    it('rejects an expired ISO timestamp on the same calendar day', () => {
+        db.db.query('UPDATE sessions SET expires_at = ? WHERE session_id = ?').run(new Date(Date.now() - 60000).toISOString(), sessionId);
+        expect(sessions.verifySession(sessionId).valid).toBe(false);
+    });
+
+    it('keeps the five newest active sessions without relying on optional SQLite DELETE LIMIT support', () => {
+        for (let i = 0; i < 8; i++) sessions.createSession(1, 'tester');
+        expect(sessions.getUserSessions(1)).toHaveLength(5);
+        expect(sessions.verifySession(sessionId).valid).toBe(false);
+    });
+
+    it('prevents generic configuration updates from bypassing password verification', async () => {
+        const response = await app.request('/api/config', { method: 'PUT', headers: headers(), body: JSON.stringify({ username: 'attacker', password: 'plain-text' }) });
+        expect(response.status).toBe(400);
+        expect(db.getBaseConfig()!.username).toBe('tester');
+        expect(db.getBaseConfig()!.password).toBe('unused-test-hash');
+    });
+
+    it('verifies the old password, hashes the replacement and revokes every session', async () => {
+        db.updateBaseConfig({ password: await bcrypt.hash('CurrentPass123!', 4) });
+        const body = { username: 'new-admin', currentPassword: 'wrong', newPassword: 'NewPass456!' };
+        const rejected = await app.request('/auth/account', { method: 'PUT', headers: headers(), body: JSON.stringify(body) });
+        expect(rejected.status).toBe(400);
+        expect(db.getBaseConfig()!.username).toBe('tester');
+        const other = sessions.createSession(1, 'tester').sessionId;
+        const response = await app.request('/auth/account', { method: 'PUT', headers: headers(), body: JSON.stringify({ ...body, currentPassword: 'CurrentPass123!' }) });
+        expect(response.status).toBe(200);
+        const config = db.getBaseConfig()!;
+        expect(config.username).toBe('new-admin');
+        expect(config.password).not.toBe(body.newPassword);
+        expect(await bcrypt.compare(body.newPassword, config.password)).toBe(true);
+        expect(sessions.verifySession(sessionId).valid).toBe(false);
+        expect(sessions.verifySession(other).valid).toBe(false);
+        const auth = new AuthService(db);
+        expect((await auth.login({ username: 'new-admin', password: 'CurrentPass123!' })).success).toBe(false);
+        expect((await auth.login({ username: 'new-admin', password: 'NewPass456!' })).success).toBe(true);
+    });
+
+    it('persists Telegram mode through the real configuration API without exposing a password', async () => {
+        const response = await app.request('/api/config', { method: 'PUT', headers: headers(), body: JSON.stringify({ telegram_mode: 'webhook' }) });
+        expect(response.status).toBe(200);
+        expect(db.getBaseConfig()!.telegram_mode).toBe('webhook');
+        const read = await app.request('/api/config', { headers: headers() });
+        const body = await read.json();
+        expect(body.data.telegram_mode).toBe('webhook');
+        expect(body.data.password).toBeUndefined();
+        const invalid = await app.request('/api/config', { method: 'PUT', headers: headers(), body: JSON.stringify({ telegram_mode: 'invented' }) });
+        expect(invalid.status).toBe(400);
+        expect(db.getBaseConfig()!.telegram_mode).toBe('webhook');
+    });
 });
 
 afterEach(() => db.close());

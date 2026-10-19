@@ -170,6 +170,10 @@ export class DatabaseService {
       updates.push('telegram_mode = ?');
       values.push(config.telegram_mode);
     }
+    if (config.session_expiry_hours !== undefined) {
+      updates.push('session_expiry_hours = ?');
+      values.push(config.session_expiry_hours);
+    }
 
     if (updates.length === 0) {
       return this.getBaseConfig();

@@ -14,7 +14,7 @@ export const pageRoutes = new Hono<{ Variables: Variables }>();
 pageRoutes.get('/pwa-check', c => c.html(<PwaCheckPage />));
 
 // 首页 - 检查初始化状态，未初始化跳转到初始化页面
-pageRoutes.get('/', async (c) => {
+for (const path of ['/', '/matched', '/subscriptions', '/statistics', '/settings', '/settings/account', '/settings/rss', '/settings/telegram']) pageRoutes.get(path, async (c) => {
   try {
     const authService = c.get('authService');
     const initStatus = authService.checkInitialization();
@@ -24,7 +24,7 @@ pageRoutes.get('/', async (c) => {
       return c.redirect('/init');
     }
     
-    return c.html(<HomePage />);
+    return c.html(<HomePage path={path === "/settings" ? "/settings/account" : path} />);
   } catch (error) {
     return c.html(<ErrorPage message={`加载页面失败: ${error}`} />);
   }

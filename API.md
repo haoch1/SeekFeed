@@ -3,77 +3,35 @@
 ## 基础信息
 
 - **Base URL**: `http://localhost:3010`
-- **认证方式**: JWT Bearer Token
+- **认证方式**: 数据库 Session，使用 Bearer 请求头
 - **Content-Type**: `application/json`
 
-## 认证流程
+## 认证与账号设置
 
-### 1. 检查系统状态
-```http
-GET /auth/status
-```
+`GET /auth/check-init` 检查初始化状态。首次使用通过 `POST /auth/init` 提交 `username`、`password`、`confirmPassword`，此接口只允许初始化一次。
 
-**响应示例**:
-```json
-{
-  "success": true,
-  "data": {
-    "initialized": false,
-    "message": "系统尚未初始化"
-  }
-}
-```
+`POST /auth/login` 提交 JSON `{ "username": "admin", "password": "your-password" }`，成功返回 `{ "success": true, "sessionId": "随机会话凭据", "user": { "username": "admin", "isInitialized": true } }`。
 
-### 2. 系统初始化（首次使用）
-```http
-POST /auth/init
-Content-Type: application/json
+后续受保护请求携带 `Authorization: Bearer <sessionId>`。会话为数据库保存的随机凭据，默认 7 天过期，每个账号最多 5 个活跃会话。
 
-{
-  "username": "admin",
-  "password": "password123",
-  "confirmPassword": "password123"
-}
-```
+| 接口 | 请求 / 行为 |
+| --- | --- |
+| `POST /auth/verify` | JSON `{ "sessionId": "..." }` 验证会话 |
+| `POST /auth/logout` | JSON `{ "sessionId": "..." }` 注销该会话 |
+| `GET /auth/account` | 需认证；返回用户名和 `session_expiry_hours`，不返回密码 |
+| `PUT /auth/account` | 需认证；JSON `{ "username": "new-admin", "currentPassword": "...", "newPassword": "..." }`。新密码为空时保留密码；用户名 3–50 字，新密码 8–50 字。成功后所有会话失效，需要重新登录 |
+| `PUT /auth/preferences` | 需认证；JSON `{ "session_expiry_hours": 168 }`，仅接受 `1`、`24`、`168`、`720`；对新会话生效 |
+| `GET /auth/sessions` | 需认证；返回活跃设备、创建/到期时间和 `current`，不暴露可重用的会话 ID |
+| `POST /auth/logout-all` | 需认证；注销包括当前设备在内的所有会话 |
 
-**响应示例**:
-```json
-{
-  "success": true,
-  "data": {
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "user": {
-      "username": "admin",
-      "isInitialized": true
-    }
-  },
-  "message": "系统初始化成功"
-}
-```
-
-### 3. 用户登录
-```http
-POST /auth/login
-Content-Type: application/json
-
-{
-  "username": "admin",
-  "password": "password123"
-}
-```
-
-### 4. 验证 Token
-```http
-GET /auth/verify
-Authorization: Bearer <token>
-```
+通用 `PUT /api/config` 不接受用户名、密码或会话有效期，账号设置必须使用上述接口验证。
 
 ## 配置管理
 
 ### 获取系统配置
 ```http
 GET /api/config
-Authorization: Bearer <token>
+Authorization: Bearer <sessionId>
 ```
 
 **响应示例**:
@@ -101,7 +59,7 @@ Authorization: Bearer <token>
 ### 更新系统配置
 ```http
 PUT /api/config
-Authorization: Bearer <token>
+Authorization: Bearer <sessionId>
 Content-Type: application/json
 
 {
@@ -117,7 +75,7 @@ Content-Type: application/json
 ### 设置 Telegram Bot Token
 ```http
 POST /api/bot-token
-Authorization: Bearer <token>
+Authorization: Bearer <sessionId>
 Content-Type: application/json
 
 {
@@ -130,7 +88,7 @@ Content-Type: application/json
 ### 获取订阅列表
 ```http
 GET /api/subscriptions
-Authorization: Bearer <token>
+Authorization: Bearer <sessionId>
 ```
 
 **响应示例**:
@@ -155,7 +113,7 @@ Authorization: Bearer <token>
 ### 添加订阅
 ```http
 POST /api/subscriptions
-Authorization: Bearer <token>
+Authorization: Bearer <sessionId>
 Content-Type: application/json
 
 {
@@ -170,7 +128,7 @@ Content-Type: application/json
 ### 更新订阅
 ```http
 PUT /api/subscriptions/1
-Authorization: Bearer <token>
+Authorization: Bearer <sessionId>
 Content-Type: application/json
 
 {
@@ -182,7 +140,7 @@ Content-Type: application/json
 ### 删除订阅
 ```http
 DELETE /api/subscriptions/1
-Authorization: Bearer <token>
+Authorization: Bearer <sessionId>
 ```
 
 ## 文章管理
@@ -190,7 +148,7 @@ Authorization: Bearer <token>
 ### 获取文章列表
 ```http
 GET /api/posts?page=1&limit=20&pushStatus=0&creator=admin&category=tech
-Authorization: Bearer <token>
+Authorization: Bearer <sessionId>
 ```
 
 **查询参数**:
@@ -230,7 +188,7 @@ Authorization: Bearer <token>
 ### 手动抓取 RSS
 ```http
 POST /api/rss/fetch
-Authorization: Bearer <token>
+Authorization: Bearer <sessionId>
 ```
 
 **响应示例**:
@@ -249,7 +207,7 @@ Authorization: Bearer <token>
 ### 手动推送文章
 ```http
 POST /api/posts/12345/push/1
-Authorization: Bearer <token>
+Authorization: Bearer <sessionId>
 ```
 
 ## 统计信息
@@ -257,7 +215,7 @@ Authorization: Bearer <token>
 ### 获取系统统计
 ```http
 GET /api/stats
-Authorization: Bearer <token>
+Authorization: Bearer <sessionId>
 ```
 
 **响应示例**:
@@ -280,7 +238,7 @@ Authorization: Bearer <token>
 ### 获取匹配统计
 ```http
 GET /api/match-stats
-Authorization: Bearer <token>
+Authorization: Bearer <sessionId>
 ```
 
 ## 系统管理
@@ -288,7 +246,7 @@ Authorization: Bearer <token>
 ### 数据清理
 ```http
 POST /api/cleanup
-Authorization: Bearer <token>
+Authorization: Bearer <sessionId>
 ```
 
 **响应示例**:
@@ -307,7 +265,7 @@ Authorization: Bearer <token>
 #### 获取 RSS 配置
 ```http
 GET /api/rss/config
-Authorization: Bearer <token>
+Authorization: Bearer <sessionId>
 ```
 
 **响应示例**:
@@ -325,7 +283,7 @@ Authorization: Bearer <token>
 #### 更新 RSS 配置
 ```http
 PUT /api/rss/config
-Authorization: Bearer <token>
+Authorization: Bearer <sessionId>
 Content-Type: application/json
 
 {
@@ -343,7 +301,7 @@ Content-Type: application/json
 #### 测试 RSS 连接
 ```http
 POST /api/rss/test-connection
-Authorization: Bearer <token>
+Authorization: Bearer <sessionId>
 Content-Type: application/json
 
 {
@@ -366,7 +324,7 @@ Content-Type: application/json
 修改抓取间隔后需要重启任务才能生效：
 ```http
 POST /api/rss/restart
-Authorization: Bearer <token>
+Authorization: Bearer <sessionId>
 ```
 
 **响应示例**:
@@ -380,7 +338,7 @@ Authorization: Bearer <token>
 ### 获取定时任务状态
 ```http
 GET /api/scheduler/status
-Authorization: Bearer <token>
+Authorization: Bearer <sessionId>
 ```
 
 **响应示例**:
@@ -403,7 +361,7 @@ Authorization: Bearer <token>
 ### 手动执行 RSS 任务
 ```http
 POST /api/scheduler/rss/run
-Authorization: Bearer <token>
+Authorization: Bearer <sessionId>
 ```
 
 ## Telegram 集成
@@ -435,7 +393,7 @@ Content-Type: application/json
 ### 设置 Webhook
 ```http
 POST /telegram/set-webhook
-Authorization: Bearer <token>
+Authorization: Bearer <sessionId>
 Content-Type: application/json
 
 {
@@ -446,13 +404,13 @@ Content-Type: application/json
 ### 获取 Bot 信息
 ```http
 GET /telegram/bot-info
-Authorization: Bearer <token>
+Authorization: Bearer <sessionId>
 ```
 
 ### 发送测试消息
 ```http
 POST /telegram/test-message
-Authorization: Bearer <token>
+Authorization: Bearer <sessionId>
 Content-Type: application/json
 
 {

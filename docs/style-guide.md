@@ -2,6 +2,8 @@
 
 界面参考 [ReUI Components](https://reui.io/components) 的布局与组件组织方式，使用 Hono JSX 和原生 JavaScript 实现。所有页面共用 `Layout.tsx` 和 `public/css/workspace.css`；不加载旧主题样式。
 
+具体对照 ReUI 官方的 [带图标分段选项 c-tabs-9](https://github.com/keenthemes/reui/blob/main/public/r/styles/radix-nova/c-tabs-9.json)、[开关 c-switch-1](https://github.com/keenthemes/reui/blob/main/public/r/styles/radix-nova/c-switch-1.json) 和 [省略号分页 c-pagination-10](https://github.com/keenthemes/reui/blob/main/public/r/styles/radix-nova/c-pagination-10.json)。保留等宽选项、清晰选中态、统一图标间距、首尾页和省略号，并适配当前 Hono 页面和品牌色。
+
 ## 设计变量
 
 | 类别 | 规范 |
@@ -12,12 +14,12 @@
 | 字体 | 系统 sans-serif，中文使用 Microsoft YaHei 等本机字体 |
 | 字号 | 正文/控件 13–14px，辅助 11–12px，页面标题 24px |
 | 圆角 | 控件 6px，面板 8px；不混用大胶囊和渐变卡片 |
-| 线条 | 1px 中性边框，功能图标使用 Lucide、24px 网格、1.8px 描边 |
+| 线条 | 1px 中性边框，功能图标使用 Lucide、24px 网格、1.7px 描边 |
 | 间距 | 4px 基础刻度，内容区 30px，移动端 16px |
 
 颜色、边框、字体和焦点样式通过 CSS 变量统一提供；明暗主题只覆盖变量。
 
-SeekFeed 品牌使用原创 S 形标识，界面、favicon、Apple 图标与 PWA 使用同一源文件。功能图标选自 [Lucide Static](https://lucide.dev/guide/static) 1.59.0，30 个图标打包在 `public/icons/ui.svg` 中；导航、按钮、关闭、主题切换、空状态与通知共用该图标集，许可见 `licenses/lucide.txt`。
+SeekFeed 品牌使用原创 S 形标识，界面、favicon、Apple 图标与 PWA 使用同一源文件。功能图标选自 [Lucide Static](https://lucide.dev/guide/static) 1.59.0，图标路径统一存放在 `src/components/icons.json` 中，服务端与动态组件均内联渲染 SVG，避免主题切换后外部引用失效；导航、按钮、关闭、主题切换、空状态与通知共用该图标集，许可见 `licenses/lucide.txt`。
 
 ## 组件
 
@@ -25,11 +27,16 @@ SeekFeed 品牌使用原创 S 形标识，界面、favicon、Apple 图标与 PWA
 - **按钮**：主按钮、描边次按钮、文字按钮、危险按钮共享高度、圆角和焦点环。
 - **表单**：输入框、选择器、开关、分段选择、辅助文字共用样式；每个控件关联 label。
 - **反馈**：状态徽标、空状态、加载骨架与 Toast 使用一致色板，文案反映真实数据。
-- **面板**：订阅、RSS、Telegram、统计和登录共用抽屉，最大宽度 440px/520px。
+- **页面**：订阅 `/subscriptions`、统计 `/statistics`、账号与安全 `/settings/account`、RSS `/settings/rss`、Telegram `/settings/telegram` 使用独立地址，支持直达、刷新和前进后退。配置在宽屏使用双栏卡片，窄屏堆叠，避免固定表单宽度留下大块空白。
+- **临时操作**：登录和危险操作确认使用居中对话框，支持 Escape、焦点管理。
 - **独立页面**：初始化、错误与 PWA 检查页面共用品牌、边框、输入和按钮。
 
 ## 交互与适配
 
-面板支持 Escape、遮罩关闭、焦点圈定/恢复，背景设为 inert。窄屏折叠侧栏，抽屉使用全宽。动效尊重 `prefers-reduced-motion`，所有可操作元素具备键盘焦点状态。
+登录对话框支持 Escape、遮罩关闭、焦点圈定/恢复，背景设为 inert。窄屏折叠侧栏，表单在 320px 起保持无水平溢出。动效尊重 `prefers-reduced-motion`，所有可操作元素具备键盘焦点状态。
 
-列表搜索和作者筛选独立防抖，使用 AbortController 避免旧响应覆盖新结果。错误和空列表提供刷新/清空筛选的恢复入口。
+列表搜索和作者筛选独立防抖，使用 AbortController 避免旧响应覆盖新结果。列表翻页保留当前行高与滚动位置，数字按钮保留首尾页和省略号。错误保留当前结果并提供重试，空列表提供清空筛选入口。
+
+非登录输入由 `FieldInput` 统一标记 `data-1p-ignore` 和 `data-op-ignore`；登录表单保留 username/current-password 的语义。选择器支持方向键、Home/End、输入定位和 Escape。保存按钮有忙碌状态，禁止重复提交。
+
+Telegram 使用紧凑单色符号（◇、≡、✓、→、!）、HTML 标题和字段间距；动态文本必须转义，长列表按完整条目拆分消息。
