@@ -27,6 +27,7 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/" }) => {
                 <FieldInput type="text" id="keyword3" class="input-field" placeholder="关键词3（同时命中）" aria-label="关键词3" maxlength="100" />
               </div>
             </div>
+            <div class="match-rules"><p>普通关键词不区分大小写，如 DMIT 与 dmit。多个关键词需要全部命中。</p><p><span id="subscriptionMatchScope">正在读取匹配范围…</span> <a href="/settings/telegram" data-route>调整范围</a></p><p>内容取自 RSS 提供的摘要，可能不包含完整正文。</p></div>
             {/* 第二行：作者和分类 */}
             <div class="sub-form-row">
               <div class="sub-form-group">
@@ -34,8 +35,8 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/" }) => {
                 <FieldInput type="text" id="subCreator" class="input-field" placeholder="作者名" />
               </div>
               <div class="sub-form-group">
-                <label for="subCategory" class="sub-form-label">分类（可多选）</label>
-                <select data-1p-ignore="true" data-op-ignore="true" id="subCategory" multiple class="input-field">
+                <label for="subCategory" class="sub-form-label">分类</label>
+                <select data-1p-ignore="true" data-op-ignore="true" id="subCategory" class="input-field">
                   <option value="">全部分类</option>
                   <option value="daily">日常</option>
                   <option value="tech">技术</option>
@@ -52,7 +53,7 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/" }) => {
                 </select>
               </div>
             </div>
-            <div class="sub-form-row"><div class="sub-form-group" style="width:100%"><label for="excludeKeywords" class="sub-form-label">屏蔽词</label><FieldInput type="text" id="excludeKeywords" class="input-field" placeholder="如：出号, 求购, 已出（用逗号分隔）" maxlength="500" /><span class="form-hint">分类之间任一符合即可；多个关键词需同时命中，包含屏蔽词时不通知。</span></div></div>
+            <div class="sub-form-row"><div class="sub-form-group" style="width:100%"><label for="excludeKeywords" class="sub-form-label">屏蔽词</label><FieldInput type="text" id="excludeKeywords" class="input-field" placeholder="如：出号, 求购, 已出（用逗号分隔）" maxlength="500" /><span class="form-hint">只监控所选分类；选择全部分类时不限制板块。标题或摘要包含屏蔽词时不通知。</span></div></div>
             {/* 第三行：添加按钮 */}
             <div class="sub-form-row sub-form-row-action">
               <button type="submit" class="btn btn-primary">添加订阅</button>

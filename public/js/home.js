@@ -395,7 +395,7 @@ document.addEventListener("DOMContentLoaded", function () {
     [["filterCategory", "category"], ["filterSubscription", "subId"], ["filterStatus", "pushStatus"]].forEach(([id, key]) => {
       el(id).addEventListener("change", e => {
         if (key === "pushStatus") setMatched(false);
-        currentFilters[key] = e.target.multiple ? [...e.target.selectedOptions].map(o => o.value).filter(Boolean).join(",") : e.target.value; loadPosts(1);
+        currentFilters[key] = e.target.value; loadPosts(1);
       });
     });
     el("filterCreator").addEventListener("input", e => {
@@ -409,7 +409,7 @@ document.addEventListener("DOMContentLoaded", function () {
       el("clearSearchBtn").style.display = "none"; currentFilters = {}; setMatched(false); loadPosts(1);
     });
     el("subscribedOnlyChip").addEventListener("click", () => { setMatched(!currentFilters.pushStatusIn); loadPosts(1); });
-    el("refreshBtn").addEventListener("click", () => { loadPosts(); updateStats(); updateMonitor(); });
+    el("refreshBtn").addEventListener("click", pendingClick(() => Promise.all([loadPosts(), updateStats(), updateMonitor()])));
     el("prevPageBtn").addEventListener("click", () => loadPosts(Math.max(1, currentPage - 1)));
     el("nextPageBtn").addEventListener("click", () => loadPosts(currentPage + 1));
     ["syncNowBtn", "fetchRssBtn"].forEach(id => el(id).addEventListener("click", syncNow));
@@ -419,10 +419,10 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!isLoggedIn) return LoginModal.open();
     if (syncing) return;
     syncing = true;
-    ["syncNowBtn", "fetchRssBtn"].forEach(id => { el(id).disabled = true; el(id).classList.add("spin"); });
-    const result = await apiRequest("/api/rss/fetch", { method: "POST" });
-    syncing = false;
-    ["syncNowBtn", "fetchRssBtn"].forEach(id => { el(id).disabled = false; el(id).classList.remove("spin"); });
+    const finishes = ["syncNowBtn", "fetchRssBtn"].map(id => window.SeekFeedControls.beginPending(el(id), '正在同步'));
+    let result;
+    try { result = await apiRequest("/api/rss/fetch", { method: "POST" }); }
+    finally { syncing = false; finishes.forEach(finish => finish?.()); }
     if (result?.success) {
       const failed = result.data.notifications?.failed || 0;
       Toast.show(`同步完成，新增 ${result.data.new} 篇，成功推送 ${result.data.notifications?.pushed || 0} 篇${failed ? `；${failed} 篇发送失败，将在后续同步重试` : ""}`, failed ? "warning" : "success");
@@ -995,31 +995,58 @@ document.addEventListener("DOMContentLoaded", function () {
     const result = await apiRequest("/api/subscriptions");
     const container = el("subscriptionsList");
     if (!result?.success) { container.textContent = "订阅加载失败，请刷新页面重试。"; return; }
-    container.innerHTML = result.data.length ? result.data.map(sub => `<div class="subscription-item ${sub.enabled === 0 ? "paused" : ""}" data-id="${sub.id}"><div class="subscription-description"><div class="subscription-keywords">${[sub.keyword1, sub.keyword2, sub.keyword3].filter(Boolean).map(word => `<span class="tag tag-blue">${escapeHtml(word)}</span>`).join("") || '<span class="tag">按作者 / 分类订阅</span>'}</div><div class="subscription-filters"><span>${sub.enabled === 0 ? "已暂停" : "监控中"}</span>${sub.creator ? `<span>作者 ${escapeHtml(sub.creator)}</span>` : ""}${sub.category ? `<span>${escapeHtml(getCategoryName(sub.category))}</span>` : ""}</div>${sub.exclude_keywords ? `<div class="subscription-exclusions">屏蔽：${escapeHtml(sub.exclude_keywords)}</div>` : ""}</div><div class="subscription-controls"><button class="btn btn-secondary btn-xs toggle-sub" data-enabled="${sub.enabled === 0 ? 1 : 0}">${sub.enabled === 0 ? "恢复" : "暂停"}</button><button class="btn btn-danger btn-xs delete-sub">删除</button></div></div>`).join("") : '<div class="empty-state-small"><div class="empty-title">还没有订阅</div><p class="form-hint">添加关键词、作者或分类，开始接收有价值的动态。</p></div>';
+    container.innerHTML = result.data.length ? result.data.map(sub => `<div class="subscription-item ${sub.enabled === 0 ? "paused" : ""}" data-id="${sub.id}"><div class="subscription-description"><div class="subscription-keywords">${[sub.keyword1, sub.keyword2, sub.keyword3].filter(Boolean).map(word => `<span class="tag tag-blue">${escapeHtml(word)}</span>`).join("") || '<span class="tag">按作者 / 分类订阅</span>'}</div><div class="subscription-filters"><span class="subscription-state">${sub.enabled === 0 ? "已暂停" : "监控中"}</span>${sub.creator ? `<span>作者 ${escapeHtml(sub.creator)}</span>` : ""}${sub.category ? `<span>${escapeHtml(getCategoryName(sub.category))}</span>` : ""}</div>${sub.exclude_keywords ? `<div class="subscription-exclusions">屏蔽：${escapeHtml(sub.exclude_keywords)}</div>` : ""}</div><div class="subscription-controls"><button class="btn btn-secondary btn-xs toggle-sub" data-enabled="${sub.enabled === 0 ? 1 : 0}">${renderIcon(sub.enabled === 0 ? 'play' : 'pause')}${sub.enabled === 0 ? "恢复" : "暂停"}</button><button class="btn btn-danger btn-xs delete-sub">${renderIcon('trash')}删除</button></div></div>`).join("") : '<div class="empty-state-small"><div class="empty-title">还没有订阅</div><p class="form-hint">添加关键词、作者或分类，开始接收有价值的动态。</p></div>';
     container.querySelectorAll(".toggle-sub").forEach(btn => btn.addEventListener("click", async () => {
-      btn.disabled = true;
-      const result = await apiRequest(`/api/subscriptions/${btn.closest(".subscription-item").dataset.id}`, { method: "PUT", body: JSON.stringify({ enabled: Number(btn.dataset.enabled) }) });
-      if (result?.success) { Toast.success(btn.dataset.enabled === "1" ? "订阅已恢复" : "订阅已暂停"); loadSubscriptions(); loadFilterSubscriptions(); }
-      else { Toast.error(result?.message || "修改失败"); btn.disabled = false; }
+      const item = btn.closest('.subscription-item');
+      if (item.dataset.busy) return;
+      const enabled = Number(btn.dataset.enabled);
+      const other = item.querySelector('.delete-sub');
+      item.dataset.busy = 'true'; other.disabled = true;
+      let result;
+      try { result = await window.SeekFeedControls.pending(btn, () => apiRequest(`/api/subscriptions/${item.dataset.id}`, { method: "PUT", body: JSON.stringify({ enabled }) })); }
+      finally { delete item.dataset.busy; other.disabled = false; }
+      if (result?.success) {
+        item.classList.toggle('paused', enabled === 0);
+        item.querySelector('.subscription-state').textContent = enabled === 0 ? '已暂停' : '监控中';
+        btn.dataset.enabled = String(enabled === 0 ? 1 : 0);
+        btn.innerHTML = `${renderIcon(enabled === 0 ? 'play' : 'pause')}${enabled === 0 ? '恢复' : '暂停'}`;
+        Toast.success(enabled === 0 ? '订阅已暂停' : '订阅已恢复'); loadFilterSubscriptions();
+      } else Toast.error(result?.message || "修改失败");
     }));
     container.querySelectorAll(".delete-sub").forEach(btn => btn.addEventListener("click", async () => {
-      if (btn.dataset.confirm !== "yes") { btn.dataset.confirm = "yes"; btn.textContent = "确认删除"; setTimeout(() => { btn.dataset.confirm = ""; btn.textContent = "删除"; }, 4000); return; }
-      btn.disabled = true;
-      const result = await apiRequest(`/api/subscriptions/${btn.closest(".subscription-item").dataset.id}`, { method: "DELETE" });
-      if (result?.success) { Toast.success("订阅已删除"); loadSubscriptions(); loadFilterSubscriptions(); updateStats(); }
-      else { Toast.error(result?.message || "删除失败"); btn.disabled = false; }
+      const item = btn.closest('.subscription-item');
+      if (item.dataset.busy || btn.dataset.confirming) return;
+      btn.dataset.confirming = 'true';
+      let confirmed;
+      try { confirmed = await confirmAction('删除这条订阅？', '删除后不再按此规则监控新帖，已收录的帖子会保留。', '删除订阅'); }
+      finally { delete btn.dataset.confirming; }
+      if (!confirmed) return;
+      const other = item.querySelector('.toggle-sub');
+      item.dataset.busy = 'true'; other.disabled = true;
+      let result;
+      try { result = await window.SeekFeedControls.pending(btn, () => apiRequest(`/api/subscriptions/${item.dataset.id}`, { method: "DELETE" })); }
+      finally { delete item.dataset.busy; other.disabled = false; }
+      if (result?.success) {
+        item.remove();
+        if (!container.querySelector('.subscription-item')) loadSubscriptions();
+        Toast.success("订阅已删除"); loadFilterSubscriptions(); updateStats();
+      } else Toast.error(result?.message || "删除失败");
     }));
+  }
+  async function loadMatchingScope() {
+    const result = await apiRequest('/api/config');
+    el('subscriptionMatchScope').textContent = result?.success
+      ? result.data.only_title ? '当前范围：仅标题。' : '当前范围：标题、RSS 摘要、作者和分类。'
+      : '匹配范围可在 Telegram 设置中查看。';
   }
   function initSubscriptions() {
     el("addSubForm").addEventListener("submit", pendingSubmit(async e => {
       e.preventDefault();
       const data = { keyword1: el("keyword1").value.trim() || undefined, keyword2: el("keyword2").value.trim() || undefined,
         keyword3: el("keyword3").value.trim() || undefined, creator: el("subCreator").value.trim() || undefined,
-        category: [...el("subCategory").selectedOptions].map(o => o.value).filter(Boolean).join(",") || undefined, exclude_keywords: el("excludeKeywords").value.trim(), enabled: 1 };
+        category: el("subCategory").value || undefined, exclude_keywords: el("excludeKeywords").value.trim(), enabled: 1 };
       if (![data.keyword1, data.keyword2, data.keyword3, data.creator, data.category].some(Boolean)) return Toast.warning("请至少填写一个订阅条件");
-      const button = e.submitter; button.disabled = true;
       const result = await apiRequest("/api/subscriptions", { method: "POST", body: JSON.stringify(data) });
-      button.disabled = false;
       if (!result?.success) return Toast.error(result?.message || "添加失败");
       Toast.success("订阅已添加"); el("addSubForm").reset(); loadSubscriptions(); loadFilterSubscriptions(); updateStats();
     }));
@@ -1047,7 +1074,7 @@ document.addEventListener("DOMContentLoaded", function () {
     el('breadcrumbCurrent').textContent = title;
     document.title = `${title} · SeekFeed`;
     if (name === 'feed') { setMatched(path === '/matched'); loadPosts(currentPage); }
-    if (name === 'subscriptions') loadSubscriptions();
+    if (name === 'subscriptions') { loadSubscriptions(); loadMatchingScope(); }
     if (name === 'rss') loadRssConfig();
     if (name === 'telegram') loadTelegramConfig();
     if (name === 'stats') { loadChartData(currentChartDays); updateStats(); }

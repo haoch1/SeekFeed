@@ -82,11 +82,10 @@ export const InitPage: FC = () => {
                 />
               </div>
 
-              <div id="initMessage" class="login-message" style="display: none;"></div>
-
               <button type="submit" class="btn btn-primary" style="width: 100%;">
                 初始化系统
               </button>
+              <div id="initMessage" class="login-message" role="status" aria-live="polite" style="display: none;"></div>
             </form>
           </div>
         </main>

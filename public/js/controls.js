@@ -129,19 +129,46 @@
         select.form?.addEventListener('reset', () => setTimeout(refresh));
         refresh();
     }
-    async function pending(button, action, label = '处理中…') {
-        if (!button || button.disabled) return;
-        const content = button.innerHTML;
-        button.style.minWidth = `${button.getBoundingClientRect().width}px`;
+    function beginPending(button, label = '处理中') {
+        if (!button || button.disabled) return null;
+        const original = { width: button.style.width, height: button.style.height, position: button.style.position, label: button.getAttribute('aria-label') };
+        const bounds = button.getBoundingClientRect();
+        const content = document.createElement('span');
+        content.className = 'button-content';
+        content.append(...button.childNodes);
+        const progress = document.createElement('span');
+        progress.className = 'button-progress';
+        progress.setAttribute('aria-hidden', 'true');
+        progress.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9" opacity=".2"/><path d="M21 12a9 9 0 0 0-9-9"/></svg>';
+        if (bounds.width && bounds.height) {
+            button.style.width = `${bounds.width}px`;
+            button.style.height = `${bounds.height}px`;
+        }
+        if (getComputedStyle(button).position === 'static') button.style.position = 'relative';
+        button.append(content, progress);
         button.disabled = true;
         button.setAttribute('aria-busy', 'true');
-        button.innerHTML = `${icon('sync')}<span>${label}</span>`;
+        button.setAttribute('aria-label', `${content.textContent.trim() || original.label || ''}，${label}`);
         button.classList.add('is-pending');
+        // Fast requests retain their original appearance; slow ones use a quiet spinner.
+        const delay = setTimeout(() => button.classList.add('is-progress-visible'), 240);
+        return () => {
+            clearTimeout(delay);
+            button.replaceChildren(...content.childNodes);
+            button.disabled = false;
+            button.removeAttribute('aria-busy');
+            if (original.label === null) button.removeAttribute('aria-label'); else button.setAttribute('aria-label', original.label);
+            button.classList.remove('is-pending', 'is-progress-visible');
+            button.style.width = original.width;
+            button.style.height = original.height;
+            button.style.position = original.position;
+        };
+    }
+    async function pending(button, action, label = '处理中') {
+        const finish = beginPending(button, label);
+        if (!finish) return;
         try { return await action(); }
-        finally {
-            button.innerHTML = content; button.disabled = false;
-            button.removeAttribute('aria-busy'); button.classList.remove('is-pending'); button.style.minWidth = '';
-        }
+        finally { finish(); }
     }
     document.addEventListener('pointerdown', e => { if (active && !active.button.contains(e.target) && !active.menu.contains(e.target)) close(); });
     document.addEventListener('scroll', e => { if (active && !active.menu.contains(e.target)) close(); }, true);
@@ -156,6 +183,6 @@
         button.setAttribute('aria-pressed', String(show));
         button.setAttribute('aria-label', `${show ? '隐藏' : '显示'}${input.id === 'botToken' ? ' Bot Token' : '密码'}`);
     });
-    window.SeekFeedControls = { icon, pending, closeSelect: close, refreshSelects: () => selects.forEach(s => s.refresh()) };
+    window.SeekFeedControls = { icon, beginPending, pending, closeSelect: close, refreshSelects: () => selects.forEach(s => s.refresh()) };
     document.addEventListener('DOMContentLoaded', () => document.querySelectorAll('select').forEach(enhance));
 })();

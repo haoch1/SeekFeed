@@ -104,8 +104,10 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
 
+    const finish = window.SeekFeedControls.beginPending(initForm.querySelector('button[type="submit"]'), '正在初始化');
+    if (!finish) return;
     try {
-      showMessage('正在初始化系统...', 'info');
+      hideMessage();
       
       const response = await fetch('/auth/init', {
         method: 'POST',
@@ -133,7 +135,7 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch (error) {
       console.error('初始化错误:', error);
       showMessage('网络错误，请重试', 'error');
-    }
+    } finally { finish(); }
   });
 
   // 输入验证
