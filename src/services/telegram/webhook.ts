@@ -1,10 +1,17 @@
 import { Context } from 'grammy';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { TelegramBaseService } from './base';
 import type { Post } from '../../types';
 import { logger } from '../../utils/logger';
 
 export class TelegramWebhookService extends TelegramBaseService {
   private isPolling: boolean = false;
+
+  private getWebhookSecret(): string {
+    return createHmac('sha256', this.botToken)
+      .update('SeekFeed webhook authentication v1')
+      .digest('hex');
+  }
 
 
   /**
@@ -143,6 +150,11 @@ export class TelegramWebhookService extends TelegramBaseService {
    */
   getWebhookCallback() {
     return async (request: Request) => {
+      const provided = Buffer.from(request.headers.get('X-Telegram-Bot-Api-Secret-Token') || '');
+      const expected = Buffer.from(this.getWebhookSecret());
+      if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+        return new Response('Forbidden', { status: 403 });
+      }
       try {
         // 确保 Bot 已初始化
         if (!this.initialized) {
@@ -297,7 +309,7 @@ export class TelegramWebhookService extends TelegramBaseService {
   }> {
     try {
       logger.telegram('正在设置 Webhook: ' + webhookUrl);
-      await this.bot.api.setWebhook(webhookUrl);
+      await this.bot.api.setWebhook(webhookUrl, { secret_token: this.getWebhookSecret() });
       logger.telegram('Webhook 设置成功: ' + webhookUrl);
       return { success: true };
     } catch (error: any) {

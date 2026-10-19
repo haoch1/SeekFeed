@@ -249,6 +249,7 @@ export type ApiResponseType<T = any> = SuccessResponse<T> | ErrorResponse;
 
 // 中间件上下文变量类型
 export interface ContextVariables {
+  sessionData?: SessionData;
   dbService: any; // DatabaseService 类型
   authService?: any; // AuthService 类型
   jwtPayload?: JWTPayload;

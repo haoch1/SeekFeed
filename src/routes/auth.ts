@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { AuthService } from '../services/auth'
 import { DatabaseService } from '../services/database'
 import type { SessionData } from '../types'
+import { requireSession } from '../middleware/session';
 
 type Bindings = {
   ENVIRONMENT: string
@@ -22,17 +23,6 @@ authRoutes.use('*', async (c, next) => {
 
 authRoutes.use('/sessions', requireSession);
 authRoutes.use('/logout-all', requireSession);
-
-async function requireSession(c: any, next: any) {
-    const sessionId = c.req.header('Authorization')?.match(/^Bearer (\S+)$/)?.[1];
-    if (!sessionId) return c.json({ success: false, message: '请先登录' }, 401);
-    const verification = await c.get('authService').verifySession(sessionId, getClientInfo(c).ipAddress);
-    if (!verification.valid || !verification.sessionData) {
-        return c.json({ success: false, message: 'Session无效或已过期' }, 401);
-    }
-    c.set('sessionData', verification.sessionData);
-    await next();
-}
 
 // 检查初始化状态
 authRoutes.get('/check-init', async (c) => {

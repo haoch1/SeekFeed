@@ -3,6 +3,7 @@ import { Database } from 'bun:sqlite';
 import { readFileSync } from 'node:fs';
 import { Hono } from 'hono';
 import { authRoutes } from './auth';
+import { telegramRoutes } from './telegram';
 import { AuthService } from '../services/auth';
 import { DatabaseService } from '../services/database';
 import { SessionService } from '../services/session';
@@ -28,11 +29,30 @@ beforeEach(() => {
         await next();
     });
     app.route('/auth', authRoutes);
+    app.route('/telegram', telegramRoutes);
 });
 
 afterEach(() => db.close());
 
 describe('session management authorization', () => {
+    it('protects Telegram management before parsing input or accessing the bot', async () => {
+        for (const [path, method] of [['set-webhook', 'POST'], ['bot-info', 'GET'], ['test-message', 'POST']]) {
+            for (const headers of [{}, { Authorization: 'Bearer forged' }]) {
+                const response = await app.request(`/telegram/${path}`, { method, headers });
+                expect(response.status).toBe(401);
+                expect(response.headers.get('Cache-Control')).toBe('no-store');
+            }
+        }
+    });
+
+    it('allows an authenticated administrator to access Telegram settings', async () => {
+        const response = await app.request('/telegram/bot-info', {
+            headers: { Authorization: `Bearer ${sessionId}` },
+        });
+        expect(response.status).toBe(400);
+        expect((await response.json()).message).toContain('Bot Token');
+    });
+
     it('rejects anonymous and forged session-list requests without exposing active credentials', async () => {
         for (const headers of [{}, { Authorization: 'Bearer invalid-session' }]) {
             const response = await app.request('/auth/sessions', { headers });

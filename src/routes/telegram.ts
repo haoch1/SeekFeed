@@ -4,10 +4,15 @@ import { TelegramPushService } from '../services/telegram/push';
 import { createSuccessResponse, createErrorResponse } from '../utils/helpers';
 import type { ContextVariables } from '../types';
 import { logger } from '../utils/logger';
+import { requireSession } from '../middleware/session';
 
 type Variables = ContextVariables;
 
 export const telegramRoutes = new Hono<{ Variables: Variables }>();
+
+telegramRoutes.use('/set-webhook', requireSession);
+telegramRoutes.use('/bot-info', requireSession);
+telegramRoutes.use('/test-message', requireSession);
 
 // Telegram Webhook 处理
 telegramRoutes.post('/webhook', async (c) => {
@@ -53,7 +58,7 @@ telegramRoutes.post('/set-webhook', async (c) => {
     const telegramService = new TelegramWebhookService(dbService, config.bot_token);
     const success = await telegramService.setWebhook(webhookUrl);
     
-    if (success) {
+    if (success.success) {
       return c.json(createSuccessResponse(null, 'Webhook 设置成功'));
     } else {
       return c.json(createErrorResponse('Webhook 设置失败'), 500);
