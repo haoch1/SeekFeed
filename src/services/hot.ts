@@ -88,7 +88,7 @@ export class HotService {
                 .run(observedAt, batch.pages, new Set(batch.posts.map(p => p.postId)).size);
         })();
     }
-    ranking(period: HotPeriod = 'live', category = '', sort: HotSort = 'heat', now = new Date()) {
+    ranking(period: HotPeriod = 'live', category = '', sort: HotSort = 'heat', now = new Date(), limit: 30 | 50 | 100 = 30) {
         const state = this.state();
         // Scores stay fixed between successful collections, including while serving stale data.
         const reference = Math.min(now.getTime(), Date.parse(state.last_success_at || now.toISOString()));
@@ -133,7 +133,7 @@ export class HotService {
                     (reference - published) / HOUR, live),
             }];
         }).sort((a, b) => (sort === 'heat' ? b.heat - a.heat : b[sort] - a[sort]) || b.postId - a.postId);
-        return { posts: ranked.slice(0, 50), total: ranked.length, categories, period, sort,
+        return { posts: ranked.slice(0, limit), total: ranked.length, categories, period, sort, limit,
             updatedAt: state.last_success_at, stale: !state.last_success_at || now.getTime() - Date.parse(state.last_success_at) > 15 * MINUTE,
             error: state.last_error, busy: Boolean(this.inFlight), enabled: process.env.HOT_COLLECT_ENABLED === 'true',
             coverage: state.batch_size, pages: state.pages, intervalSeconds: 300, warmingUp };

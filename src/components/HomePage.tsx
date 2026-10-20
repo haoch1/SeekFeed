@@ -19,12 +19,12 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
       <DashboardSurface path={path}>
 
       {/* 订阅管理页面 */}
-      <section id="subscriptionsPage" class="route-page" hidden={path !== "/subscriptions"}><div class="workspace-heading"><div><h1>订阅管理</h1><p>创建关键词规则，让重要的新帖自动找到你。</p></div></div>
+      <section id="subscriptionsPage" class="route-page" hidden={path !== "/subscriptions"}><div class="workspace-heading"><div><h1>订阅管理</h1></div></div>
         <div class="page-body">
           {/* 添加订阅表单 */}
           <form id="addSubForm" class="sub-form" method="post">
             {/* 第一行：关键词 */}
-            <div class="section-heading"><h2>新建订阅</h2><p>按关键词、作者或分类监控新帖。</p></div><div class="sub-form-row"><label class="form-label" for="keyword1">匹配关键词</label></div>
+            <div class="section-heading"><h2>新建订阅</h2></div><div class="sub-form-row"><label class="form-label" for="keyword1">匹配关键词</label></div>
             <div class="sub-form-row"><div class="sub-keywords-inputs">
                 <FieldInput type="text" id="keyword1" class="input-field" placeholder="关键词1，如 DMIT" aria-label="关键词1" maxlength="100" />
                 <FieldInput type="text" id="keyword2" class="input-field" placeholder="关键词2（同时命中）" aria-label="关键词2" maxlength="100" />
@@ -80,7 +80,7 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
       </section>
 
       {/* RSS 配置页面 */}
-      <section id="rssPage" class="route-page" hidden={path !== "/settings/rss"}><div class="workspace-heading"><div><h1>RSS 配置</h1><p>管理内容来源、抓取频率与网络连接。</p></div></div>
+      <section id="rssPage" class="route-page" hidden={path !== "/settings/rss"}><div class="workspace-heading"><div><h1>RSS 配置</h1></div></div>
         <div class="page-body">
           <form id="rssConfigForm" class="form-stack" method="post">
             <div class="form-group">

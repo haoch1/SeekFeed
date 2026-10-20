@@ -39,14 +39,22 @@ SeekFeed 品牌使用原创 S 形标识，界面、favicon、Apple 图标与 PWA
 
 非登录输入由 `FieldInput` 统一标记 `data-1p-ignore` 和 `data-op-ignore`；登录表单保留 username/current-password 的语义。选择器支持方向键、Home/End、输入定位和 Escape。保存按钮有忙碌状态，禁止重复提交。
 
-Telegram 保留语义明确的原生图标（📰 帖子、📋 订阅、👤 账号、🔔 通知、✈️ 测试），不使用试管图标。图标仅置于标题或字段开头，字段间空一行。最近帖子的序号使用等宽 01–10 和统一间距，展示时统一全角方括号；数据库原文保持不变。帖子与订阅通知启用链接预览。原生命令菜单使用 SeekFeed 头像和简短说明；动态文本必须转义，长列表按完整条目拆分消息。
+Telegram 统一使用 A 版纯文字格式：粗体标题、等宽 01–10 序号和简洁字段，不使用装饰图标；数据库原文保持不变。热榜底部只显示更新时间，异常时保留必要的延迟提醒。帖子与订阅通知启用链接预览。原生命令菜单使用 SeekFeed 头像和简短说明；动态文本必须转义，长列表按完整条目拆分消息。
 
 ## Surface contrast, aligned settings and category selection
 
 The workspace uses a light neutral canvas with white cards, visible cool-gray borders and subtle elevation. Dark surfaces use separate border tokens. ReUI card/input hierarchy is shared across all seven routes rather than tuned per screenshot. Two-column settings stretch the primary card to the full height of the two related cards, with its actions at the bottom; narrow screens stack naturally.
 
-Category selects use one accessible multi-select with persistent checkboxes, a selected count, select-all and clear actions. Keyboard navigation, Space/Enter toggling and Escape remain available. Category keys are stored as a comma-separated set in the existing field; boards use OR, other conditions use AND. Post pagination applies the exact same SQL IN filter to its result and total queries.
+Category controls use accessible single selects, with keyboard navigation and Escape. Hot ranking adds a matching count selector with exactly 30, 50 and 100; 30 is the initial value, and automatic updates preserve the selection.
 
 Active devices show the IP recorded at login. Direct deployments use the socket address. Deployments behind a controlled reverse proxy can enable TRUST_PROXY=true; that proxy must overwrite X-Real-IP and keep the application port private. Existing sessions retain their original recorded IP.
 
 The feed polls current results every 10 seconds while visible and refreshes on returning to the tab. Page one reconciles keyed post rows without a loading flash, preserving the visible post anchor. Older pages retain their contents and show a compact new-post action. Filters and page selection remain intact; hidden tabs and settings pages do not poll the post list.
+
+## Shared motion and concise labels
+
+The topbar stays at the top while content scrolls. Route changes capture the outgoing and incoming content with View Transitions (200ms out, 300ms in, at most 8px motion), keeping the sidebar and topbar stable. Unsupported browsers use a short sequential fade. Rapid navigation, history and reduced-motion preferences must remain correct.
+
+Buttons share one progress lifecycle: wait 280ms before showing progress, then keep it visible for at least 420ms and fade it out over 160ms. Fast operations do not show a spinner. Existing labels, icons and hit targets are restored after success or failure. Loading never fades an entire populated list. Background updates never animate or replace unchanged rows.
+
+Remove generic page introductions and collection diagnostics from the primary surface. Keep timestamps, time ranges, chart units, validation, security consequences and actionable error messages.

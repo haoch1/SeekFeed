@@ -271,7 +271,7 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
                 el('chartRangeSelector').querySelectorAll('button').forEach(item => { item.classList.toggle('active', item === button); item.setAttribute('aria-pressed', String(item === button)); });
                 load();
             }));
-            el('retryAnalytics').addEventListener('click', () => load());
+            el('retryAnalytics').addEventListener('click', event => window.SeekFeedControls.pending(event.currentTarget, () => load()));
             el('analyticsCategorySearch').addEventListener('input', () => { if (currentData) renderCategories(currentData); });
             el('analyticsCategoryLink').addEventListener('click', event => {
                 event.preventDefault();

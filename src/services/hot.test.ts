@@ -71,17 +71,25 @@ describe('independent hot ranking', () => {
         expect(stale.stale).toBe(true);
         expect(stale.error).not.toContain('secret');
     });
-    it('keeps a stable top 50 and prunes only old heat records, preserving RSS history', () => {
+    it('defaults to 30, supports 50/100 after sorting, and prunes only old heat records', () => {
         const service = new HotService(db);
         const old = new Date(now.getTime() - 31 * 86400000);
         service.saveBatch(batch([post(999)], old), old);
         publish(999, old.toISOString());
-        for (let id = 1; id <= 70; id++) publish(id, '2026-10-20T04:00:00Z');
-        service.saveBatch(batch(Array.from({length:70}, (_, i) => post(i+1))), now);
+        for (let id = 1; id <= 140; id++) publish(id, '2026-10-20T04:00:00Z');
+        service.saveBatch(batch(Array.from({length:140}, (_, i) => post(i+1, {views:i, category:i < 110 ? 'tech' : 'daily'}))), now);
         const result = service.ranking('live', '', 'heat', now);
-        expect(result.posts).toHaveLength(50);
-        expect(result.total).toBe(70);
-        expect(db.query('SELECT COUNT(*) AS n FROM posts').get()).toEqual({n:71});
+        expect(result.posts).toHaveLength(30);
+        expect(result.total).toBe(140);
+        for (const limit of [30, 50, 100] as const) {
+            const ranked = service.ranking('day', '', 'views', now, limit);
+            expect(ranked.posts.map(p => p.postId)).toEqual(Array.from({length:limit}, (_, i) => 140-i));
+            expect(ranked.total).toBe(140);
+            const filtered = service.ranking('week', 'tech', 'views', now, limit);
+            expect(filtered.posts.map(p => p.postId)).toEqual(Array.from({length:limit}, (_, i) => 110-i));
+            expect(filtered.total).toBe(110);
+        }
+        expect(db.query('SELECT COUNT(*) AS n FROM posts').get()).toEqual({n:141});
         expect(db.query('SELECT * FROM hot_posts WHERE post_id=999').get()).toBeNull();
     });
     it('ranks recent growth above large static lifetime counts and never resets age on a reply', () => {

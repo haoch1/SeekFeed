@@ -23,7 +23,6 @@ export function hotRankingMessage(data: ReturnType<HotService['ranking']>): stri
     }
     if (!data.posts.length) text += data.updatedAt ? '暂无符合时间范围的帖子。\n\n' : '榜单准备中，采集完成后可再次查看。\n\n';
     if (data.error || (data.stale && data.updatedAt)) text += '采集延迟，当前为上次保存的榜单。\n';
-    if (data.warmingUp) text += '正在积累增量样本，暂按发帖时间与累计热度排序。\n';
     if (data.updatedAt) text += `更新于 ${telegramTimestamp(data.updatedAt)}\n`;
-    return telegramMessage(title, text + '每 5 分钟采集 · 仅覆盖已采集的公开帖子');
+    return telegramMessage(title, text);
 }

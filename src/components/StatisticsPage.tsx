@@ -5,7 +5,7 @@ import { FieldInput } from './Controls';
 export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
     <section id="statsPage" class="route-page" hidden={!active}>
         <div class="workspace-heading analytics-heading">
-            <div><h1>统计信息</h1><p>了解社区热度、内容分布与发帖节奏。</p></div>
+            <div><h1>统计信息</h1></div>
             <div id="chartRangeSelector" class="analytics-period" role="group" aria-label="统计时间范围">
                 {[[-1, '今日'], [7, '近 7 天'], [30, '近 30 天'], [0, '全部']].map(([days, label]) => (
                     <button type="button" class={`chart-range-btn${days === -1 ? ' active' : ''}`} data-days={days} aria-pressed={days === -1 ? 'true' : 'false'}>{label}</button>

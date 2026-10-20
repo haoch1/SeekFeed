@@ -42,7 +42,7 @@ export const DashboardSurface: FC<PropsWithChildren<{ path?: string }>> = ({ chi
                 <div class="header-actions"><button id="themeToggleBtn" class="icon-btn" title="切换主题" aria-label="切换主题"><Icon name="sun" /></button></div>
             </header>
             <main class="workspace-content" id="mainContent"><section id="feedPage" class="route-page" hidden={path !== "/posts" && path !== "/matched"}>
-                <div class="workspace-heading"><div><h1 id="pageTitle">{path === "/matched" ? "命中订阅" : "最新帖子"}</h1><p>追踪社区动态，让有价值的信息主动找到你。</p></div><div class="heading-actions"><a href="/subscriptions" data-route class="btn btn-secondary"><Icon name="list" />管理订阅</a><button id="syncNowBtn" class="btn btn-primary"><Icon name="sync" /><span>立即同步</span></button></div></div>
+                <div class="workspace-heading"><div><h1 id="pageTitle">{path === "/matched" ? "命中订阅" : "最新帖子"}</h1></div><div class="heading-actions"><a href="/subscriptions" data-route class="btn btn-secondary"><Icon name="list" />管理订阅</a><button id="syncNowBtn" class="btn btn-primary"><Icon name="sync" /><span>立即同步</span></button></div></div>
                 <section class="metric-strip" aria-label="监控统计">
                     <div class="metric"><Icon name="posts" /><div><span>已收录帖子</span><strong id="overviewTotal">—</strong></div></div>
                     <div class="metric"><Icon name="target" /><div><span>命中订阅</span><strong id="overviewMatched">—</strong></div></div>

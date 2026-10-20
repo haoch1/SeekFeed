@@ -96,10 +96,11 @@ const hotQuery = z.object({
     period: z.enum(['live', 'day', 'week']).default('live'),
     category: z.string().max(80).regex(/^[a-zA-Z0-9_-]*$/).default(''),
     sort: z.enum(['heat', 'views', 'replies']).default('heat'),
+    limit: z.enum(['30', '50', '100']).default('30').transform(value => Number(value) as 30 | 50 | 100),
 });
 apiRoutes.get('/hot', createQueryValidationMiddleware(hotQuery), c => {
-    const { period, category, sort } = c.get('validatedQuery');
-    return c.json(createSuccessResponse(c.get('dbService').getHotService().ranking(period, category, sort)));
+    const { period, category, sort, limit } = c.get('validatedQuery');
+    return c.json(createSuccessResponse(c.get('dbService').getHotService().ranking(period, category, sort, undefined, limit)));
 });
 
 // 公开路由（无需认证）

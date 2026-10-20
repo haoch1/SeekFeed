@@ -96,10 +96,11 @@
             document.body.append(menu);
             const rect = button.getBoundingClientRect();
             const height = Math.min(menu.scrollHeight, 260);
-            const width = Math.min(innerWidth - 16, Math.max(rect.width, select.multiple ? 210 : 140));
+            const viewportWidth = document.documentElement.clientWidth;
+            const width = Math.min(viewportWidth - 16, Math.max(rect.width, select.multiple ? 210 : 140));
             const below = innerHeight - rect.bottom - 12;
             menu.style.width = `${width}px`;
-            menu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - width - 8))}px`;
+            menu.style.left = `${Math.max(8, Math.min(rect.left, viewportWidth - width - 8))}px`;
             menu.style.maxHeight = `${Math.max(80, Math.min(260, Math.max(below, rect.top - 12)))}px`;
             menu.style.top = `${below >= height || below >= rect.top ? rect.bottom + 5 : Math.max(8, rect.top - Math.min(height, rect.top - 12) - 5)}px`;
             state.menu = menu; active = state; refresh();
@@ -162,9 +163,20 @@
         button.setAttribute('aria-label', `${content.textContent.trim() || original.label || ''}，${label}`);
         button.classList.add('is-pending');
         // Keep the label visible; only an existing icon or the quiet bottom rail indicates progress.
-        const delay = setTimeout(() => button.classList.add('is-progress-visible'), 240);
-        return () => {
+        let shownAt = 0;
+        const delay = setTimeout(() => {
+            shownAt = performance.now();
+            button.classList.add('is-progress-visible');
+        }, 280);
+        let completion;
+        return () => completion ||= (async () => {
             clearTimeout(delay);
+            if (shownAt && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                // Once shown, progress must remain readable rather than flash for a single frame.
+                await new Promise(resolve => setTimeout(resolve, Math.max(0, 420 - (performance.now() - shownAt))));
+                button.classList.remove('is-progress-visible');
+                await new Promise(resolve => setTimeout(resolve, 160));
+            }
             button.replaceChildren(...content.childNodes);
             button.disabled = false;
             button.removeAttribute('aria-busy');
@@ -173,13 +185,13 @@
             button.style.width = original.width;
             button.style.height = original.height;
             button.style.position = original.position;
-        };
+        })();
     }
     async function pending(button, action, label = '处理中') {
         const finish = beginPending(button, label);
         if (!finish) return;
         try { return await action(); }
-        finally { finish(); }
+        finally { await finish(); }
     }
     document.addEventListener('pointerdown', e => { if (active && !active.button.contains(e.target) && !active.menu.contains(e.target)) close(); });
     document.addEventListener('scroll', e => { if (active && !active.menu.contains(e.target)) close(); }, true);

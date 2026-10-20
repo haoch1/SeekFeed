@@ -167,6 +167,8 @@ document.addEventListener("DOMContentLoaded", function () {
       };
       if (document.startViewTransition && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         themeTransition?.skipTransition();
+        routeTransition?.skipTransition();
+        root.classList.remove('route-transition');
         themeTransition = document.startViewTransition(apply);
         return;
       }
@@ -452,7 +454,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const finishes = ["syncNowBtn", "fetchRssBtn"].map(id => window.SeekFeedControls.beginPending(el(id), '正在同步'));
     let result;
     try { result = await apiRequest("/api/rss/fetch", { method: "POST" }); }
-    finally { syncing = false; finishes.forEach(finish => finish?.()); }
+    finally { await Promise.all(finishes.map(finish => finish?.())); syncing = false; }
     if (result?.success) {
       const failed = result.data.notifications?.failed || 0;
       Toast.show(`同步完成，新增 ${result.data.new} 篇，成功推送 ${result.data.notifications?.pushed || 0} 篇${failed ? `；${failed} 篇发送失败，将在后续同步重试` : ""}`, failed ? "warning" : "success");
@@ -862,36 +864,62 @@ document.addEventListener("DOMContentLoaded", function () {
   };
   let activePath = null;
   let routeAnimation;
+  let routeTransition;
+  let routeRequest = 0;
   const routeScroll = new Map();
-  function navigate(path, push = true) {
+  async function navigate(path, push = true) {
     if (path === '/settings') path = '/settings/account';
     const [name, title] = routeMap[path] || routeMap['/'];
     if (!isLoggedIn && !['feed', 'stats', 'hot'].includes(name)) { LoginModal.open(); return; }
-    if (activePath) routeScroll.set(activePath, scrollY);
-    if (push && location.pathname !== path) history.pushState({}, '', path);
-    window.SeekFeedControls.closeSelect();
-    document.querySelectorAll('.route-page').forEach(page => page.hidden = page.id !== `${name}Page`);
-    if (activePath && activePath !== path && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      routeAnimation?.cancel();
-      routeAnimation = el(`${name}Page`).animate([{ opacity: .45 }, { opacity: 1 }], { duration: 180, easing: 'cubic-bezier(.2,.7,.2,1)' });
+    const id = ++routeRequest;
+    routeTransition?.skipTransition();
+    routeAnimation?.cancel();
+    const root = document.documentElement;
+    const content = el('mainContent');
+    const animate = activePath && activePath !== path && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const apply = () => {
+      if (id !== routeRequest) return;
+      if (activePath) routeScroll.set(activePath, scrollY);
+      if (push && location.pathname !== path) history.pushState({}, '', path);
+      window.SeekFeedControls.closeSelect();
+      document.querySelectorAll('.route-page').forEach(page => page.hidden = page.id !== `${name}Page`);
+      document.querySelectorAll('.workspace-nav [data-route]').forEach(link => {
+        const selected = link.pathname === path;
+        link.classList.toggle('selected', selected);
+        if (selected) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+      });
+      el('breadcrumbCurrent').textContent = title;
+      document.title = `${title} · SeekFeed`;
+      if (name === 'feed') { setMatched(path === '/matched'); loadPosts(currentPage); }
+      if (name === 'subscriptions') { loadSubscriptions(); loadMatchingScope(); analytics.loadNotifications(); }
+      if (name === 'rss') loadRssConfig();
+      if (name === 'telegram') loadTelegramConfig();
+      if (name === 'stats') analytics.load();
+      if (name === 'hot') window.SeekFeedHot.load();
+      if (name === 'account') loadAccount();
+      activePath = path;
+      window.scrollTo({ top: routeScroll.get(path) || 0, behavior: 'instant' });
+      if (push) document.querySelector(`#${name}Page h1`)?.focus({ preventScroll: true });
+    };
+    // Capture both pages before hiding either; the application shell stays in place.
+    if (animate && document.startViewTransition) {
+      root.classList.add('route-transition');
+      routeTransition = document.startViewTransition(apply);
+      try { await routeTransition.finished; }
+      catch { /* Interrupted navigation still commits the latest requested route. */ }
+      finally { if (id === routeRequest) root.classList.remove('route-transition'); }
+    } else if (animate && content.animate) {
+      root.classList.remove('route-transition');
+      routeAnimation = content.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 100, fill: 'forwards', easing: 'ease-out' });
+      try { await routeAnimation.finished; } catch { return; }
+      if (id !== routeRequest) return;
+      apply();
+      routeAnimation.cancel();
+      routeAnimation = content.animate([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 220, easing: 'cubic-bezier(.2,.7,.2,1)' });
+    } else {
+      root.classList.remove('route-transition');
+      apply();
     }
-    document.querySelectorAll('.workspace-nav [data-route]').forEach(link => {
-      const selected = link.pathname === path;
-      link.classList.toggle('selected', selected);
-      if (selected) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
-    });
-    el('breadcrumbCurrent').textContent = title;
-    document.title = `${title} · SeekFeed`;
-    if (name === 'feed') { setMatched(path === '/matched'); loadPosts(currentPage); }
-    if (name === 'subscriptions') { loadSubscriptions(); loadMatchingScope(); analytics.loadNotifications(); }
-    if (name === 'rss') loadRssConfig();
-    if (name === 'telegram') loadTelegramConfig();
-    if (name === 'stats') analytics.load();
-    if (name === 'hot') window.SeekFeedHot.load();
-    if (name === 'account') loadAccount();
-    activePath = path;
-    window.scrollTo({ top: routeScroll.get(path) || 0, behavior: 'instant' });
-    if (push) document.querySelector(`#${name}Page h1`)?.focus({ preventScroll: true });
   }
   function initSettingsDropdown() {
     const closeSidebar = () => { el('workspaceSidebar').classList.remove('open'); el('sidebarBackdrop').hidden = true; el('sidebarToggle').setAttribute('aria-expanded', 'false'); };
@@ -944,7 +972,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }));
     el('logoutAllBtn').addEventListener('click', async () => {
       if (!await confirmAction('退出所有设备？', '当前设备也会退出，所有设备都需要重新登录。', '确认退出')) return;
-      const result = await apiRequest('/auth/logout-all', { method: 'POST' });
+      const result = await window.SeekFeedControls.pending(el('logoutAllBtn'), () => apiRequest('/auth/logout-all', { method: 'POST' }));
       if (result?.success) { localStorage.removeItem('sessionId'); localStorage.removeItem('user'); location.href = '/'; }
       else Toast.error(result?.message || '退出失败');
     });

@@ -39,12 +39,11 @@ window.SeekFeedHot = (() => {
       el('hotEmpty').querySelector('.empty-title').textContent = data.updatedAt ? '暂无符合条件的帖子' : '榜单准备中';
       el('hotEmpty').querySelector('.empty-desc').textContent = data.updatedAt ? '试试其他分类或时间范围。' : data.enabled ? '首次采集完成后会自动显示。' : '服务器尚未启用热榜采集。';
     }
-    el('hotCount').textContent = data.posts.length ? `展示 ${data.posts.length} / ${data.total} 条` : '最多展示 50 条';
+    el('hotCount').textContent = data.posts.length ? `展示 ${data.posts.length} / ${data.total} 条` : `最多展示 ${el('hotLimit').value} 条`;
   }
   function status(data) {
     const freshness = data.updatedAt ? `更新于 ${new Date(data.updatedAt).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'})} · ${data.warmingUp ? '正在积累增量样本' : '每 5 分钟采集'}` : '等待首次采集';
     if (el('hotFreshness').textContent !== freshness) el('hotFreshness').textContent = freshness;
-    el('hotCoverage').textContent = data.updatedAt ? `本轮采集 ${data.coverage} 篇 · ${data.pages} 页` : '';
     el('hotError').hidden = !data.error && (!data.stale || !data.updatedAt);
     el('hotError').textContent = data.error || '采集延迟，当前显示上次保存的榜单。';
     el('hotFreshness').parentElement.classList.toggle('has-error', !el('hotError').hidden);
@@ -68,7 +67,7 @@ window.SeekFeedHot = (() => {
     const timeout = setTimeout(() => activeController.abort('timeout'), 15000);
     const id = ++request;
     loading = true;
-    const query = new URLSearchParams({period, category:el('hotCategory').value, sort:el('hotSort').value});
+    const query = new URLSearchParams({period, category:el('hotCategory').value, sort:el('hotSort').value, limit:el('hotLimit').value});
     if (!background) el('hotResults').setAttribute('aria-busy', 'true');
     try {
       const response = await fetch('/api/hot?' + query, {signal:controller.signal, cache:'no-store'});
@@ -92,7 +91,7 @@ window.SeekFeedHot = (() => {
   }
   function init() {
     el('hotRefresh').addEventListener('click', event => window.SeekFeedControls.pending(event.currentTarget, () => load()));
-    for (const select of ['hotCategory', 'hotSort']) el(select).addEventListener('change', () => load());
+    for (const select of ['hotCategory', 'hotSort', 'hotLimit']) el(select).addEventListener('change', () => load());
     const tabs = [...document.querySelectorAll('[data-hot-period]')];
     for (const [index, tab] of tabs.entries()) {
       tab.addEventListener('click', () => {

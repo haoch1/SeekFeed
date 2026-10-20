@@ -4,10 +4,10 @@ import { FieldInput } from './Controls';
 
 export const TelegramSettings: FC<{ active?: boolean }> = ({ active = false }) => (
     <section id="telegramPage" class="route-page" hidden={!active}>
-        <div class="workspace-heading"><div><h1>Telegram</h1><p>连接机器人，接收订阅通知并通过命令管理订阅。</p></div></div>
+        <div class="workspace-heading"><div><h1>Telegram</h1></div></div>
         <div class="page-body settings-content">
             <section class="settings-section" aria-labelledby="telegramDeliveryTitle">
-                <div class="section-heading"><h4 id="telegramDeliveryTitle">推送设置</h4><p>填写 Bot Token 和接收消息的 Chat ID。</p></div>
+                <div class="section-heading"><h4 id="telegramDeliveryTitle">推送设置</h4></div>
                 <form id="telegramConfigForm" class="form-stack" method="post">
                     <div class="form-group">
                         <label for="botToken" class="form-label">Bot Token</label>
@@ -27,7 +27,7 @@ export const TelegramSettings: FC<{ active?: boolean }> = ({ active = false }) =
                 </form>
             </section>
             <section class="settings-section" aria-labelledby="telegramInteractionTitle">
-                <div class="section-heading"><h4 id="telegramInteractionTitle">命令交互</h4><p>通过 Bot 查看帖子、管理订阅和暂停通知。</p></div>
+                <div class="section-heading"><h4 id="telegramInteractionTitle">命令交互</h4></div>
                 <fieldset class="mode-fieldset"><legend class="form-label">连接方式</legend>
                     <div class="mode-selector" id="telegramModeSelector">
                         <label class="mode-option"><FieldInput type="radio" name="telegramMode" value="disabled" checked /><span class="mode-label"><Icon name="pause" />关闭</span></label>

@@ -44,6 +44,9 @@ describe('Telegram hot ranking', () => {
         expect(text).toContain('<code>01</code>  <a');
         expect(text).toContain('<code>10</code>  <a');
         expect(text).toContain('浏览量 1,000 · 回复 0 · 技术');
+        expect(text).toEndWith('更新于 2026/10/20 10:00:00（UTC+8）');
+        expect(text).not.toContain('每 5 分钟采集');
+        expect(text).not.toContain('仅覆盖');
         expect(text).not.toMatch(/\p{Extended_Pictographic}|\u20e3/u);
         const long = hotRankingMessage(ranking('live', { posts: Array.from({ length: 50 }, () => ({
             postId: 42, title: '<script>&😀'.repeat(300), views: 0, replies: 0, categoryLabel: '<&',
