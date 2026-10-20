@@ -27,7 +27,7 @@ export function hotRankingMessage(data: ReturnType<HotService['ranking']>): stri
     let text = '';
     for (const [index, post] of data.posts.slice(0, 10).entries()) {
         const rank = String(index + 1).padStart(2, '0');
-        const row = telegramRow(rank, telegramPostLink(post.postId, post.title), `浏览量 ${post.views.toLocaleString('zh-CN')} · 回复量 ${post.replies.toLocaleString('zh-CN')} · ${telegramText(post.categoryLabel)}`);
+        const row = telegramRow(rank, telegramPostLink(post.postId, post.title), `浏览量 ${post.views.toLocaleString('zh-CN')} · 回复量 ${post.replies.toLocaleString('zh-CN')} · ${telegramText(post.categoryLabel)}`, true);
         if (text.length + row.length > 3400) break;
         text += row;
     }

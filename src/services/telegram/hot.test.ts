@@ -41,8 +41,10 @@ function botFixture() {
 describe('Telegram hot ranking', () => {
     it('renders aligned numbers, safe titles, actual zero counts and a bounded message', () => {
         const text = hotRankingMessage(ranking());
-        expect(text).toContain('<code>01</code>  <a');
-        expect(text).toContain('<code>10</code>  <a');
+        expect(text).toContain('<b>01</b>  <a');
+        expect(text).toContain('<b>10</b>  <a');
+        expect(text.match(/<b>\d{2}<\/b>  <a/g)).toHaveLength(10);
+        expect(text).not.toContain('<code>');
         expect(text.match(/<a href="https:\/\/www\.nodeseek\.com\/post-\d+-1"><b>标题 \d+<\/b><\/a>/g)).toHaveLength(10);
         for (const period of ['live', 'day', 'week']) {
             const message = hotRankingMessage(ranking(period));
@@ -103,6 +105,8 @@ describe('Telegram hot ranking', () => {
         for (const call of test.calls.filter(c => c.method === 'sendMessage' || c.method === 'editMessageText')) {
             expect(call.payload.link_preview_options).toEqual(hotRankingPreview(ranking()));
             expect(call.payload.parse_mode).toBe('HTML');
+            expect(call.payload.text).toContain('<b>01</b>  <a');
+            expect(call.payload.text).not.toContain('<code>');
             expect(call.payload.text).toContain('<a href="https://www.nodeseek.com/post-1-1"><b>标题 1</b></a>');
         }
         expect(test.calls[5].payload.text).toContain('日榜');

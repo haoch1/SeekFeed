@@ -30,8 +30,9 @@ export function telegramPostLink(postId: number, title: string): string {
 }
 
 // The same two-line layout is used for rankings, recent posts and subscriptions.
-export function telegramRow(label: string, contentHtml: string, metadata: string): string {
-    return `<code>${escapeTelegramHtml(label)}</code>  ${contentHtml}\n${escapeTelegramHtml(metadata)}\n\n`;
+export function telegramRow(label: string, contentHtml: string, metadata: string, boldLabel = false): string {
+    const labelTag = boldLabel ? 'b' : 'code';
+    return `<${labelTag}>${escapeTelegramHtml(label)}</${labelTag}>  ${contentHtml}\n${escapeTelegramHtml(metadata)}\n\n`;
 }
 
 // Split only between complete rows, retaining a heading on every message.
