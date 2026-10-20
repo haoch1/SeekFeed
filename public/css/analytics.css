@@ -48,7 +48,15 @@ details[open] > summary svg { transform: rotate(180deg); }
 .analytics-plot-canvas { position: relative; min-width: 100%; }
 .analytics-plot svg { display: block; max-width: 100%; overflow: visible; }
 .analytics-plot text { fill: var(--text-secondary); font-size: 11px; font-family: inherit; }
-.analytics-plot .analytics-bar-value { fill: var(--text-primary); font-weight: 550; font-variant-numeric: tabular-nums; }
+.analytics-bar-label { pointer-events: none; }
+.analytics-bar-label rect { fill: var(--primary-alpha); stroke: color-mix(in srgb, var(--primary) 16%, transparent); stroke-width: 1px; }
+.analytics-plot .analytics-bar-value { fill: var(--primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+.analytics-bar-label[data-active] rect { fill: var(--primary); stroke: var(--primary); }
+.analytics-bar-label[data-active] .analytics-bar-value { fill: var(--bg-card); }
+@media (prefers-reduced-motion: no-preference) {
+    .analytics-post-bar { transition: fill-opacity .16s ease; }
+    .analytics-bar-label rect, .analytics-bar-value { transition: fill .16s ease, stroke .16s ease; }
+}
 .analytics-grid-line { stroke: var(--border-color); stroke-dasharray: 3 4; }
 .analytics-post-bar { fill: var(--primary); fill-opacity: .82; }
 .analytics-post-bar[data-active] { fill-opacity: 1; }

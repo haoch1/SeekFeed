@@ -61,6 +61,6 @@ Buttons share one progress lifecycle: wait 280ms before showing progress, then k
 
 Remove generic page introductions and collection diagnostics from the primary surface. Keep timestamps, time ranges, chart units, validation, security consequences and actionable error messages.
 
-Trend charts use compact start-time ticks (00:00 or month/day), complete time ranges in tooltips, and a visible value above every bar. Dense charts scroll within the card so numeric labels never overlap or shrink illegibly.
+Trend charts use compact start-time ticks (00:00 or month/day), complete time ranges in tooltips, and a compact rounded value badge above every bar. Badges use a soft brand tint and fine border, with coordinated bar/badge emphasis on hover and keyboard focus. Dense charts scroll within the card so value badges never overlap or shrink illegibly.
 
 Post lists share synchronized pagination: compact previous/current/next controls in the toolbar and direct page numbers below. Filters reset to page one; failed requests retain the last successful page and rows. Rapid paging commits only the latest request. Manual page changes gently reveal the new rows and return to the toolbar below the fixed header; background updates never animate or move the reader to another page. Both pagers expose disabled boundaries and the current page to assistive technology.

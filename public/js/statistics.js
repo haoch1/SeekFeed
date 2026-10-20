@@ -42,8 +42,8 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             return;
         }
         const max = Math.max(...data.map(row => row.count), 1);
-        const slot = Math.max(32, number(max).length * 7 + 12);
-        const width = Math.max(box.clientWidth, 45 + data.length * slot), height = 228, left = 33, right = width - 12, top = 26, bottom = 196;
+        const slot = Math.max(38, number(max).length * 7 + 22);
+        const width = Math.max(box.clientWidth, 45 + data.length * slot), height = 228, left = 33, right = width - 12, top = 34, bottom = 196;
         const ceiling = Math.max(4, Math.ceil(max / 4) * 4);
         const step = (right - left) / data.length, barWidth = Math.min(34, step * .64);
         const x = index => left + step * (index + .5);
@@ -52,7 +52,9 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             const start = x(index) - barWidth / 2, end = start + barWidth, barTop = y(row.count);
             const radius = Math.min(4, barWidth / 2, bottom - barTop);
             const path = `M${start},${bottom} V${barTop + radius} Q${start},${barTop} ${start + radius},${barTop} H${end - radius} Q${end},${barTop} ${end},${barTop + radius} V${bottom} Z`;
-            return `<path class="analytics-post-bar" data-bar-index="${index}" data-count="${row.count}" d="${path}"/><text class="analytics-bar-value" x="${x(index)}" y="${barTop - 8}" text-anchor="middle">${number(row.count)}</text>`;
+            const value = number(row.count), labelWidth = Math.max(28, value.length * 7 + 14);
+            return `<path class="analytics-post-bar" data-bar-index="${index}" data-count="${row.count}" d="${path}"/>
+                <g class="analytics-bar-label" data-label-index="${index}"><rect x="${x(index) - labelWidth / 2}" y="${barTop - 28}" width="${labelWidth}" height="21" rx="5"/><text class="analytics-bar-value" x="${x(index)}" y="${barTop - 17.5}" text-anchor="middle" dominant-baseline="central">${value}</text></g>`;
         }).join('');
         const grid = Array.from({ length: 5 }, (_, index) => {
             const value = ceiling * index / 4;
@@ -70,15 +72,16 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
         box.setAttribute('role', 'group');
         box.setAttribute('tabindex', '0');
         box.setAttribute('aria-label', `发帖趋势柱形图，${data.length} 个时间段。使用左右方向键查看数据。`);
-        const columns = [...box.querySelectorAll('.analytics-post-bar')], tooltip = el('analyticsTrendTooltip'), scroller = box.querySelector('.analytics-plot-scroll');
+        const columns = [...box.querySelectorAll('.analytics-post-bar')], labels = [...box.querySelectorAll('.analytics-bar-label')], tooltip = el('analyticsTrendTooltip'), scroller = box.querySelector('.analytics-plot-scroll');
         let selected = -1;
         function select(index) {
             focusIndex = Math.max(0, Math.min(data.length - 1, index));
             const cursor = el('analyticsCursor');
             cursor.setAttribute('visibility', 'visible');
             cursor.setAttribute('x', left + step * focusIndex);
-            if (selected >= 0) columns[selected].removeAttribute('data-active');
+            if (selected >= 0) { columns[selected].removeAttribute('data-active'); labels[selected].removeAttribute('data-active'); }
             columns[focusIndex].setAttribute('data-active', 'true');
+            labels[focusIndex].setAttribute('data-active', 'true');
             selected = focusIndex;
             showReadout(data[focusIndex]);
             tooltip.firstElementChild.textContent = bucketText(data[focusIndex]);
@@ -94,7 +97,7 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
         }
         function clearSelection() {
             el('analyticsCursor').setAttribute('visibility', 'hidden'); tooltip.hidden = true;
-            if (selected >= 0) columns[selected].removeAttribute('data-active');
+            if (selected >= 0) { columns[selected].removeAttribute('data-active'); labels[selected].removeAttribute('data-active'); }
             selected = -1; showReadout();
         }
         box.onpointermove = event => select(Math.floor((event.clientX - box.getBoundingClientRect().left + scroller.scrollLeft - left) / step));
