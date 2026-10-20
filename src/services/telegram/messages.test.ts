@@ -22,7 +22,7 @@ describe('Telegram message layout and escaping', () => {
         const post = { post_id: 42, title: '  \u200b【出】标题 & 更多  ' } as any;
         for (const [index, label] of [[0, '01'], [8, '09'], [9, '10']] as const) {
             expect(recentPostRow(post, index)).toStartWith(`<code>${label}</code>  <a `);
-            expect(recentPostRow(post, index)).toContain('>[出]标题 &amp; 更多</a>');
+            expect(recentPostRow(post, index)).toContain('><b>[出]标题 &amp; 更多</b></a>');
         }
         expect(post.title).toBe('  \u200b【出】标题 & 更多  ');
         expect(displayTelegramTitle('[DMIT] (test)')).toBe('[DMIT] (test)');
@@ -33,6 +33,8 @@ describe('Telegram message layout and escaping', () => {
         const replies: any[] = [];
         await (service as any).handlePostCommand({ reply: async (...args: any[]) => replies.push(args) });
         expect(replies[0][0]).toStartWith('<b>SeekFeed · 最近帖子</b>');
+        expect(replies[0][0]).toContain('<a href="https://www.nodeseek.com/post-42-1"><b>[出]标题</b></a>');
+        expect(replies[0][1].parse_mode).toBe('HTML');
         expect(replies[0][1].link_preview_options.is_disabled).toBe(false);
     });
 
@@ -53,7 +55,7 @@ describe('Telegram message layout and escaping', () => {
         expect(message).toContain('a&lt;&amp; + _b');
         expect(message).toContain('https://www.nodeseek.com/post-42-1');
         expect(message).toContain('作者 a&lt;b&gt; · 技术 · 订阅 #4');
-        expect(message).not.toContain('<a href="https://www.nodeseek.com/post-42-1"><b>');
+        expect(message).toContain('<a href="https://www.nodeseek.com/post-42-1"><b>[DMIT] (test) &lt;b&gt; &amp; stuff</b></a>');
     });
 
     it('rejects partial numeric deletion IDs rather than deleting a different subscription', async () => {
@@ -132,6 +134,26 @@ describe('Shared Telegram templates', () => {
         expect(calls[0][2].parse_mode).toBe('HTML');
         expect(calls[1][1]).toBe('<b>custom</b>');
         expect(calls[1][2].parse_mode).toBeUndefined();
+    });
+
+    it('sends subscription titles with native bold and link formatting in the Bot API payload', async () => {
+        const updates: any[] = [];
+        const service = new TelegramPushService({
+            getBaseConfig: () => ({ chat_id: '42', stop_push: 0 }),
+            updatePostPushStatus: (...args: any[]) => updates.push(args),
+        } as any, '123:test');
+        const calls: any[] = [];
+        (service as any).bot.api.config.use(async (_prev: any, method: string, payload: any) => {
+            calls.push({ method, payload });
+            return { ok: true, result: { message_id: 1 } };
+        });
+        expect(await service.pushPost({ post_id: 42, title: 'VMISS <优惠> & 😀', creator: 'Tester', category: 'tech' } as any, { id: 4, keyword1: 'vmiss' } as any)).toBe(true);
+        expect(calls).toHaveLength(1);
+        expect(calls[0].method).toBe('sendMessage');
+        expect(calls[0].payload.parse_mode).toBe('HTML');
+        expect(calls[0].payload.text).toContain('<a href="https://www.nodeseek.com/post-42-1"><b>VMISS &lt;优惠&gt; &amp; 😀</b></a>');
+        expect(calls[0].payload.text).not.toContain('<b>作者');
+        expect(updates[0].slice(0, 3)).toEqual([42, 3, 4]);
     });
 });
 

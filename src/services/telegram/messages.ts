@@ -26,7 +26,7 @@ export function telegramTestMessage(title = '推送测试', message = '通知通
 }
 
 export function telegramPostLink(postId: number, title: string): string {
-    return `<a href="https://www.nodeseek.com/post-${Number(postId)}-1">${escapeTelegramHtml(telegramText(displayTelegramTitle(title), 80))}</a>`;
+    return `<a href="https://www.nodeseek.com/post-${Number(postId)}-1"><b>${escapeTelegramHtml(telegramText(displayTelegramTitle(title), 80))}</b></a>`;
 }
 
 // The same two-line layout is used for rankings, recent posts and subscriptions.
