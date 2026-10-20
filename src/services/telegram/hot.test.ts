@@ -1,0 +1,104 @@
+import { describe, expect, it } from 'bun:test';
+import { hotEntryKeyboard, hotRankingKeyboard, hotRankingMessage } from './hot';
+import { TelegramWebhookService } from './webhook';
+import { telegramCommands } from './messages';
+
+function ranking(period = 'live', overrides = {}) {
+    return { period, posts: Array.from({ length: 10 }, (_, i) => ({
+        postId: i + 1, title: `标题 ${i + 1}`, views: 1000, replies: 0, categoryLabel: '技术',
+    })), updatedAt: '2026-10-20T02:00:00Z', stale: false, error: null, ...overrides } as any;
+}
+
+function botFixture() {
+    const calls: { method: string; payload: any }[] = [], periods: string[] = [];
+    const db = { getBaseConfig: () => ({ chat_id: '42' }), getHotService: () => ({
+        ranking: (period: string) => { periods.push(period); return ranking(period); },
+    }) };
+    const service = new TelegramWebhookService(db as any, '123:test');
+    const bot = (service as any).bot;
+    bot.botInfo = { id: 123, is_bot: true, first_name: 'SeekFeed', username: 'seekfeed_test_bot' };
+    bot.api.config.use(async (_prev: any, method: string, payload: any) => {
+        calls.push({ method, payload });
+        return { ok: true, result: method === 'answerCallbackQuery' ? true : {
+            message_id: 5, chat: { id: 42, type: 'private' }, date: 1, text: payload.text,
+        } };
+    });
+    (service as any).setupHandlers();
+    let id = 0;
+    const user = { id: 42, is_bot: false, first_name: 'Tester' };
+    return { calls, periods, service,
+        command: (text: string, chat = 42) => bot.handleUpdate({ update_id: ++id, message: {
+            message_id: id, date: 1, from: user, chat: { id: chat, type: 'private' }, text,
+            entities: [{ type: 'bot_command', offset: 0, length: text.split(' ')[0].length }],
+        } }),
+        click: (data: string, chat = 42) => bot.handleUpdate({ update_id: ++id, callback_query: {
+            id: String(id), from: user, chat_instance: 'test', data,
+            message: { message_id: 5, date: 1, chat: { id: chat, type: 'private' }, text: 'SeekFeed' },
+        } }),
+    };
+}
+
+describe('Telegram hot ranking', () => {
+    it('renders aligned numbers, safe titles, actual zero counts and a bounded message', () => {
+        const text = hotRankingMessage(ranking());
+        expect(text).toContain('<code>01</code>\u2002<a');
+        expect(text).toContain('<code>10</code>\u2002<a');
+        expect(text).toContain('👁 1,000  ·  💬 0');
+        expect(text).not.toContain('🧪');
+        const long = hotRankingMessage(ranking('live', { posts: Array.from({ length: 50 }, () => ({
+            postId: 42, title: '<script>&😀'.repeat(300), views: 0, replies: 0, categoryLabel: '<&',
+        })) }));
+        expect(long.length).toBeLessThan(4096);
+        expect(long).toContain('&lt;script&gt;&amp;');
+        expect(long).not.toContain('<script>');
+        expect(long.match(/<a /g)!.length).toBeLessThanOrEqual(10);
+    });
+
+    it('describes missing and stale data and exposes short native and inline commands', () => {
+        expect(hotRankingMessage(ranking('day', { posts: [] }))).toContain('暂无符合时间范围');
+        expect(hotRankingMessage(ranking('week', { posts: [], updatedAt: null }))).toContain('榜单准备中');
+        expect(hotRankingMessage(ranking('live', { stale: true }))).toContain('上次保存的榜单');
+        expect(telegramCommands.some(c => c.command === 'hot')).toBe(true);
+        expect(hotEntryKeyboard.inline_keyboard[0][0].callback_data).toBe('hot:open');
+        const keyboard = hotRankingKeyboard('day').inline_keyboard;
+        expect(keyboard[0].map(b => b.text)).toEqual(['实时', '✓ 24 小时', '7 天']);
+        expect(keyboard[1][0].callback_data).toBe('hot:day');
+        expect(keyboard.flat().every(b => Buffer.byteLength(b.callback_data) <= 64)).toBe(true);
+    });
+
+    it('dispatches native commands and buttons to the shared cache, edits tabs in place and acknowledges first', async () => {
+        const test = botFixture();
+        await test.command('/hot');
+        await test.command('/hot week');
+        await test.click('hot:open');
+        await test.click('hot:day');
+        await test.click('hot:day');
+        expect(test.periods).toEqual(['live', 'week', 'live', 'day', 'day']);
+        expect(test.calls.map(c => c.method)).toEqual(['sendMessage', 'sendMessage',
+            'answerCallbackQuery', 'sendMessage', 'answerCallbackQuery', 'editMessageText',
+            'answerCallbackQuery', 'editMessageText']);
+        expect(test.calls[0].payload.reply_markup).toEqual(hotRankingKeyboard('live'));
+        expect(test.calls[0].payload.link_preview_options.is_disabled).toBe(false);
+        expect(test.calls[5].payload.text).toContain('24 小时热榜');
+    });
+
+    it('rejects unbound chats and invalid periods before reading ranking data', async () => {
+        const test = botFixture();
+        await test.command('/hot', 99);
+        await test.click('hot:day', 99);
+        await test.command('/hot invalid');
+        expect(test.periods).toEqual([]);
+        expect(test.calls[0].payload.text).toContain('没有权限');
+        expect(test.calls[1].payload.show_alert).toBe(true);
+        expect(test.calls[2].payload.text).toContain('/hot day');
+    });
+
+    it('ignores unchanged refreshes but propagates delivery failures', async () => {
+        const test = botFixture();
+        const ctx = { chat: { id: 42 }, callbackQuery: { data: 'hot:live' }, answerCallbackQuery: async () => {},
+            editMessageText: async () => { throw { description: 'Bad Request: message is not modified' }; } };
+        await (test.service as any).handleHotCallback(ctx);
+        ctx.editMessageText = async () => { throw new Error('unavailable'); };
+        await expect((test.service as any).handleHotCallback(ctx)).rejects.toThrow('unavailable');
+    });
+});

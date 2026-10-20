@@ -19,43 +19,64 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
         const box = el('analyticsTrend');
         if (!currentData || box.clientWidth < 10) return;
         const data = currentData.trend;
+        if (!data.length) {
+            box.innerHTML = empty('所选时段暂无发帖数据');
+            box.removeAttribute('tabindex');
+            box.onpointermove = box.onpointerleave = box.onfocus = box.onblur = box.onkeydown = null;
+            return;
+        }
         const width = box.clientWidth, height = 220, left = 33, right = width - 12, top = 14, bottom = 190;
         const max = Math.max(...data.map(row => row.count), 1);
         const ceiling = Math.max(4, Math.ceil(max / 4) * 4);
-        const x = index => left + (right - left) * (data.length === 1 ? .5 : index / (data.length - 1));
+        const step = (right - left) / data.length, barWidth = Math.min(34, step * .64);
+        const x = index => left + step * (index + .5);
         const y = value => bottom - value / ceiling * (bottom - top);
-        const path = key => data.map((row, index) => `${index ? 'L' : 'M'}${x(index).toFixed(2)},${y(row[key]).toFixed(2)}`).join(' ');
-        const line = path('count');
+        const bars = data.map((row, index) => {
+            const start = x(index) - barWidth / 2, end = start + barWidth, barTop = y(row.count);
+            const radius = Math.min(4, barWidth / 2, bottom - barTop);
+            const path = `M${start},${bottom} V${barTop + radius} Q${start},${barTop} ${start + radius},${barTop} H${end - radius} Q${end},${barTop} ${end},${barTop + radius} V${bottom} Z`;
+            return `<path class="analytics-post-bar" data-bar-index="${index}" data-count="${row.count}" d="${path}"/>`;
+        }).join('');
         const grid = Array.from({ length: 5 }, (_, index) => {
             const value = ceiling * index / 4;
             return `<line x1="${left}" x2="${right}" y1="${y(value)}" y2="${y(value)}" class="analytics-grid-line"/><text x="${left - 8}" y="${y(value) + 4}" text-anchor="end">${number(value)}</text>`;
         }).join('');
         const tickCount = Math.min(width < 400 ? 3 : 6, data.length);
         const ticks = [...new Set(Array.from({ length: tickCount }, (_, index) => Math.round(index * (data.length - 1) / Math.max(1, tickCount - 1))))];
-        box.innerHTML = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true"><defs><linearGradient id="analyticsFill" x1="0" y1="0" x2="0" y2="1"><stop stop-color="var(--primary)" stop-opacity=".17"/><stop offset="1" stop-color="var(--primary)" stop-opacity=".015"/></linearGradient></defs>${grid}
-            <path d="${line} L${x(data.length - 1)},${bottom} L${x(0)},${bottom} Z" fill="url(#analyticsFill)"/>
-            <path d="${line}" class="analytics-series-posts"/>
-            ${data.length === 1 ? `<circle cx="${x(0)}" cy="${y(data[0].count)}" r="4" fill="var(--primary)"/>` : ''}
+        box.innerHTML = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true">${grid}
+            <rect id="analyticsCursor" y="${top}" width="${step}" height="${bottom - top}" class="analytics-bar-cursor" visibility="hidden" rx="4"/>${bars}
             ${ticks.map(index => `<text x="${x(index)}" y="214" text-anchor="${index === 0 && data.length > 1 ? 'start' : index === data.length - 1 && data.length > 1 ? 'end' : 'middle'}">${label(data[index].time, currentData.period.hourly)}</text>`).join('')}
-            <g id="analyticsCursor" visibility="hidden"><line y1="${top}" y2="${bottom}" class="analytics-cursor-line"/><circle r="4" class="analytics-cursor-dot"/></g></svg>`;
+            </svg><div class="analytics-chart-tooltip" id="analyticsTrendTooltip" aria-hidden="true" hidden><span></span><div><i></i>收录帖子<strong></strong></div></div>`;
         box.setAttribute('role', 'group');
         box.setAttribute('tabindex', '0');
-        box.setAttribute('aria-label', `发帖趋势，${data.length} 个时间段。使用左右方向键查看数据。`);
+        box.setAttribute('aria-label', `发帖趋势柱形图，${data.length} 个时间段。使用左右方向键查看数据。`);
+        const columns = [...box.querySelectorAll('.analytics-post-bar')], tooltip = el('analyticsTrendTooltip');
+        let selected = -1;
         function select(index) {
             focusIndex = Math.max(0, Math.min(data.length - 1, index));
             const cursor = el('analyticsCursor');
             cursor.setAttribute('visibility', 'visible');
-            cursor.querySelector('line').setAttribute('x1', x(focusIndex));
-            cursor.querySelector('line').setAttribute('x2', x(focusIndex));
-            cursor.querySelector('circle').setAttribute('cx', x(focusIndex));
-            cursor.querySelector('circle').setAttribute('cy', y(data[focusIndex].count));
+            cursor.setAttribute('x', left + step * focusIndex);
+            if (selected >= 0) columns[selected].removeAttribute('data-active');
+            columns[focusIndex].setAttribute('data-active', 'true');
+            selected = focusIndex;
             showReadout(data[focusIndex]);
+            tooltip.firstElementChild.textContent = label(data[focusIndex].time, currentData.period.hourly);
+            tooltip.querySelector('strong').textContent = number(data[focusIndex].count) + ' 篇';
+            tooltip.hidden = false;
+            tooltip.style.left = `${Math.max(8, Math.min(width - tooltip.offsetWidth - 8, x(focusIndex) - tooltip.offsetWidth / 2))}px`;
+            tooltip.style.top = `${Math.max(0, y(data[focusIndex].count) - tooltip.offsetHeight - 10)}px`;
             box.setAttribute('aria-label', el('analyticsTrendReadout').textContent + '。左右方向键查看相邻时间段。');
         }
-        box.onpointermove = event => select(Math.round((event.clientX - box.getBoundingClientRect().left - left) / (right - left) * (data.length - 1)));
-        box.onpointerleave = () => { if (document.activeElement !== box) { el('analyticsCursor').setAttribute('visibility', 'hidden'); showReadout(); } };
+        function clearSelection() {
+            el('analyticsCursor').setAttribute('visibility', 'hidden'); tooltip.hidden = true;
+            if (selected >= 0) columns[selected].removeAttribute('data-active');
+            selected = -1; showReadout();
+        }
+        box.onpointermove = event => select(Math.floor((event.clientX - box.getBoundingClientRect().left - left) / step));
+        box.onpointerleave = () => { if (document.activeElement !== box) clearSelection(); };
         box.onfocus = () => select(focusIndex < 0 ? data.length - 1 : focusIndex);
-        box.onblur = () => { el('analyticsCursor').setAttribute('visibility', 'hidden'); showReadout(); };
+        box.onblur = clearSelection;
         box.onkeydown = event => {
             if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
             event.preventDefault();
