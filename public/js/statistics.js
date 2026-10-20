@@ -88,8 +88,10 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             tooltip.querySelector('strong').textContent = number(data[focusIndex].count) + ' 篇';
             tooltip.hidden = false;
             if (document.activeElement === box) {
-                if (x(focusIndex) < scroller.scrollLeft + left) scroller.scrollLeft = x(focusIndex) - left;
-                else if (x(focusIndex) > scroller.scrollLeft + box.clientWidth - 20) scroller.scrollLeft = x(focusIndex) - box.clientWidth + 20;
+                const start = Math.max(0, x(focusIndex) - slot / 2 - 8), end = x(focusIndex) + slot / 2 + 8;
+                if (focusIndex === 0) scroller.scrollLeft = 0;
+                else if (start < scroller.scrollLeft) scroller.scrollLeft = start;
+                else if (end > scroller.scrollLeft + box.clientWidth) scroller.scrollLeft = end - box.clientWidth;
             }
             tooltip.style.left = `${Math.max(scroller.scrollLeft + 8, Math.min(scroller.scrollLeft + box.clientWidth - tooltip.offsetWidth - 8, x(focusIndex) - tooltip.offsetWidth / 2))}px`;
             tooltip.style.top = `${Math.max(0, y(data[focusIndex].count) - tooltip.offsetHeight - 10)}px`;
