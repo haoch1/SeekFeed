@@ -43,8 +43,8 @@ describe('Telegram hot ranking', () => {
         const text = hotRankingMessage(ranking());
         expect(text).toContain('<code>01</code>\u2002<a');
         expect(text).toContain('<code>10</code>\u2002<a');
-        expect(text).toContain('📖 1,000  ·  💬 0');
-        expect(text).not.toContain('👁');
+        expect(text).toContain('📊 浏览量 1,000  ·  💬 回复 0');
+        expect(text).not.toMatch(/👁|📖/);
         expect(text).not.toContain('🧪');
         const long = hotRankingMessage(ranking('live', { posts: Array.from({ length: 50 }, () => ({
             postId: 42, title: '<script>&😀'.repeat(300), views: 0, replies: 0, categoryLabel: '<&',
@@ -62,7 +62,9 @@ describe('Telegram hot ranking', () => {
         expect(telegramCommands.some(c => c.command === 'hot')).toBe(true);
         expect(hotEntryKeyboard.inline_keyboard[0][0].callback_data).toBe('hot:open');
         const keyboard = hotRankingKeyboard('day').inline_keyboard;
-        expect(keyboard[0].map(b => b.text)).toEqual(['实时', '✓ 24 小时', '7 天']);
+        expect(keyboard[0].map(b => b.text)).toEqual(['🔥 实时', '🕒 24 小时', '📅 7 天']);
+        expect(keyboard[0].map(b => b.style)).toEqual([undefined, 'primary', undefined]);
+        expect(hotRankingKeyboard('week').inline_keyboard[0].map(b => b.style)).toEqual([undefined, undefined, 'primary']);
         expect(keyboard[1][0].callback_data).toBe('hot:day');
         expect(keyboard.flat().every(b => Buffer.byteLength(b.callback_data) <= 64)).toBe(true);
     });
