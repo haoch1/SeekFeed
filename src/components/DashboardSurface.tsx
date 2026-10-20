@@ -40,8 +40,8 @@ export const DashboardSurface: FC<PropsWithChildren<{ path?: string }>> = ({ chi
             <header class="workspace-topbar">
                 <div class="breadcrumb"><button id="sidebarToggle" class="icon-btn mobile-menu" aria-label="打开导航" aria-expanded="false" aria-controls="workspaceSidebar"><Icon name="menu" /></button><span id="breadcrumbSection">{path.startsWith('/settings') ? '设置' : '社区动态'}</span><span class="breadcrumb-divider">/</span><strong id="breadcrumbCurrent">{({ "/": "热榜", "/posts": "最新帖子", "/hot": "热榜", "/matched": "命中订阅", "/subscriptions": "订阅管理", "/statistics": "统计信息", "/settings/account": "账号与安全", "/settings/rss": "RSS 配置", "/settings/telegram": "Telegram" } as Record<string, string>)[path]}</strong></div>
                 <div class="header-actions">
-                    <a href="https://github.com/haoch1/SeekFeed" target="_blank" rel="noopener noreferrer" class="icon-btn github-link" aria-label="查看 GitHub 源码（新窗口打开）" aria-describedby="githubLinkHint"><Icon name="github" /><span id="githubLinkHint" class="github-link-hint" role="tooltip">GitHub</span></a>
-                    <button id="themeToggleBtn" class="icon-btn" title="切换主题" aria-label="切换主题"><Icon name="sun" /></button>
+                    <a href="https://github.com/haoch1/SeekFeed" target="_blank" rel="noopener noreferrer" class="icon-btn github-link header-tooltip-trigger" aria-label="查看 GitHub 源码（新窗口打开）" aria-describedby="githubLinkHint"><Icon name="github" /><span id="githubLinkHint" class="header-tooltip" role="tooltip">GitHub</span></a>
+                    <button id="themeToggleBtn" class="icon-btn header-tooltip-trigger" type="button" aria-label="切换主题" aria-describedby="themeToggleHint"><span class="theme-toggle-icon theme-icon-sun"><Icon name="sun" /></span><span class="theme-toggle-icon theme-icon-moon"><Icon name="moon" /></span><span id="themeToggleHint" class="header-tooltip" role="tooltip">切换到暗色模式</span></button>
                 </div>
             </header>
             <main class="workspace-content" id="mainContent"><section id="feedPage" class="route-page" hidden={path !== "/posts" && path !== "/matched"}>

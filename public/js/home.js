@@ -206,12 +206,12 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     const themeButton = document.getElementById("themeToggleBtn");
-    if (themeButton) themeButton.innerHTML = `<span class="theme-toggle-icon theme-icon-sun">${renderIcon('sun')}</span><span class="theme-toggle-icon theme-icon-moon">${renderIcon('moon')}</span>`;
+    const themeHint = document.getElementById("themeToggleHint");
     const updateThemeIcon = () => {
       if (!themeButton) return;
       const isDark = document.documentElement.getAttribute("data-theme") === "dark";
       themeButton.setAttribute("aria-label", isDark ? "切换到浅色模式" : "切换到暗色模式");
-      themeButton.title = themeButton.getAttribute("aria-label");
+      if (themeHint) themeHint.textContent = themeButton.getAttribute("aria-label");
     };
     updateThemeIcon();
     let themeTimer;
