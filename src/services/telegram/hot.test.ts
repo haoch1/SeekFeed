@@ -43,7 +43,8 @@ describe('Telegram hot ranking', () => {
         const text = hotRankingMessage(ranking());
         expect(text).toContain('<code>01</code>\u2002<a');
         expect(text).toContain('<code>10</code>\u2002<a');
-        expect(text).toContain('👁 1,000  ·  💬 0');
+        expect(text).toContain('📖 1,000  ·  💬 0');
+        expect(text).not.toContain('👁');
         expect(text).not.toContain('🧪');
         const long = hotRankingMessage(ranking('live', { posts: Array.from({ length: 50 }, () => ({
             postId: 42, title: '<script>&😀'.repeat(300), views: 0, replies: 0, categoryLabel: '<&',
