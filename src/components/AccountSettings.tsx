@@ -23,9 +23,9 @@ export const AccountSettings: FC<{ active?: boolean }> = ({ active = false }) =>
                     <div class="form-actions"><button class="btn btn-primary" type="submit">保存有效期</button></div>
                 </form>
             </section>
-            <section class="settings-section">
-                <div class="section-heading"><h2>登录设备</h2><p>最多保留 5 个活跃会话。退出所有设备后，需要重新登录。</p></div>
-                <div id="sessionsList" class="sessions-list" aria-live="polite"></div>
+            <section class="settings-section account-devices">
+                <div class="section-heading"><h2 id="sessionsTitle">登录设备</h2><p>最多保留 5 个活跃会话。退出所有设备后，需要重新登录。</p></div>
+                <div id="sessionsList" class="sessions-list" aria-live="polite" tabindex="0" role="region" aria-labelledby="sessionsTitle"></div>
                 <div class="form-actions"><button id="logoutAllBtn" class="btn btn-danger" type="button"><Icon name="logout" />退出所有设备</button></div>
             </section>
         </div>

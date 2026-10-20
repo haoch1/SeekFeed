@@ -4,7 +4,7 @@ import type { FC, PropsWithChildren } from 'hono/jsx';
 import iconPaths from './icons.json';
 
 export const Icon: FC<{ name: string }> = ({ name }) => (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">{raw(iconPaths[name as keyof typeof iconPaths] || iconPaths.info)}</svg>
+    <svg data-icon={name} viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">{raw(iconPaths[name as keyof typeof iconPaths] || iconPaths.info)}</svg>
 );
 
 export const BrandMark: FC = () => (
@@ -23,7 +23,7 @@ export const DashboardSurface: FC<PropsWithChildren<{ path?: string }>> = ({ chi
         <aside class="workspace-sidebar" id="workspaceSidebar" aria-label="主导航">
             <a href="/hot" data-route class="workspace-brand"><span class="brand-icon"><BrandMark /></span><span><strong>SeekFeed</strong></span></a>
             <nav class="workspace-nav">
-                <p class="nav-section-label">工作空间</p>
+                <p class="nav-section-label">社区动态</p>
                 <a href="/hot" class="nav-item" data-route><Icon name="flame" />热榜</a>
                 <a href="/posts" id="navLatest" class="nav-item" data-route><Icon name="posts" />最新帖子</a>
                 <a href="/matched" id="navMatched" class="nav-item" data-route><Icon name="bell" />命中订阅</a>
@@ -38,7 +38,7 @@ export const DashboardSurface: FC<PropsWithChildren<{ path?: string }>> = ({ chi
         </aside>
         <div class="workspace-main">
             <header class="workspace-topbar">
-                <div class="breadcrumb"><button id="sidebarToggle" class="icon-btn mobile-menu" aria-label="打开导航" aria-expanded="false"><Icon name="menu" /></button><span>工作空间</span><span class="breadcrumb-divider">/</span><strong id="breadcrumbCurrent">{({ "/": "热榜", "/posts": "最新帖子", "/hot": "热榜", "/matched": "命中订阅", "/subscriptions": "订阅管理", "/statistics": "统计信息", "/settings/account": "账号与安全", "/settings/rss": "RSS 配置", "/settings/telegram": "Telegram" } as Record<string, string>)[path]}</strong></div>
+                <div class="breadcrumb"><button id="sidebarToggle" class="icon-btn mobile-menu" aria-label="打开导航" aria-expanded="false"><Icon name="menu" /></button><span id="breadcrumbSection">{path.startsWith('/settings') ? '设置' : '社区动态'}</span><span class="breadcrumb-divider">/</span><strong id="breadcrumbCurrent">{({ "/": "热榜", "/posts": "最新帖子", "/hot": "热榜", "/matched": "命中订阅", "/subscriptions": "订阅管理", "/statistics": "统计信息", "/settings/account": "账号与安全", "/settings/rss": "RSS 配置", "/settings/telegram": "Telegram" } as Record<string, string>)[path]}</strong></div>
                 <div class="header-actions"><button id="themeToggleBtn" class="icon-btn" title="切换主题" aria-label="切换主题"><Icon name="sun" /></button></div>
             </header>
             <main class="workspace-content" id="mainContent"><section id="feedPage" class="route-page" hidden={path !== "/posts" && path !== "/matched"}>

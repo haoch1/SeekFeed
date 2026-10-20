@@ -1,7 +1,7 @@
 /* Shared inline icons, accessible selects, and form feedback. */
 (() => {
     const paths = JSON.parse(document.getElementById('seekfeedIcons')?.textContent || '{}');
-    const icon = name => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths[name] || paths.info || ''}</svg>`;
+    const icon = name => `<svg data-icon="${name}" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths[name] || paths.info || ''}</svg>`;
     const selects = new Map();
     const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
     const pressAnimations = new Map();
@@ -114,7 +114,9 @@
             options.forEach((option, i) => option.classList.toggle('highlighted', i === state.index));
             const current = options[state.index];
             button.setAttribute('aria-activedescendant', current.id);
-            current.scrollIntoView({ block: 'nearest' });
+            const top = current.offsetTop, bottom = top + current.offsetHeight;
+            if (top < state.menu.scrollTop) state.menu.scrollTop = Math.max(0, top - 4);
+            else if (bottom > state.menu.scrollTop + state.menu.clientHeight) state.menu.scrollTop = bottom - state.menu.clientHeight + 4;
         };
         const choose = index => {
             if (select.options[index].disabled) return;
@@ -216,6 +218,15 @@
         if (getComputedStyle(button).position === 'static') button.style.position = 'relative';
         button.append(content, progress);
         const leadingIcon = content.querySelector('svg');
+        const refreshIcon = leadingIcon?.dataset.icon === 'sync';
+        // Same full, eased turn as the panel refresh controls, even for cached responses.
+        // Data can render immediately; only repeated button activation waits for the turn.
+        const turn = refreshIcon && !reducedMotion.matches ? leadingIcon.animate([
+            { transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' },
+        ], { duration: 1000, easing: 'cubic-bezier(.38,.08,.24,1)' }) : null;
+        if (turn) turn.id = 'refresh-turn';
+        const cancelTurn = () => turn?.cancel();
+        reducedMotion.addEventListener('change', cancelTurn, { once: true });
         if (leadingIcon) {
             const bounds = button.getBoundingClientRect();
             const iconBounds = leadingIcon.getBoundingClientRect();
@@ -234,12 +245,15 @@
         // Keep the label visible; only an existing icon or the quiet bottom rail indicates progress.
         let shownAt = 0;
         const delay = setTimeout(() => {
+            if (refreshIcon) return;
             shownAt = performance.now();
             button.classList.add('is-progress-visible');
         }, 280);
         let completion;
         return () => completion ||= (async () => {
             clearTimeout(delay);
+            if (turn) await turn.finished.catch(() => {});
+            reducedMotion.removeEventListener('change', cancelTurn);
             if (shownAt && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
                 // Once shown, progress must remain readable rather than flash for a single frame.
                 await new Promise(resolve => setTimeout(resolve, Math.max(0, 420 - (performance.now() - shownAt))));

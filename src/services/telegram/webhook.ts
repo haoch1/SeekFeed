@@ -125,7 +125,7 @@ export class TelegramWebhookService extends TelegramBaseService {
       }
       const period = ctx.match.trim() || 'live';
       if (!['live', 'day', 'week'].includes(period)) {
-        await ctx.reply(telegramNotice('论坛热榜', '/hot  实时热榜\n/hot day  日榜\n/hot week  周榜'), { parse_mode: 'HTML', reply_markup: hotEntryKeyboard });
+        await ctx.reply(telegramNotice('论坛热榜', '/hot  打开热榜，通过榜单下方按钮切换实时、日榜、周榜。'), { parse_mode: 'HTML', reply_markup: hotEntryKeyboard });
         return;
       }
       await this.handleHotCommand(ctx, period as HotPeriod);

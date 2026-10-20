@@ -9,12 +9,17 @@ const postSchema = z.object({
     category: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/), categoryLabel: z.string().min(1).max(50),
     views: metric, replies: metric, lastActiveAt: z.string().datetime({ offset: true }), pinned: z.boolean(),
 });
-const batchSchema = z.object({ posts: z.array(postSchema).min(1).max(250), collectedAt: z.string().datetime({ offset: true }), pages: z.literal(4) });
+const batchSchema = z.object({ posts: z.array(postSchema).min(1).max(250), collectedAt: z.string().datetime({ offset: true }), pages: z.union([z.literal(2), z.literal(4)]) });
 export type HotBatch = z.infer<typeof batchSchema>;
 export type HotPeriod = 'live' | 'day' | 'week';
 export type HotSort = 'heat' | 'views' | 'replies';
 const MINUTE = 60000;
 const HOUR = 60 * MINUTE;
+const COLLECT_INTERVAL = 2 * MINUTE;
+
+export class CollectorUnavailable extends Error {
+    constructor(public retryAfterSeconds = 0) { super('Collector unavailable'); }
+}
 
 export function heatScore(views: number, replies: number): number {
     return Math.log1p(Math.max(0, views)) + 3 * Math.log1p(Math.max(0, replies));
@@ -45,7 +50,7 @@ function recentGrowth(row: HotSample, history: HotSample[], published: number, r
             baseline = { timestamp: start, views: before.views + (after.views - before.views) * ratio,
                 replies: before.replies + (after.replies - before.replies) * ratio };
         } else {
-            if (!after || observed - Date.parse(after.observed_at) < 4 * MINUTE) return null;
+            if (!after || observed - Date.parse(after.observed_at) < MINUTE) return null;
             baseline = { ...after, timestamp: Date.parse(after.observed_at) };
         }
     }
@@ -54,46 +59,85 @@ function recentGrowth(row: HotSample, history: HotSample[], published: number, r
         sampleMinutes: Math.max(0, Math.round((observed - baseline.timestamp) / MINUTE)) };
 }
 
+// Decay the time of observed interactions, not the age of the post. Integrating
+// each normal sample interval avoids spikes when the collection cadence changes.
+export function liveActivity(history: HotSample[], published: number, reference: number) {
+    if (!history.length) return null;
+    const points = history.map(sample => ({ timestamp: Date.parse(sample.observed_at), views: sample.views, replies: sample.replies }));
+    const first = points[0];
+    if (published >= reference - HOUR && published <= first.timestamp && first.timestamp - published <= 15 * MINUTE) {
+        points.unshift({ timestamp: published, views: 0, replies: 0 });
+    }
+    const decay = Math.LN2 / (15 * MINUTE);
+    let views = 0, replies = 0, recent = 0, measured = false;
+    let peakViews = points[0].views, peakReplies = points[0].replies;
+    for (let i = 1; i < points.length; i++) {
+        const a = points[i - 1], b = points[i];
+        const dv = Math.max(0, b.views - peakViews), dr = Math.max(0, b.replies - peakReplies);
+        peakViews = Math.max(peakViews, b.views); peakReplies = Math.max(peakReplies, b.replies);
+        const duration = b.timestamp - a.timestamp;
+        if (duration <= 0 || duration > 15 * MINUTE || b.timestamp <= reference - HOUR) continue;
+        measured = true;
+        const start = Math.max(a.timestamp, reference - HOUR), end = b.timestamp;
+        const weight = (Math.exp(-decay * (reference - end)) - Math.exp(-decay * (reference - start))) / (decay * duration);
+        views += dv * weight; replies += dr * weight;
+        recent += (dv + dr) * Math.max(0, end - Math.max(a.timestamp, reference - 30 * MINUTE)) / duration;
+    }
+    return measured ? { views, replies, active: recent > 0 } : null;
+}
+
 export class HotService {
     private timer?: ReturnType<typeof setTimeout>;
     private running = false;
     private inFlight?: Promise<boolean>;
-    constructor(private db: Database, private collectBatch: () => Promise<unknown> = collectWithPython) {}
+    private lightRounds = 2;
+    constructor(private db: Database, private collectBatch: (full: boolean) => Promise<unknown> = collectWithPython) {}
 
     start() {
         if (this.running || process.env.HOT_COLLECT_ENABLED !== 'true') return;
         this.running = true;
-        this.schedule(0);
+        this.schedule(Math.max(0, Date.parse(this.state().next_attempt_at || '') - Date.now()) || 0);
     }
     stop() { this.running = false; clearTimeout(this.timer); }
     private schedule(delay: number) {
         this.timer = setTimeout(async () => {
             await this.refresh();
-            const failures = this.state().failures;
-            if (this.running) this.schedule(5 * MINUTE * Math.min(12, 2 ** Math.min(4, failures)));
+            if (this.running) this.schedule(Math.max(1000, Date.parse(this.state().next_attempt_at || '') - Date.now()) || COLLECT_INTERVAL);
         }, delay);
     }
     private state() {
         return this.db.query('SELECT * FROM hot_collector_state WHERE id=1').get() as {
             last_attempt_at: string | null; last_success_at: string | null; last_error: string | null;
-            failures: number; pages: number; batch_size: number;
+            failures: number; pages: number; batch_size: number; next_attempt_at: string | null;
         };
     }
     refresh(): Promise<boolean> {
         if (this.inFlight) return this.inFlight;
-        const last = this.state().last_attempt_at;
+        const state = this.state();
+        if (state.next_attempt_at && Date.now() < Date.parse(state.next_attempt_at)) return Promise.resolve(false);
+        const last = state.last_attempt_at;
         if (last && Date.now() - Date.parse(last) < MINUTE) return Promise.resolve(false);
         this.inFlight = this.run().finally(() => { this.inFlight = undefined; });
         return this.inFlight;
     }
     private async run() {
-        this.db.query('UPDATE hot_collector_state SET last_attempt_at=? WHERE id=1').run(new Date().toISOString());
+        this.db.query('UPDATE hot_collector_state SET last_attempt_at=?,next_attempt_at=? WHERE id=1')
+            .run(new Date().toISOString(), new Date(Date.now() + COLLECT_INTERVAL).toISOString());
         try {
-            this.saveBatch(await this.collectBatch());
+            const full = this.lightRounds >= 2;
+            this.saveBatch(await this.collectBatch(full));
+            this.lightRounds = full ? 0 : this.lightRounds + 1;
+            this.db.query('UPDATE hot_collector_state SET next_attempt_at=? WHERE id=1')
+                .run(new Date(Date.now() + COLLECT_INTERVAL + Math.random() * 15 * 1000).toISOString());
             logger.info('热榜采集完成');
             return true;
-        } catch {
-            this.db.query("UPDATE hot_collector_state SET failures=failures+1,last_error='采集暂不可用，已保留上次榜单' WHERE id=1").run();
+        } catch (error) {
+            const failures = this.state().failures + 1;
+            const retryAfter = error instanceof CollectorUnavailable && Number.isFinite(error.retryAfterSeconds)
+                ? Math.max(0, Math.min(86400, error.retryAfterSeconds)) * 1000 : 0;
+            const delay = Math.max(10 * MINUTE * Math.min(6, 2 ** Math.min(3, failures - 1)), retryAfter);
+            this.db.query("UPDATE hot_collector_state SET failures=failures+1,last_error='采集暂不可用，已保留上次榜单',next_attempt_at=? WHERE id=1")
+                .run(new Date(Date.now() + delay).toISOString());
             logger.warn('热榜采集失败，保留缓存并退避重试');
             return false;
         }
@@ -146,35 +190,42 @@ export class HotService {
             const inCohort = Number.isFinite(published) && published <= reference && published >= cohortStart;
             return inCohort && (!live || reference - Date.parse(row.observed_at) <= 15 * MINUTE);
         });
+        let cold = 0;
         const ranked = eligible.flatMap(r => {
             const published = Date.parse(r.published_at);
             const history = (histories.get(r.post_id) || []).filter(sample => Date.parse(sample.observed_at) <= Date.parse(r.observed_at));
             const growth = recentGrowth(r, history, published, reference);
-            if (live && !growth) return [];
+            const activity = live ? liveActivity(history, published, reference) : null;
+            if (live && !activity) { cold++; return []; }
+            if (live && !activity!.active) return [];
             return [{
                 postId: r.post_id, title: r.title, author: r.author, category: r.category, categoryLabel: r.category_label,
                 views: r.views, replies: r.replies, observedAt: r.observed_at, publishedAt: r.published_at,
                 growthViews: growth?.growthViews ?? 0, growthReplies: growth?.growthReplies ?? 0,
                 sampleMinutes: growth?.sampleMinutes ?? 0,
-                heat: heatScore(live ? growth!.growthViews : r.views, live ? growth!.growthReplies : r.replies),
+                heat: heatScore(live ? activity!.views : r.views, live ? activity!.replies : r.replies),
             }];
         }).sort((a, b) => (sort === 'heat' ? b.heat - a.heat : b[sort] - a[sort]) || b.postId - a.postId);
-        const warmingUp = live && eligible.length > 0 && ranked.length === 0;
+        const warmingUp = live && cold > 0 && ranked.length === 0;
         return { posts: ranked.slice(0, limit), total: ranked.length, categories, period, sort, limit,
             updatedAt: state.last_success_at, stale: !state.last_success_at || now.getTime() - Date.parse(state.last_success_at) > 15 * MINUTE,
             error: state.last_error, busy: Boolean(this.inFlight), enabled: process.env.HOT_COLLECT_ENABLED === 'true',
-            coverage: state.batch_size, pages: state.pages, intervalSeconds: 300, warmingUp };
+            coverage: state.batch_size, pages: state.pages, intervalSeconds: 120, nextAttemptAt: state.next_attempt_at, warmingUp };
     }
 }
 
-async function collectWithPython(): Promise<unknown> {
-    const child = Bun.spawn([process.env.HOT_COLLECTOR_PYTHON || 'python3', resolve('collector/collect.py')], {
+async function collectWithPython(full: boolean): Promise<unknown> {
+    const child = Bun.spawn([process.env.HOT_COLLECTOR_PYTHON || 'python3', resolve('collector/collect.py'), ...(full ? [] : ['--light'])], {
         stdout: 'pipe', stderr: 'pipe', stdin: 'ignore', env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
     });
     const timeout = setTimeout(() => child.kill(), 100000);
     try {
-        const [output, , exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
-        if (exitCode !== 0 || output.length > 1_000_000) throw new Error('Collector unavailable');
+        const [output, errors, exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+        if (exitCode !== 0 || output.length > 1_000_000) {
+            let retryAfter = 0;
+            try { retryAfter = z.number().finite().nonnegative().max(86400).parse(JSON.parse(errors).retryAfterSeconds); } catch { /* Untrusted transport output is never logged. */ }
+            throw new CollectorUnavailable(retryAfter);
+        }
         return JSON.parse(output);
     } finally { clearTimeout(timeout); }
 }

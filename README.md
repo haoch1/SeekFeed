@@ -78,7 +78,7 @@ bun run db:resetuser # 重置管理员账号
 | `CORS_ORIGINS` | `http://localhost:3010` | 跨域来源，逗号分隔 |
 | `RSS_CHECK_ENABLED` | `true` | 自动监控开关，关闭时仍可手动同步 |
 | `RSS_TIMEOUT` | `30000` | 抓取超时，毫秒 |
-| `HOT_COLLECT_ENABLED` | Docker `true`，本地 `false` | 每 5 分钟独立采集热榜，失败保留缓存并退避 |
+| `HOT_COLLECT_ENABLED` | Docker `true`，本地 `false` | 约每 2 分钟轻量采集，约 6 分钟完整扫描；失败保留缓存并退避 |
 | `HOT_COLLECTOR_PYTHON` | Docker 已配置，本地 `python3` | 安装 `collector/requirements.txt` 的 Python 路径 |
 | `TELEGRAM_WEBHOOK_URL` | 无 | 可选 Webhook URL |
 

@@ -65,7 +65,9 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
           </form>
 
           {/* 订阅列表 */}
-          <div id="subscriptionsList" class="subscriptions-list">
+          <section class="subscriptions-panel-shell" aria-labelledby="subscriptionsListTitle"><div class="subscriptions-panel">
+          <div class="subscriptions-panel-heading"><h2 id="subscriptionsListTitle">我的订阅</h2><div class="search-box"><Icon name="search" /><FieldInput type="search" id="subscriptionSearch" class="input-field" placeholder="搜索订阅" aria-label="搜索订阅 ID、关键词或作者" /></div></div>
+          <div id="subscriptionsList" class="subscriptions-list" tabindex="0" role="region" aria-label="订阅列表">
             <div class="skeleton-wrapper">
               {[1, 2, 3].map(() => (
                 <div class="skeleton-list-item">
@@ -75,6 +77,8 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
               ))}
             </div>
           </div>
+          <p id="subscriptionSearchEmpty" class="subscription-search-empty" hidden>没有匹配的订阅</p>
+          </div></section>
         </div>
         <SubscriptionAnalytics />
       </section>
@@ -110,6 +114,7 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
           <div class="rss-sync-section"><div class="section-heading"><h2>手动同步</h2><p>保存源配置后，可立即抓取新帖。自动监控会按照设定的间隔持续运行。</p></div>
             <dl class="diagnostic-list rss-diagnostics"><div><dt>自动监控</dt><dd id="rssRunningStatus">读取状态中</dd></div><div><dt>抓取频率</dt><dd id="rssRunningInterval">—</dd></div><div><dt>上次成功同步</dt><dd id="rssLastSuccess">—</dd></div></dl>
             <button id="fetchRssBtn" class="btn btn-primary">
+              <Icon name="sync" />
               立即抓取 RSS
             </button>
           </div>

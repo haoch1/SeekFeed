@@ -1,17 +1,32 @@
 """Fetch public NodeSeek list metrics. stdout is a single validated JSON document."""
 import json
 import re
+import random
 import sys
 import time
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from bs4 import BeautifulSoup
 
 URLS = [
     'https://www.nodeseek.com/',
-    'https://www.nodeseek.com/page-2',
     'https://www.nodeseek.com/?sortBy=postTime',
+    'https://www.nodeseek.com/page-2',
     'https://www.nodeseek.com/page-2?sortBy=postTime',
 ]
+
+class CollectionError(ValueError):
+    def __init__(self, reason, retry_after=0):
+        super().__init__(reason)
+        self.retry_after = retry_after
+
+def retry_after_seconds(value, now=None):
+    now = now or datetime.now(timezone.utc)
+    try:
+        seconds = int(value) if re.fullmatch(r'\d+', value or '') else (parsedate_to_datetime(value) - now).total_seconds()
+        return min(86400, max(0, int(seconds)))
+    except (TypeError, ValueError, OverflowError):
+        return 0
 
 def count(value):
     text = (value or '').strip().replace(',', '')
@@ -69,25 +84,34 @@ def parse(html):
         raise ValueError('unexpected_markup')
     return posts
 
-def collect():
+def collect(light=False):
     from curl_cffi import requests
     session = requests.Session(impersonate='chrome')
     posts = {}
-    for index, url in enumerate(URLS):
-        if index:
-            time.sleep(2)
-        response = session.get(url, timeout=20)
-        if response.status_code != 200:
-            raise ValueError('http_' + str(response.status_code))
-        for post in parse(response.text):
-            posts[post['postId']] = post
-    return {'posts': list(posts.values()), 'collectedAt': datetime.now(timezone.utc).isoformat(), 'pages': len(URLS)}
+    urls = URLS[:2] if light else URLS
+    try:
+        for index, url in enumerate(urls):
+            if index:
+                time.sleep(random.uniform(2, 3))
+            response = session.get(url, timeout=20)
+            if response.status_code != 200:
+                raise CollectionError('http_' + str(response.status_code), retry_after_seconds(response.headers.get('Retry-After')))
+            for post in parse(response.text):
+                # A later page can repeat a pinned/bumped row with older cached counts.
+                previous = posts.get(post['postId'])
+                if previous:
+                    post['views'] = max(previous['views'], post['views'])
+                    post['replies'] = max(previous['replies'], post['replies'])
+                posts[post['postId']] = post
+    finally:
+        session.close()
+    return {'posts': list(posts.values()), 'collectedAt': datetime.now(timezone.utc).isoformat(), 'pages': len(urls)}
 
 if __name__ == '__main__':
     try:
-        print(json.dumps(collect(), ensure_ascii=False))
+        print(json.dumps(collect(light='--light' in sys.argv), ensure_ascii=False))
     except Exception as error:
         # Do not log headers, cookies, response pages or transport exceptions.
         reason = str(error) if isinstance(error, ValueError) else 'transport_error'
-        print(json.dumps({'error': reason}), file=sys.stderr)
+        print(json.dumps({'error': reason, 'retryAfterSeconds': error.retry_after if isinstance(error, CollectionError) else 0}), file=sys.stderr)
         sys.exit(1)

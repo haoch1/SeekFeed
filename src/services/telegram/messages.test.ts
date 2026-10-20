@@ -13,6 +13,9 @@ describe('Telegram message layout and escaping', () => {
         expect(message + telegramHelp).not.toMatch(/\p{Extended_Pictographic}|\u20e3/u);
         expect(telegramHelp).toContain('SeekFeed');
         expect(telegramHelp).not.toContain('\\-');
+        expect(telegramHelp).not.toContain('/hot day');
+        expect(telegramHelp).not.toContain('/hot week');
+        expect(telegramHelp).toContain('榜单下方可切换实时、日榜、周榜');
     });
 
     it('aligns single and double digit post numbers and normalizes presentation without changing stored titles', () => {

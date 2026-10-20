@@ -1,5 +1,8 @@
 import unittest
-from collect import count, parse
+from collect import count, parse, collect, retry_after_seconds, CollectionError, URLS
+from datetime import datetime, timezone
+from types import SimpleNamespace
+from unittest.mock import patch, MagicMock
 
 def row(views='1,234', replies='27', inner='28', title='&lt;script&gt;'):
     return f'''<li class="post-list-item"><div class="post-title"><a href="/post-123-1">{title}</a></div>
@@ -33,6 +36,37 @@ class ParserTests(unittest.TestCase):
     def test_pinned_icon_without_title_attribute(self):
         html = row().replace('</a></div>', '</a><svg class="iconpark-icon pined"></svg></div>')
         self.assertTrue(parse(html)[0]['pinned'])
+
+    def test_retry_after_seconds_and_dates(self):
+        now = datetime(2026, 10, 20, 5, 0, tzinfo=timezone.utc)
+        for value, expected in [('120', 120), ('Tue, 20 Oct 2026 05:30:00 GMT', 1800), ('Tue, 20 Oct 2026 04:30:00 GMT', 0), ('bogus', 0), (None, 0), ('99999999', 86400)]:
+            self.assertEqual(retry_after_seconds(value, now), expected)
+
+    def test_light_and_full_scan_request_budget(self):
+        for light, pages in [(True, 2), (False, 4)]:
+            session = MagicMock()
+            session.get.return_value = SimpleNamespace(status_code=200, text=row())
+            with patch('curl_cffi.requests.Session', return_value=session), patch('collect.time.sleep') as sleep:
+                result = collect(light)
+            self.assertEqual([c.args[0] for c in session.get.call_args_list], URLS[:pages])
+            self.assertEqual(result['pages'], pages)
+            self.assertEqual(sleep.call_count, pages - 1)
+            self.assertTrue(all(2 <= c.args[0] <= 3 for c in sleep.call_args_list))
+            session.close.assert_called_once()
+
+    def test_rate_limit_or_challenge_aborts_without_retrying_more_pages(self):
+        for status, html in [(429, ''), (403, ''), (200, '<title>Just a moment...</title>')]:
+            session = MagicMock()
+            session.get.return_value = SimpleNamespace(status_code=status, text=html, headers={'Retry-After': '1800'})
+            with patch('curl_cffi.requests.Session', return_value=session), patch('collect.time.sleep') as sleep:
+                with self.assertRaises(ValueError) as caught:
+                    collect()
+            self.assertEqual(session.get.call_count, 1)
+            sleep.assert_not_called()
+            session.close.assert_called_once()
+            if status != 200:
+                self.assertIsInstance(caught.exception, CollectionError)
+                self.assertEqual(caught.exception.retry_after, 1800)
 
 if __name__ == '__main__':
     unittest.main()

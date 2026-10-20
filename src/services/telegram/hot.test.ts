@@ -113,7 +113,7 @@ describe('Telegram hot ranking', () => {
         expect(test.periods).toEqual([]);
         expect(test.calls[0].payload.text).toContain('没有权限');
         expect(test.calls[1].payload.show_alert).toBe(true);
-        expect(test.calls[2].payload.text).toContain('/hot day');
+        expect(test.calls[2].payload.text).toContain('下方按钮切换');
     });
 
     it('ignores unchanged refreshes but propagates delivery failures', async () => {

@@ -395,6 +395,10 @@ button:disabled { pointer-events: none; }
 .subscription-controls .delete-sub { min-width: 72px; }
 .empty-state-small { border: 1px dashed var(--border-color); border-radius: 8px; padding: 48px 20px; }
 .sessions-list { margin-bottom: 20px; }
+.account-devices { display: flex; flex-direction: column; height: 400px; }
+.account-devices > .section-heading, .account-devices > .form-actions { flex-shrink: 0; }
+.account-devices .sessions-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; }
+.account-devices .sessions-list:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 4px; }
 .session-item { display: flex; gap: 14px; padding: 16px 0; border-bottom: 1px solid var(--border-light); }
 .session-item:first-child { padding-top: 0; }
 .session-item:last-child { border-bottom: 0; }
@@ -498,9 +502,34 @@ button:disabled { pointer-events: none; }
 #rssPage .page-body > div { margin-top: 0 !important; padding-top: 0 !important; border-top: 0 !important; }
 #rssPage .page-body > div .btn { width: auto !important; }
 @media (min-width: 1200px) {
-    #subscriptionsPage .page-body { display: grid; grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); gap: 24px; max-width: none; align-items: start; }
+    #subscriptionsPage .page-body { display: grid; grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); gap: 24px; max-width: none; align-items: stretch; }
+    #subscriptionsPage .sub-form { margin-bottom: 0; }
+    .subscriptions-panel-shell { position: relative; min-width: 0; }
+    .subscriptions-panel-shell .subscriptions-panel { position: absolute; inset: 0; }
     #subscriptionsPage .sub-keywords-inputs { flex-direction: column; }
-    #subscriptionsPage .subscription-item:first-child { margin-top: 0; }
+}
+.subscriptions-panel { display: flex; flex-direction: column; min-width: 0; overflow: hidden; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-card); box-shadow: 0 1px 3px #18181b09; }
+.subscriptions-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
+.subscriptions-panel-heading h2 { font-size: 15px; font-weight: 600; white-space: nowrap; }
+.subscriptions-panel-heading .search-box { flex: 0 1 240px; min-width: 0; position: relative; display: flex; align-items: center; }
+.subscriptions-panel-heading .search-box > svg { position: absolute; left: 11px; width: 15px; height: 15px; color: var(--text-secondary); pointer-events: none; }
+.subscriptions-panel-heading .input-field { min-height: 36px; padding-left: 34px; }
+.subscriptions-list { min-height: 0; max-height: 480px; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; overflow-anchor: none; }
+.subscriptions-list:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.subscriptions-panel-shell .subscriptions-list { flex: 1; }
+.subscriptions-list .subscription-item { margin: 0; padding: 18px 20px; border: 0; border-bottom: 1px solid var(--border-light); border-radius: 0; box-shadow: none; }
+.subscriptions-list .subscription-item:last-child { border-bottom: 0; }
+.subscriptions-list .subscription-keywords .tag { white-space: normal; overflow-wrap: anywhere; max-width: 100%; }
+.subscriptions-list .subscription-filters > span { overflow-wrap: anywhere; max-width: 100%; }
+.subscriptions-list .empty-state-small { border: 0; text-align: center; }
+.subscription-search-empty { padding: 40px 20px; text-align: center; color: var(--text-secondary); font-size: 13px; }
+@media (min-width: 1200px) { .subscriptions-list { max-height: none; } }
+@media (max-width: 760px) {
+    .subscriptions-panel-heading { padding: 16px; gap: 12px; }
+    .subscriptions-panel-heading .search-box { flex-basis: 170px; }
+    .subscriptions-list { max-height: min(560px, 75dvh); }
+    .subscriptions-list .subscription-item { padding: 16px; }
+    .subscriptions-list .subscription-controls { justify-content: flex-start; }
 }
 @media (max-width: 1050px) {
     .settings-content { display: flex; flex-direction: column; gap: 20px; }
@@ -560,6 +589,7 @@ button:disabled { pointer-events: none; }
 /* Shared feedback keeps labels, hit targets and layout stable. */
 .is-progress-visible .button-content { opacity: 1; }
 .button-content > svg { transition: opacity .16s ease; }
+.button-content > svg[data-icon="sync"] { transform-origin: center; }
 .is-progress-visible:has(.button-progress[data-kind="icon"]) .button-content svg { opacity: 0; }
 .button-progress[data-kind="icon"] { right: auto; }
 .button-progress[data-kind="line"] { inset: auto 9px 3px; height: 2px; display: block; overflow: hidden; border-radius: 2px; }

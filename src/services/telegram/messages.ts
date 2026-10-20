@@ -78,11 +78,10 @@ export const telegramHelp = telegramMessage('命令帮助', `<b>账号与通知<
 /add 关键词1 关键词2 关键词3
 /del 订阅ID
 /post  最近 10 条帖子
-/hot  实时热榜
-/hot day  日榜
-/hot week  周榜
+/hot  论坛热榜
 /help  查看帮助
 
+榜单下方可切换实时、日榜、周榜。
 关键词不区分大小写，最多 3 个，需同时命中。匹配范围与其他规则可在网页端设置。`);
 
 export function welcomeMessage(name: string, username: string, chatId: number, returning: boolean): string {

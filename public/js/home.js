@@ -840,11 +840,22 @@ document.addEventListener("DOMContentLoaded", function () {
   // ============================================
   // 订阅管理
   // ============================================
+  function filterSubscriptions() {
+    const query = el('subscriptionSearch').value.trim().toLocaleLowerCase();
+    const items = [...el('subscriptionsList').querySelectorAll('.subscription-item')];
+    let visible = 0;
+    for (const item of items) {
+      item.hidden = !item.querySelector('.subscription-description').textContent.toLocaleLowerCase().includes(query);
+      if (!item.hidden) visible++;
+    }
+    el('subscriptionSearchEmpty').hidden = !items.length || visible > 0;
+  }
   async function loadSubscriptions() {
     const result = await apiRequest("/api/subscriptions");
     const container = el("subscriptionsList");
     if (!result?.success) { container.textContent = "订阅加载失败，请刷新页面重试。"; return; }
     container.innerHTML = result.data.length ? result.data.map(sub => `<div class="subscription-item ${sub.enabled === 0 ? "paused" : ""}" data-id="${sub.id}"><div class="subscription-description"><div class="subscription-id">订阅 <span>#${sub.id}</span></div><div class="subscription-keywords">${[sub.keyword1, sub.keyword2, sub.keyword3].filter(Boolean).map(word => `<span class="tag tag-blue">${escapeHtml(word)}</span>`).join("") || '<span class="tag">按作者 / 分类订阅</span>'}</div><div class="subscription-filters"><span class="subscription-state">${sub.enabled === 0 ? "已暂停" : "监控中"}</span>${sub.creator ? `<span>作者 ${escapeHtml(sub.creator)}</span>` : ""}${sub.category ? `<span>${escapeHtml(getCategoryName(sub.category))}</span>` : ""}</div>${sub.exclude_keywords ? `<div class="subscription-exclusions">屏蔽：${escapeHtml(sub.exclude_keywords)}</div>` : ""}</div><div class="subscription-controls"><button class="btn btn-secondary btn-xs toggle-sub" data-enabled="${sub.enabled === 0 ? 1 : 0}">${renderIcon(sub.enabled === 0 ? 'play' : 'pause')}${sub.enabled === 0 ? "恢复" : "暂停"}</button><button class="btn btn-danger btn-xs delete-sub">${renderIcon('trash')}删除</button></div></div>`).join("") : '<div class="empty-state-small"><div class="empty-title">还没有订阅</div><p class="form-hint">添加关键词、作者或分类，开始接收有价值的动态。</p></div>';
+    filterSubscriptions();
     container.querySelectorAll(".toggle-sub").forEach(btn => btn.addEventListener("click", async () => {
       const item = btn.closest('.subscription-item');
       if (item.dataset.busy) return;
@@ -877,6 +888,7 @@ document.addEventListener("DOMContentLoaded", function () {
       finally { delete item.dataset.busy; other.disabled = false; }
       if (result?.success) {
         item.remove();
+        filterSubscriptions();
         if (!container.querySelector('.subscription-item')) loadSubscriptions();
         Toast.success("订阅已删除"); loadFilterSubscriptions(); updateStats(); analytics.loadNotifications();
       } else Toast.error(result?.message || "删除失败");
@@ -889,6 +901,7 @@ document.addEventListener("DOMContentLoaded", function () {
       : '匹配范围可在 Telegram 设置中查看。';
   }
   function initSubscriptions() {
+    el('subscriptionSearch').addEventListener('input', () => { filterSubscriptions(); el('subscriptionsList').scrollTop = 0; });
     el("addSubForm").addEventListener("submit", pendingSubmit(async e => {
       e.preventDefault();
       const data = { keyword1: el("keyword1").value.trim() || undefined, keyword2: el("keyword2").value.trim() || undefined,
@@ -932,6 +945,7 @@ document.addEventListener("DOMContentLoaded", function () {
         link.classList.toggle('selected', selected);
         if (selected) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
       });
+      el('breadcrumbSection').textContent = path.startsWith('/settings') ? '设置' : '社区动态';
       el('breadcrumbCurrent').textContent = title;
       document.title = `${title} · SeekFeed`;
       if (name === 'feed') { setMatched(path === '/matched'); loadPosts(currentPage); }
