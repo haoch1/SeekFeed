@@ -1,5 +1,6 @@
 import type { FC, PropsWithChildren } from "hono/jsx";
 import iconPaths from './icons.json';
+import identityScript from '../../public/js/identity.js' with { type: 'text' };
 
 interface LayoutProps {
   title?: string;
@@ -54,17 +55,15 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
         <link href="/css/mobile.css" rel="stylesheet" />
 
         {/* Establish presentation before the first body paint. APIs still verify the session. */}
+        <script dangerouslySetInnerHTML={{ __html: identityScript }} />
         <script
           dangerouslySetInnerHTML={{
             __html: `
             (function() {
               let savedTheme;
               try {
-                document.documentElement.dataset.auth = localStorage.getItem('sessionId') ? 'session' : 'guest';
                 savedTheme = localStorage.getItem('theme');
-              } catch {
-                document.documentElement.dataset.auth = 'guest';
-              }
+              } catch { /* Use the system theme when browser storage is unavailable. */ }
               if (savedTheme === 'dark') {
                 document.documentElement.setAttribute('data-theme', 'dark');
               } else if (savedTheme === 'light') {
@@ -79,6 +78,8 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
       </head>
       <body>
         {children}
+        {/* Restore account presentation before any external application script can delay parsing. */}
+        <script dangerouslySetInnerHTML={{ __html: 'window.SeekFeedIdentity.render();' }} />
         <script id="seekfeedIcons" type="application/json" dangerouslySetInnerHTML={{ __html: JSON.stringify(iconPaths).replace(/</g, '\\u003c') }} />
         <script src="/js/controls.js"></script>
         {/* PWA Scripts */}

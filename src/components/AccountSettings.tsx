@@ -9,7 +9,7 @@ export const AccountSettings: FC<{ active?: boolean }> = ({ active = false }) =>
             <section class="settings-section">
                 <div class="section-heading"><h2>账号信息</h2><p>头像单独保存。修改用户名或密码需要验证当前密码，保存后请重新登录。</p></div>
                 <div class="account-profile">
-                    <span class="profile-avatar" data-account-avatar aria-hidden="true">S</span>
+                    <span class="profile-avatar" data-account-avatar aria-hidden="true" style="visibility:hidden">S</span>
                     <div class="account-profile-content"><strong>账号头像</strong><div class="account-avatar-actions"><button id="avatarUploadBtn" type="button" class="btn btn-secondary btn-xs">更换头像</button><button id="avatarRemoveBtn" type="button" class="btn btn-text btn-xs" disabled>恢复默认</button></div><p id="avatarHelp" class="form-hint">支持 JPG、PNG、WebP，最大 5 MB，自动居中裁剪。</p></div>
                     <input id="avatarFile" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="avatarHelp" hidden />
                 </div>

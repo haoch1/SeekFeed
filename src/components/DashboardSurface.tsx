@@ -8,7 +8,7 @@ export const Icon: FC<{ name: string }> = ({ name }) => (
 );
 
 export const BrandMark: FC = () => (
-    <img src="/icons/seekfeed.svg" width="36" height="36" alt="" class="brand-mark" />
+    <svg viewBox="0 0 64 64" width="36" height="36" class="brand-mark" aria-hidden="true" focusable="false"><rect width="64" height="64" rx="16" fill="#4f46e5" /><path d="M44 18H28a7 7 0 0 0 0 14h8a7 7 0 0 1 0 14H20" fill="none" stroke="#fff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
 );
 
 const categories = [
@@ -17,6 +17,11 @@ const categories = [
     ['dev', 'Dev'], ['photo-share', '贴图'], ['expose', '曝光'], ['inside', '内版'], ['sandbox', '沙盒'],
 ];
 
+const navAttributes = (path: string, target: string) => ({
+    class: path === target ? 'nav-item selected' : 'nav-item',
+    'aria-current': path === target ? 'page' : undefined,
+});
+
 export const DashboardSurface: FC<PropsWithChildren<{ path?: string }>> = ({ children, path = "/hot" }) => (
     <div class="workspace-shell">
         <button id="sidebarBackdrop" class="sidebar-backdrop" aria-label="关闭导航" hidden></button>
@@ -24,17 +29,18 @@ export const DashboardSurface: FC<PropsWithChildren<{ path?: string }>> = ({ chi
             <div class="sidebar-brand-row"><a href="/hot" data-route class="workspace-brand"><span class="brand-icon"><BrandMark /></span><span><strong>SeekFeed</strong></span></a><button id="sidebarClose" type="button" class="icon-btn mobile-menu" aria-label="关闭导航"><Icon name="close" /></button></div>
             <nav class="workspace-nav">
                 <p class="nav-section-label">社区动态</p>
-                <a href="/hot" class="nav-item" data-route><Icon name="flame" />热榜</a>
-                <a href="/posts" id="navLatest" class="nav-item" data-route><Icon name="posts" />最新帖子</a>
-                <a href="/matched" id="navMatched" class="nav-item" data-route data-auth-only><Icon name="bell" />命中订阅</a>
-                <a href="/subscriptions" class="nav-item" data-route data-auth-only><Icon name="list" />订阅管理</a>
-                <a href="/statistics" class="nav-item" data-route><Icon name="chart" />统计信息</a>
+                <a href="/hot" {...navAttributes(path, '/hot')} data-route><Icon name="flame" />热榜</a>
+                <a href="/posts" id="navLatest" {...navAttributes(path, '/posts')} data-route><Icon name="posts" />最新帖子</a>
+                <a href="/matched" id="navMatched" {...navAttributes(path, '/matched')} data-route data-auth-only><Icon name="bell" />命中订阅</a>
+                <a href="/subscriptions" {...navAttributes(path, '/subscriptions')} data-route data-auth-only><Icon name="list" />订阅管理</a>
+                <a href="/statistics" {...navAttributes(path, '/statistics')} data-route><Icon name="chart" />统计信息</a>
                 <div class="nav-divider" data-auth-only></div>
-                <p class="nav-section-label" data-auth-only>设置</p><a href="/settings/account" class="nav-item" data-route data-auth-only><Icon name="settings" />账号与安全</a>
-                <a href="/settings/rss" class="nav-item" data-route data-auth-only><Icon name="rss" />RSS 配置</a>
-                <a href="/settings/telegram" class="nav-item" data-route data-auth-only><Icon name="send" />Telegram</a>
+                <p class="nav-section-label" data-auth-only>设置</p><a href="/settings/account" {...navAttributes(path, '/settings/account')} data-route data-auth-only><Icon name="settings" />账号与安全</a>
+                <a href="/settings/rss" {...navAttributes(path, '/settings/rss')} data-route data-auth-only><Icon name="rss" />RSS 配置</a>
+                <a href="/settings/telegram" {...navAttributes(path, '/settings/telegram')} data-route data-auth-only><Icon name="send" />Telegram</a>
             </nav>
-            <div class="workspace-account"><span class="account-avatar-wrap"><button id="accountAvatarButton" type="button" class="account-avatar" aria-label="登录" aria-describedby="accountAvatarHint"><span data-account-avatar>S</span></button><span id="accountAvatarHint" class="account-avatar-hint" role="tooltip">点击登录</span></span><span><strong id="accountLabel" style="visibility:hidden">账户</strong><small>本地控制台</small></span><button id="logoutBtn" type="button" class="icon-btn" title="退出登录" aria-label="退出登录" data-auth-only><Icon name="logout" /></button></div>
+            <div class="workspace-account"><span class="account-avatar-wrap"><button id="accountAvatarButton" type="button" class="account-avatar" aria-label="登录" aria-describedby="accountAvatarHint"><span data-account-avatar style="visibility:hidden">S</span></button><span id="accountAvatarHint" class="account-avatar-hint" role="tooltip">点击登录</span></span><span><strong id="accountLabel" style="visibility:hidden">账户</strong><small>本地控制台</small></span><button id="logoutBtn" type="button" class="icon-btn" title="退出登录" aria-label="退出登录" data-auth-only><Icon name="logout" /></button></div>
+            <script dangerouslySetInnerHTML={{ __html: 'window.SeekFeedIdentity.render();' }} />
         </aside>
         <div class="workspace-main">
             <header class="workspace-topbar">

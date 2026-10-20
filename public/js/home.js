@@ -5,17 +5,10 @@
 document.addEventListener("DOMContentLoaded", function () {
   const sessionId = localStorage.getItem("sessionId");
   const isLoggedIn = !!sessionId;
-  const identityKey = 'seekfeed.identity';
+  const identity = window.SeekFeedIdentity;
   let currentAvatar = null, identityUsername = null, avatarBusy = false, identityVersion = 0;
   function renderAccountAvatars() {
-    document.querySelectorAll('[data-account-avatar]').forEach(node => {
-      node.replaceChildren();
-      if (!currentAvatar) { node.textContent = 'S'; return; }
-      const image = document.createElement('img');
-      image.src = currentAvatar; image.alt = '';
-      image.addEventListener('error', () => { node.textContent = 'S'; }, { once: true });
-      node.append(image);
-    });
+    identity.render();
     const remove = document.getElementById('avatarRemoveBtn');
     if (remove) remove.disabled = !currentAvatar || avatarBusy;
   }
@@ -25,31 +18,22 @@ document.addEventListener("DOMContentLoaded", function () {
     document.documentElement.dataset.auth = 'guest';
     localStorage.removeItem('sessionId');
     localStorage.removeItem('user');
-    sessionStorage.removeItem(identityKey);
+    identity.clear();
     currentAvatar = null;
     renderAccountAvatars();
   }
   function showIdentity(username, token = sessionId, avatar = currentAvatar) {
-    const label = document.getElementById('accountLabel');
-    label.textContent = username || (token ? '账户' : '访客');
-    label.style.visibility = 'visible';
-    identityUsername = username;
-    currentAvatar = token && typeof avatar === 'string' && avatar.startsWith('data:image/png;base64,') && avatar.length <= 410000 ? avatar : null;
+    const shown = identity.show(username, token, avatar);
+    if (!shown) return;
+    identityUsername = shown.username;
+    currentAvatar = shown.avatar;
     renderAccountAvatars();
-    document.getElementById('accountAvatarButton').setAttribute('aria-label', token ? '账号与头像' : '登录');
-    document.getElementById('accountAvatarHint').textContent = token ? '账号与头像' : '点击登录';
-    if (username && token) {
-      try { sessionStorage.setItem(identityKey, JSON.stringify({ sessionId: token, username, avatar: currentAvatar })); } catch { /* Identity can be loaded from the server if browser storage is full. */ }
-    }
   }
   function initIdentity() {
-    let cached;
-    try { cached = JSON.parse(sessionStorage.getItem(identityKey)); } catch { /* Ignore an invalid local cache. */ }
-    if (cached?.sessionId === sessionId && isLoggedIn) showIdentity(cached.username, sessionId, cached.avatar);
-    else {
-      sessionStorage.removeItem(identityKey);
-      showIdentity(null);
-    }
+    const cached = identity.get();
+    identityUsername = cached.username;
+    currentAvatar = cached.avatar;
+    renderAccountAvatars();
     const refreshProfile = async () => {
       const version = identityVersion;
       const result = await apiRequest('/auth/account', { silent: true });
@@ -59,7 +43,7 @@ document.addEventListener("DOMContentLoaded", function () {
     window.addEventListener('storage', event => {
       if (event.key === 'sessionId' || event.key === null) {
         if (localStorage.getItem('sessionId') !== sessionId) {
-          sessionStorage.removeItem(identityKey);
+          identity.clear();
           document.getElementById('mainContent').replaceChildren();
           location.reload();
         }
