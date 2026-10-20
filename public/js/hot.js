@@ -25,7 +25,7 @@ window.SeekFeedHot = (() => {
       row.querySelector('.hot-rank').setAttribute('aria-label', `第 ${index + 1} 名`);
       text('a', post.title); text('.hot-category', post.categoryLabel); text('.hot-author', post.author);
       const views = post.views, replies = post.replies;
-      const heat = String(Math.round(post.heat * 100));
+      const heat = String(Math.round(post.heat * 40));
       text('.hot-views span', number(views)); text('.hot-replies span', number(replies)); text('.hot-heat', heat);
       row.querySelector('.hot-views').setAttribute('aria-label', `浏览量 ${number(views)}`);
       row.querySelector('.hot-replies').setAttribute('aria-label', `回复量 ${number(replies)}`);

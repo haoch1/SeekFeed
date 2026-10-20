@@ -40,12 +40,12 @@ export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
                 </article>
             </div>
             <article id="keywordAnalysis" class="analytics-card keyword-analysis">
-                <div class="analytics-card-heading"><div><h2>关键词分析</h2><span class="analytics-caption">按所选日期统计，每个词独立计数</span></div></div>
+                <div class="analytics-card-heading"><div><h2>关键词分析</h2><span class="analytics-caption">按所选日期统计，每个词独立计数</span></div><div class="keyword-module-actions"><button id="keywordReset" type="button" class="btn btn-text btn-xs">重置</button><button id="keywordToggle" type="button" class="btn btn-text btn-xs" aria-expanded="true" aria-controls="keywordAnalysisBody"><span>收起</span><Icon name="chevron-down" /></button></div></div>
+                <div id="keywordAnalysisBody">
                 <form id="keywordAnalysisForm" class="keyword-analysis-form">
                     <div class="keyword-query-fields">
                         <div class="keyword-query"><Icon name="search" /><FieldInput id="analysisKeyword" type="search" class="input-field" placeholder="关键词，如 DMIT" aria-label="分析关键词" required maxlength="60" /></div>
-                        <FieldInput id="analysisCompare1" class="input-field" placeholder="对比关键词 1" aria-label="对比关键词 1" maxlength="60" hidden />
-                        <FieldInput id="analysisCompare2" class="input-field" placeholder="对比关键词 2" aria-label="对比关键词 2" maxlength="60" hidden />
+                        {[1, 2].map(index => <div id={`analysisCompareField${index}`} class="keyword-compare-field" hidden><FieldInput id={`analysisCompare${index}`} class="input-field" placeholder={`对比关键词 ${index}`} aria-label={`对比关键词 ${index}`} maxlength="60" hidden /><button type="button" class="icon-btn" data-remove-compare={index} aria-label={`移除对比关键词 ${index}`}><Icon name="close" /></button></div>)}
                         <button id="keywordAddCompare" type="button" class="btn btn-secondary"><Icon name="plus" />添加对比</button>
                     </div>
                     <div class="keyword-query-options">
@@ -57,29 +57,33 @@ export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
                 <div id="keywordSuggestions" class="keyword-suggestions" aria-label="快速分析热门标题词"></div>
                 <p id="keywordAnalysisStatus" class="keyword-analysis-status" role="status">输入关键词，查看全天与各时段的发帖分布。</p>
                 <div id="keywordAnalysisResults" class="keyword-analysis-results" hidden>
-                    <div id="keywordComparison" class="keyword-comparison" role="group" aria-label="选择查看的关键词"></div>
+                    <div id="keywordComparison" class="keyword-comparison" role="group" aria-label="选择关键词的分类、作者与详细指标"></div>
+                    <p id="keywordDetailLabel" class="keyword-detail-label"></p>
                     <div id="keywordMetrics" class="keyword-metrics"></div>
                     <div id="keywordOverlap" class="keyword-overlap" hidden></div>
                     <div class="keyword-panels">
                         <section class="keyword-panel">
                             <div class="keyword-chart-heading"><h3>时段分布</h3><div id="keywordBucketSelector" class="analytics-period" role="group" aria-label="关键词时间粒度">{[1, 3, 6].map(hours => <button type="button" class={`chart-range-btn${hours === 1 ? ' active' : ''}`} data-hours={hours} aria-pressed={hours === 1 ? 'true' : 'false'}>{hours} 小时</button>)}</div></div>
+                            <div id="keywordHourLegend" class="keyword-chart-legend"></div>
                             <div id="keywordChartReadout" class="analytics-caption keyword-panel-readout" aria-live="polite"></div>
                             <div id="keywordHourChart" class="keyword-hour-chart" tabindex="0" role="group" aria-label="关键词时段柱形图，方向键查看数据"></div>
                         </section>
                         <section class="keyword-panel">
                             <div class="keyword-chart-heading"><h3>近 7 天趋势</h3><span class="analytics-caption">篇 / 天</span></div>
-                            <div class="analytics-caption keyword-panel-readout">点击日期查看当天</div>
+                            <div id="keywordDailyLegend" class="keyword-chart-legend"></div>
+                            <div id="keywordDailyReadout" class="analytics-caption keyword-panel-readout">点击日期查看当天</div>
                             <div id="keywordDailyChart" class="keyword-daily-chart"></div>
                         </section>
                         <section class="keyword-panel">
-                            <div class="keyword-chart-heading"><h3>分类分布</h3><span class="analytics-caption">帖子占比</span></div>
+                            <div class="keyword-chart-heading"><h3>分类分布</h3><span id="keywordCategoryTerm" class="analytics-caption"></span></div>
                             <div id="keywordCategories" class="keyword-category-chart"></div>
                         </section>
                         <section class="keyword-panel">
-                            <div class="keyword-chart-heading"><h3>活跃作者</h3><span class="analytics-caption">TOP 5</span></div>
+                            <div class="keyword-chart-heading"><h3>活跃作者</h3><span id="keywordAuthorTerm" class="analytics-caption"></span></div>
                             <div id="keywordAuthors" class="keyword-ranked"></div>
                         </section>
                     </div>
+                </div>
                 </div>
             </article>
             <article id="analyticsCategoryCard" class="analytics-card">
