@@ -38,6 +38,22 @@ beforeEach(() => {
 describe('account settings and session expiry', () => {
     const headers = () => ({ Authorization: `Bearer ${sessionId}`, 'Content-Type': 'application/json' });
 
+    it('keeps analytics aggregates public and subscription identifiers and keywords authenticated', async () => {
+        const sub = db.createKeywordSub({ keyword1: 'private-rule-example' });
+        const response = await app.request('/api/stats/analytics?days=7&offset=480');
+        const data = await response.json();
+        expect(response.status).toBe(200);
+        expect(data.data.ranking).toBeUndefined();
+        expect(data.data.ruleStats).toBeUndefined();
+        expect(JSON.stringify(data)).not.toContain('private-rule-example');
+        expect((await app.request('/api/stats/subscription-ranking?days=7&offset=480')).status).toBe(401);
+        const privateResponse = await app.request('/api/stats/subscription-ranking?days=7&offset=480', { headers: headers() });
+        expect((await privateResponse.json()).data.ranking[0].id).toBe(sub.id);
+        for (const query of ['days=8', 'days=NaN', 'offset=9999', 'offset=1.5']) {
+            expect((await app.request(`/api/stats/analytics?${query}`)).status).toBe(400);
+        }
+    });
+
     it('requires authentication for account details, credentials and preferences', async () => {
         for (const [path, method] of [['/auth/account', 'GET'], ['/auth/account', 'PUT'], ['/auth/preferences', 'PUT']]) {
             const response = await app.request(path, { method });

@@ -4,7 +4,7 @@ import iconPaths from './icons.json';
 interface LayoutProps {
   title?: string;
   description?: string;
-  scriptSrc?: string;
+  scriptSrc?: string | string[];
 }
 
 export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
@@ -42,6 +42,7 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
         <link href="/css/skeleton.css" rel="stylesheet" />
         <link href="/css/charts.css" rel="stylesheet" />
         <link href="/css/workspace.css" rel="stylesheet" />
+        <link href="/css/analytics.css" rel="stylesheet" />
 
         {/* 主题初始化脚本 - 防止闪烁 */}
         <script
@@ -68,7 +69,7 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
         {/* PWA Scripts */}
         <script src="/js/pwa-register.js" defer></script>
 
-        {scriptSrc && <script src={scriptSrc}></script>}
+        {scriptSrc && (Array.isArray(scriptSrc) ? scriptSrc : [scriptSrc]).map(src => <script src={src}></script>)}
       </body>
     </html>
   );

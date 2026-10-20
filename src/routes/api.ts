@@ -141,6 +141,16 @@ apiRoutes.get('/stats/charts', async (c) => {
 });
 
 // Session 中间件
+const analyticsQuery = z.object({
+    days: z.coerce.number().refine(value => [-1, 7, 30, 0].includes(value)).default(-1),
+    offset: z.coerce.number().int().min(-840).max(840).default(0),
+});
+apiRoutes.get('/stats/analytics', createQueryValidationMiddleware(analyticsQuery), (c) => {
+    const { days, offset } = c.get('validatedQuery');
+    const { ranking, ruleStats, ...publicData } = c.get('dbService').getAnalytics(days, offset);
+    return c.json(createSuccessResponse(publicData));
+});
+
 apiRoutes.get('/stats/overview', (c) => {
     return c.json(createSuccessResponse(c.get('dbService').getComprehensiveStats()));
 });
@@ -171,6 +181,12 @@ const sessionMiddleware = async (c: any, next: any) => {
 
 // 应用Session中间件到所有后续API路由
 apiRoutes.use('*', sessionMiddleware);
+
+apiRoutes.get('/stats/subscription-ranking', createQueryValidationMiddleware(analyticsQuery), (c) => {
+    const { days, offset } = c.get('validatedQuery');
+    const data = c.get('dbService').getAnalytics(days, offset);
+    return c.json(createSuccessResponse({ ranking: data.ranking, ruleStats: data.ruleStats, period: data.period }));
+});
 
 // 获取基础配置
 apiRoutes.get('/config', async (c) => {

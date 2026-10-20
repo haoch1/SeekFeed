@@ -1,5 +1,6 @@
 import { AccountSettings } from './AccountSettings';
 import { TelegramSettings } from './TelegramSettings';
+import { StatisticsPage } from './StatisticsPage';
 import { FieldInput } from './Controls';
 import type { FC } from "hono/jsx";
 import { Layout } from "./Layout";
@@ -10,7 +11,7 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/" }) => {
     <Layout
       title="SeekFeed"
       description="NodeSeek RSS 文章列表"
-      scriptSrc="/js/home.js"
+      scriptSrc={["/js/statistics.js", "/js/home.js"]}
     >
       <DashboardSurface path={path}>
 
@@ -20,14 +21,14 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/" }) => {
           {/* 添加订阅表单 */}
           <form id="addSubForm" class="sub-form" method="post">
             {/* 第一行：关键词 */}
-            <div class="section-heading"><h2>新建订阅</h2><p>填写至少一个关键词、作者或分类。多个关键词需要同时命中。</p></div><div class="sub-form-row"><label class="form-label" for="keyword1">匹配关键词</label></div>
+            <div class="section-heading"><h2>新建订阅</h2><p>按关键词、作者或分类监控新帖。</p></div><div class="sub-form-row"><label class="form-label" for="keyword1">匹配关键词</label></div>
             <div class="sub-form-row"><div class="sub-keywords-inputs">
                 <FieldInput type="text" id="keyword1" class="input-field" placeholder="关键词1，如 DMIT" aria-label="关键词1" maxlength="100" />
                 <FieldInput type="text" id="keyword2" class="input-field" placeholder="关键词2（同时命中）" aria-label="关键词2" maxlength="100" />
                 <FieldInput type="text" id="keyword3" class="input-field" placeholder="关键词3（同时命中）" aria-label="关键词3" maxlength="100" />
               </div>
             </div>
-            <div class="match-rules"><p>普通关键词不区分大小写，如 DMIT 与 dmit。多个关键词需要全部命中。</p><p><span id="subscriptionMatchScope">正在读取匹配范围…</span> <a href="/settings/telegram" data-route>调整范围</a></p><p>内容取自 RSS 提供的摘要，可能不包含完整正文。</p></div>
+            <div class="match-rules"><p>不区分大小写，多个关键词需同时命中。</p><details class="match-rule-details"><summary>规则说明<Icon name="chevron-down" /></summary><div><p><span id="subscriptionMatchScope">正在读取匹配范围…</span> <a href="/settings/telegram" data-route>调整范围</a></p><p>摘要由 RSS 提供，可能不含完整正文。正则表达式按所填标志匹配。</p><p>作者、分类与关键词需同时满足；留空则不限。屏蔽词命中标题或摘要时不通知。</p></div></details></div>
             {/* 第二行：作者和分类 */}
             <div class="sub-form-row">
               <div class="sub-form-group">
@@ -53,7 +54,7 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/" }) => {
                 </select>
               </div>
             </div>
-            <div class="sub-form-row"><div class="sub-form-group" style="width:100%"><label for="excludeKeywords" class="sub-form-label">屏蔽词</label><FieldInput type="text" id="excludeKeywords" class="input-field" placeholder="如：出号, 求购, 已出（用逗号分隔）" maxlength="500" /><span class="form-hint">只监控所选分类；选择全部分类时不限制板块。标题或摘要包含屏蔽词时不通知。</span></div></div>
+            <div class="sub-form-row"><div class="sub-form-group" style="width:100%"><label for="excludeKeywords" class="sub-form-label">屏蔽词</label><FieldInput type="text" id="excludeKeywords" class="input-field" placeholder="如：出号, 求购, 已出（逗号分隔）" maxlength="500" /></div></div>
             {/* 第三行：添加按钮 */}
             <div class="sub-form-row sub-form-row-action">
               <button type="submit" class="btn btn-primary">添加订阅</button>
@@ -114,60 +115,7 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/" }) => {
       <TelegramSettings active={path === "/settings/telegram"} />
       <AccountSettings active={path === "/settings/account"} />
 
-      {/* 统计页面 */}
-      <section id="statsPage" class="route-page" hidden={path !== "/statistics"}><div class="workspace-heading"><div><h1>统计信息</h1><p>了解收录趋势与通知发送情况。</p></div></div>
-        <div class="page-body">
-          {/* 数字统计卡片 */}
-          <p class="form-hint" style="margin-bottom:12px">今日统计时区：UTC</p>
-          <div class="stats-grid-simple">
-            <div class="stat-card-simple">
-              <span class="stat-value" id="drawerStatTodayPushed">0</span>
-              <span class="stat-label">今日已推送</span>
-            </div>
-            <div class="stat-card-simple">
-              <span class="stat-value" id="drawerStatTodayPosts">0</span>
-              <span class="stat-label">今日帖子</span>
-            </div>
-            <div class="stat-card-simple">
-              <span class="stat-value" id="drawerStatPushed">0</span>
-              <span class="stat-label">累计已推送</span>
-            </div>
-            <div class="stat-card-simple">
-              <span class="stat-value" id="drawerStatTotalPosts">0</span>
-              <span class="stat-label">历史帖子</span>
-            </div>
-          </div>
-
-          {/* 最近 24小时发帖趋势 */}
-          <div class="chart-section">
-            <div class="chart-section-title">最近 24小时发帖趋势</div>
-            <div id="hourlyChart" class="hourly-chart">
-              {/* 加载占位 */}
-              {[...Array(24)].map((_, i) => (
-                <div class="hourly-bar-wrap">
-                  <div class="hourly-bar zero-bar" style={{ height: '2px' }}></div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 分类分布 */}
-          <div class="chart-section">
-            <div class="chart-section-title">分类分布</div>
-            <div id="categoryChart" class="category-chart">
-              <div class="chart-empty">加载中...</div>
-            </div>
-          </div>
-
-          {/* 时间范围选择器 (移至底部) */}
-          <div class="chart-range-selector" id="chartRangeSelector">
-            <button class="chart-range-btn active" data-days="-1">今日</button>
-            <button class="chart-range-btn" data-days="7">近 7 天</button>
-            <button class="chart-range-btn" data-days="30">近 30 天</button>
-            <button class="chart-range-btn" data-days="0">全部</button>
-          </div>
-        </div>
-      </section>
+      <StatisticsPage active={path === "/statistics"} />
 
       </DashboardSurface>
       <div id="drawerOverlay" class="drawer-overlay" style="display:none"></div>

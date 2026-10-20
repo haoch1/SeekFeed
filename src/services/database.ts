@@ -2,6 +2,7 @@ import type { Database } from 'bun:sqlite';
 import { createDatabaseConnection } from '../config/database';
 import type { BaseConfig, Post, KeywordSub } from '../types';
 import { logger } from '../utils/logger';
+import { getAnalytics } from './analytics';
 
 export class DatabaseService {
   private static instance: DatabaseService | undefined;
@@ -10,6 +11,15 @@ export class DatabaseService {
 
   constructor(private db: Database) {
     this.queryCache = new Map();
+  }
+
+  getAnalytics(days: number, offset: number) {
+    const key = this.getCacheKey('getSubscriptionsAnalytics', [days, offset]);
+    const cached = this.getFromCache<ReturnType<typeof getAnalytics>>(key);
+    if (cached) return cached;
+    const data = this.db.transaction(() => getAnalytics(this.db, days, offset))();
+    this.setCache(key, data, 10000);
+    return data;
   }
 
   // 静态工厂方法

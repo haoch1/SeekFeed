@@ -434,8 +434,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const result = await apiRequest("/api/stats/overview", { silent: quiet });
     if (!result?.success) return;
     const data = result.data;
-    const fields = { drawerStatTodayPushed: data.today_pushed, drawerStatTodayPosts: data.today_posts,
-      drawerStatPushed: data.pushed_posts, drawerStatTotalPosts: data.total_posts, overviewTotal: data.total_posts,
+    const fields = { overviewTotal: data.total_posts,
       overviewMatched: data.matched_not_pushed + data.pushed_posts, overviewPushed: data.pushed_posts };
     Object.entries(fields).forEach(([id, value]) => el(id).textContent = Number(value || 0).toLocaleString());
   }
@@ -455,233 +454,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // ============================================
   // 统计图表
   // ============================================
-  let currentChartDays = -1;
-  let chartRequest = 0;
-
-  const categoryNames = {
-    daily: '日常', tech: '技术', info: '情报', review: '测评',
-    trade: '交易', carpool: '拼车', promotion: '推广', life: '生活',
-    dev: 'Dev', expose: '曝光', inside: '内版', sandbox: '沙盒',
-    'photo-share': '图片',
-  };
-
-  async function loadChartData(days) {
-    const request = ++chartRequest;
-    const result = await apiRequest(`/api/stats/charts?days=${days}`);
-    if (request !== chartRequest || !result?.success) return;
-    renderHourlyChart(result.data.hourly || []);
-    renderCategoryChart(result.data.category || []);
-  }
-
-  function renderHourlyChart(data) {
-    const container = document.getElementById('hourlyChart');
-    if (!container) return;
-
-    if (!data || data.length === 0) {
-      container.innerHTML = '<div class="chart-empty">暂无数据</div>';
-      return;
-    }
-
-    // 最近 24 小时趋势：数据已按时间顺序排列，index 0 = 24h 前，index 23 = 1h 前
-    const chartData = data;
-
-    const maxCount = Math.max(...chartData.map(d => d.count), 1);
-    const width = container.clientWidth || 600;
-    const height = 130;
-    const padding = { top: 10, right: 10, bottom: 20, left: 24 };
-    
-    const innerWidth = width - padding.left - padding.right;
-    const innerHeight = height - padding.top - padding.bottom;
-
-    // 坐标转换函数
-    const getX = (index) => padding.left + (index / (chartData.length - 1 || 1)) * innerWidth;
-    const getY = (count) => padding.top + innerHeight - (count / maxCount) * innerHeight;
-
-    // 构建平滑曲线路径 (Catmull-Rom spline approximation)
-    let linePath = '';
-    let areaPath = '';
-    
-    if (chartData.length > 1) {
-      const points = chartData.map((d, i) => [getX(i), getY(d.count)]);
-      
-      linePath = `M ${points[0][0]},${points[0][1]}`;
-      areaPath = `M ${points[0][0]},${points[0][1]}`;
-      
-      for (let i = 0; i < points.length - 1; i++) {
-        const x0 = i > 0 ? points[i - 1][0] : points[i][0];
-        const y0 = i > 0 ? points[i - 1][1] : points[i][1];
-        const x1 = points[i][0];
-        const y1 = points[i][1];
-        const x2 = points[i + 1][0];
-        const y2 = points[i + 1][1];
-        const x3 = i < chartData.length - 2 ? points[i + 2][0] : points[i + 1][0];
-        const y3 = i < chartData.length - 2 ? points[i + 2][1] : points[i + 1][1];
-        
-        // Tension control (0.5 = Catmull-Rom)
-        const t = 0.25; 
-        
-        const cp1x = x1 + (x2 - x0) * t;
-        const cp1y = y1 + (y2 - y0) * t;
-        const cp2x = x2 - (x3 - x1) * t;
-        const cp2y = y2 - (y3 - y1) * t;
-        
-        linePath += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${x2},${y2}`;
-        areaPath += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${x2},${y2}`;
-      }
-      
-      // 闭合区域路径
-      areaPath += ` L ${points[points.length-1][0]},${padding.top + innerHeight} L ${points[0][0]},${padding.top + innerHeight} Z`;
-    }
-
-    // 生成网格和 Y 标签
-    const gridLines = [];
-    const yLabels = [];
-    const xLabels = [];
-    const yTicks = Math.min(4, maxCount);
-    
-    for (let i = 0; i <= yTicks; i++) {
-      const y = padding.top + innerHeight - (i / yTicks) * innerHeight;
-      const val = Math.round((i / yTicks) * maxCount);
-      gridLines.push(`<line class="chart-grid-line" x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" />`);
-      yLabels.push(`<text class="chart-y-label" x="${padding.left - 6}" y="${y + 3}">${val}</text>`);
-    }
-
-    // 生成 X 标签：显示具体小时 (HH:00)
-    const getHourLabel = (bucketIndex) => {
-      const pastTime = new Date(Date.now() - (24 - bucketIndex) * 60 * 60 * 1000);
-      return String(pastTime.getHours()).padStart(2, '0') + ':00';
-    };
-    [0, 6, 12, 18, 23].forEach((i) => {
-      if (i < chartData.length) {
-        const label = getHourLabel(i);
-        xLabels.push(`<text x="${getX(i)}" y="${height - 4}" text-anchor="middle" font-size="9" fill="var(--text-muted)">${label}</text>`);
-      }
-    });
-
-    // 交互点
-    const dots = chartData.map((d, i) => {
-      const cx = getX(i);
-      const cy = getY(d.count);
-      const hoursAgo = 24 - i;
-      return `<circle class="chart-dot" cx="${cx}" cy="${cy}" r="3" data-index="${i}" data-hours-ago="${hoursAgo}" data-count="${d.count}" />`;
-    }).join('');
-
-    container.innerHTML = `
-      <div class="line-chart-wrap" id="chartInteractionWrap">
-        <svg class="line-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-          <g class="chart-grid">
-            ${gridLines.join('')}
-            ${yLabels.join('')}
-            ${xLabels.join('')}
-          </g>
-          <path class="chart-area-path" d="${areaPath}" />
-          <path class="chart-line-path" d="${linePath}" />
-          <line class="chart-hover-line" id="chartHoverLine" y1="${padding.top}" y2="${padding.top + innerHeight}" />
-          <g class="chart-dots">${dots}</g>
-        </svg>
-        <div class="chart-tooltip" id="chartTooltip">
-          <div class="chart-tooltip-hour" id="tooltipHour"></div>
-          <div class="chart-tooltip-count" id="tooltipCount"></div>
-        </div>
-      </div>
-    `;
-
-    // 绑定交互
-    const wrap = document.getElementById('chartInteractionWrap');
-    const hoverLine = document.getElementById('chartHoverLine');
-    const tooltip = document.getElementById('chartTooltip');
-    const dotEls = wrap.querySelectorAll('.chart-dot');
-
-    wrap.addEventListener('mousemove', (e) => {
-      const rect = wrap.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      
-      // 寻找最近的点
-      let closestIdx = 0;
-      let minDiff = Infinity;
-      
-      chartData.forEach((_, i) => {
-        const diff = Math.abs(getX(i) - mouseX);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closestIdx = i;
-        }
-      });
-      
-      const d = chartData[closestIdx];
-      const dotX = getX(closestIdx);
-      const dotY = getY(d.count);
-
-      // 更新悬停线
-      hoverLine.setAttribute('x1', dotX);
-      hoverLine.setAttribute('x2', dotX);
-      hoverLine.classList.add('visible');
-
-      // 更新Tooltip：显示具体小时 (HH:00)
-      const pastTime = new Date(Date.now() - (24 - d.hour) * 60 * 60 * 1000);
-      const hourLabel = String(pastTime.getHours()).padStart(2, '0') + ':00';
-      document.getElementById('tooltipHour').textContent = hourLabel;
-      document.getElementById('tooltipCount').textContent = `${d.count} 篇`;
-      tooltip.style.left = `${dotX}px`;
-      tooltip.style.top = `${dotY - 45}px`;
-      tooltip.classList.add('visible');
-
-      // 激活圆点
-      dotEls.forEach(dot => dot.classList.remove('active'));
-      dotEls[closestIdx].classList.add('active');
-    });
-
-    wrap.addEventListener('mouseleave', () => {
-      hoverLine.classList.remove('visible');
-      tooltip.classList.remove('visible');
-      dotEls.forEach(dot => dot.classList.remove('active'));
-    });
-  }
-
-  function renderCategoryChart(data) {
-    const container = document.getElementById('categoryChart');
-    if (!container) return;
-
-    if (data.length === 0) {
-      container.innerHTML = '<div class="chart-empty">暂无数据</div>';
-      return;
-    }
-
-    const maxCount = Math.max(...data.map(d => d.count), 1);
-    container.innerHTML = data.map(d => {
-      const pct = Math.round((d.count / maxCount) * 100);
-      const label = escapeHtml(categoryNames[d.category] || d.category);
-      return `
-        <div class="category-bar-row">
-          <span class="category-bar-label" title="${label}">${label}</span>
-          <div class="category-bar-track">
-            <div class="category-bar-fill" style="width:${pct}%"></div>
-          </div>
-          <span class="category-bar-count">${d.count}</span>
-        </div>`;
-    }).join('');
-  }
-
-  function initCharts() {
-    const selector = document.getElementById('chartRangeSelector');
-    if (!selector) return;
-
-    selector.querySelectorAll('.chart-range-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        selector.querySelectorAll('.chart-range-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentChartDays = parseInt(btn.dataset.days, 10);
-        loadChartData(currentChartDays);
-      });
-    });
-    
-    // 监听窗口大小变化以重绘图表
-    window.addEventListener('resize', () => {
-      if (document.getElementById('hourlyChart')?.innerHTML.includes('line-chart-wrap')) {
-        loadChartData(currentChartDays);
-      }
-    });
-  }
+  const analytics = window.SeekFeedStatistics({ apiRequest, escapeHtml, renderIcon, getCategoryName, isLoggedIn });
 
   // ============================================
   // RSS 配置
@@ -981,7 +754,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const option = document.createElement("option");
       option.value = sub.id;
-      option.textContent = label;
+      option.textContent = `#${sub.id} · ${label}`;
       filterSubscription.appendChild(option);
     });
 
@@ -995,7 +768,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const result = await apiRequest("/api/subscriptions");
     const container = el("subscriptionsList");
     if (!result?.success) { container.textContent = "订阅加载失败，请刷新页面重试。"; return; }
-    container.innerHTML = result.data.length ? result.data.map(sub => `<div class="subscription-item ${sub.enabled === 0 ? "paused" : ""}" data-id="${sub.id}"><div class="subscription-description"><div class="subscription-keywords">${[sub.keyword1, sub.keyword2, sub.keyword3].filter(Boolean).map(word => `<span class="tag tag-blue">${escapeHtml(word)}</span>`).join("") || '<span class="tag">按作者 / 分类订阅</span>'}</div><div class="subscription-filters"><span class="subscription-state">${sub.enabled === 0 ? "已暂停" : "监控中"}</span>${sub.creator ? `<span>作者 ${escapeHtml(sub.creator)}</span>` : ""}${sub.category ? `<span>${escapeHtml(getCategoryName(sub.category))}</span>` : ""}</div>${sub.exclude_keywords ? `<div class="subscription-exclusions">屏蔽：${escapeHtml(sub.exclude_keywords)}</div>` : ""}</div><div class="subscription-controls"><button class="btn btn-secondary btn-xs toggle-sub" data-enabled="${sub.enabled === 0 ? 1 : 0}">${renderIcon(sub.enabled === 0 ? 'play' : 'pause')}${sub.enabled === 0 ? "恢复" : "暂停"}</button><button class="btn btn-danger btn-xs delete-sub">${renderIcon('trash')}删除</button></div></div>`).join("") : '<div class="empty-state-small"><div class="empty-title">还没有订阅</div><p class="form-hint">添加关键词、作者或分类，开始接收有价值的动态。</p></div>';
+    container.innerHTML = result.data.length ? result.data.map(sub => `<div class="subscription-item ${sub.enabled === 0 ? "paused" : ""}" data-id="${sub.id}"><div class="subscription-description"><div class="subscription-id">订阅 <span>#${sub.id}</span></div><div class="subscription-keywords">${[sub.keyword1, sub.keyword2, sub.keyword3].filter(Boolean).map(word => `<span class="tag tag-blue">${escapeHtml(word)}</span>`).join("") || '<span class="tag">按作者 / 分类订阅</span>'}</div><div class="subscription-filters"><span class="subscription-state">${sub.enabled === 0 ? "已暂停" : "监控中"}</span>${sub.creator ? `<span>作者 ${escapeHtml(sub.creator)}</span>` : ""}${sub.category ? `<span>${escapeHtml(getCategoryName(sub.category))}</span>` : ""}</div>${sub.exclude_keywords ? `<div class="subscription-exclusions">屏蔽：${escapeHtml(sub.exclude_keywords)}</div>` : ""}</div><div class="subscription-controls"><button class="btn btn-secondary btn-xs toggle-sub" data-enabled="${sub.enabled === 0 ? 1 : 0}">${renderIcon(sub.enabled === 0 ? 'play' : 'pause')}${sub.enabled === 0 ? "恢复" : "暂停"}</button><button class="btn btn-danger btn-xs delete-sub">${renderIcon('trash')}删除</button></div></div>`).join("") : '<div class="empty-state-small"><div class="empty-title">还没有订阅</div><p class="form-hint">添加关键词、作者或分类，开始接收有价值的动态。</p></div>';
     container.querySelectorAll(".toggle-sub").forEach(btn => btn.addEventListener("click", async () => {
       const item = btn.closest('.subscription-item');
       if (item.dataset.busy) return;
@@ -1077,7 +850,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (name === 'subscriptions') { loadSubscriptions(); loadMatchingScope(); }
     if (name === 'rss') loadRssConfig();
     if (name === 'telegram') loadTelegramConfig();
-    if (name === 'stats') { loadChartData(currentChartDays); updateStats(); }
+    if (name === 'stats') analytics.load();
     if (name === 'account') loadAccount();
     activePath = path;
     window.scrollTo({ top: routeScroll.get(path) || 0, behavior: 'instant' });
@@ -1294,7 +1067,7 @@ document.addEventListener("DOMContentLoaded", function () {
     initSettingsDropdown();
     initLoginModal();
     initLogout();
-    initCharts();
+    analytics.init();
 
     initAccount();
     navigate(location.pathname, false);
@@ -1302,7 +1075,7 @@ document.addEventListener("DOMContentLoaded", function () {
     updateStats();
     loadFilterSubscriptions();
     updateMonitor();
-    const liveTick = () => { if (!document.hidden) { updateMonitor(true); updateStats(true); refreshFeed(); } };
+    const liveTick = () => { if (!document.hidden) { updateMonitor(true); updateStats(true); refreshFeed(); analytics.tick(); } };
     setInterval(liveTick, 10000);
     document.addEventListener('visibilitychange', liveTick);
   }
