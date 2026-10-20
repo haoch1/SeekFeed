@@ -7,6 +7,8 @@ import { DatabaseService } from '../services/database'
 import type { SessionData } from '../types'
 import { requireSession } from '../middleware/session';
 import { sessionManagementId } from '../services/session';
+import { bodyLimit } from 'hono/body-limit';
+import { isAccountAvatar } from '../utils/avatar';
 
 type Bindings = {
   ENVIRONMENT: string
@@ -310,11 +312,29 @@ authRoutes.post('/init', async (c) => {
 
 
 // Account changes require the current password and revoke every existing session.
-for (const path of ['/account', '/preferences']) authRoutes.use(path, requireSession);
+for (const path of ['/account', '/preferences', '/avatar']) authRoutes.use(path, requireSession);
 
 authRoutes.get('/account', c => {
     const config = c.get('dbService').getBaseConfig();
-    return c.json({ success: true, data: { username: config?.username, session_expiry_hours: config?.session_expiry_hours || 168 } });
+    return c.json({ success: true, data: { username: config?.username, session_expiry_hours: config?.session_expiry_hours || 168, avatar: config?.avatar || null } });
+});
+
+authRoutes.put('/avatar', bodyLimit({
+    maxSize: 412000,
+    onError: c => c.json({ success: false, message: '头像文件过大，请重新选择图片。' }, 413),
+}), async c => {
+    const raw = await c.req.text();
+    if (Buffer.byteLength(raw) > 412000) return c.json({ success: false, message: '头像文件过大，请重新选择图片。' }, 413);
+    let body;
+    try { body = JSON.parse(raw); } catch { body = null; }
+    if (!body || !isAccountAvatar(body.avatar)) return c.json({ success: false, message: '请选择图片，通过头像上传入口重新上传。' }, 400);
+    c.get('dbService').updateBaseConfig({ avatar: body.avatar });
+    return c.json({ success: true, message: '头像已更新。', data: { avatar: body.avatar } });
+});
+
+authRoutes.delete('/avatar', c => {
+    c.get('dbService').updateBaseConfig({ avatar: null });
+    return c.json({ success: true, message: '已恢复默认头像。', data: { avatar: null } });
 });
 
 const accountSchema = z.object({

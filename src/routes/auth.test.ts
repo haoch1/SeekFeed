@@ -18,9 +18,11 @@ let db: DatabaseService;
 let sessions: SessionService;
 let sessionId: string;
 
+const avatar = 'data:image/png;base64,' + readFileSync(new URL('../../public/icons/seekfeed-192.png', import.meta.url)).toString('base64');
+
 beforeEach(() => {
     const sqlite = new Database(':memory:');
-    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown']) {
+    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '009_account_avatar']) {
         sqlite.exec(readFileSync(new URL(`../database/migrations/${name}.sql`, import.meta.url), 'utf8'));
     }
     db = new DatabaseService(sqlite);
@@ -37,6 +39,66 @@ beforeEach(() => {
     app.route('/telegram', telegramRoutes);
     app.route('/api', apiRoutes);
     app.route('/', pageRoutes);
+});
+
+describe('account avatar', () => {
+    const headers = () => ({ Authorization: `Bearer ${sessionId}`, 'Content-Type': 'application/json' });
+    const upload = (value: unknown, requestHeaders = headers()) => app.request('/auth/avatar', { method: 'PUT', headers: requestHeaders, body: JSON.stringify({ avatar: value }) });
+
+    it('requires a valid session for avatar reads and mutations', async () => {
+        for (const requestHeaders of [{ 'Content-Type': 'application/json' }, { ...headers(), Authorization: 'Bearer forged' }]) {
+            expect((await upload(avatar, requestHeaders)).status).toBe(401);
+            expect((await app.request('/auth/avatar', { method: 'DELETE', headers: requestHeaders })).status).toBe(401);
+            expect((await app.request('/auth/account', { headers: requestHeaders })).status).toBe(401);
+        }
+        db.db.query('UPDATE sessions SET expires_at = ?').run(new Date(Date.now() - 1000).toISOString());
+        expect((await upload(avatar)).status).toBe(401);
+        expect((await app.request('/auth/avatar', { method: 'DELETE', headers: headers() })).status).toBe(401);
+        expect(db.getBaseConfig()!.avatar).toBeNull();
+    });
+
+    it('persists a bounded PNG, invalidates cached profile data and preserves sessions and password', async () => {
+        expect(db.getBaseConfig()!.avatar).toBeNull();
+        const response = await upload(avatar);
+        expect(response.status).toBe(200);
+        expect((await response.json()).data.avatar).toBe(avatar);
+        const profile = await app.request('/auth/account', { headers: headers() });
+        expect(profile.headers.get('Cache-Control')).toContain('no-store');
+        expect((await profile.json()).data.avatar).toBe(avatar);
+        expect(db.getBaseConfig()!.avatar).toBe(avatar);
+        expect(db.getBaseConfig()!.password).toBe('unused-test-hash');
+        expect(sessions.verifySession(sessionId).valid).toBe(true);
+        const publicPage = await (await app.request('/hot')).text();
+        expect(publicPage).not.toContain(avatar);
+        expect((await app.request('/api/config', { method: 'PUT', headers: headers(), body: JSON.stringify({ avatar }) })).status).toBe(400);
+    });
+
+    it('returns the avatar after a fresh login and restores the default independently', async () => {
+        db.updateBaseConfig({ password: await bcrypt.hash('AvatarTest123!', 4) });
+        await upload(avatar);
+        const login = await new AuthService(db).login({ username: 'tester', password: 'AvatarTest123!' });
+        expect(login.success).toBe(true);
+        expect(login.user!.avatar).toBe(avatar);
+        const response = await app.request('/auth/avatar', { method: 'DELETE', headers: headers() });
+        expect(response.status).toBe(200);
+        expect((await response.json()).data.avatar).toBeNull();
+        expect(db.getBaseConfig()!.avatar).toBeNull();
+        expect(sessions.verifySession(sessionId).valid).toBe(true);
+        expect(sessions.verifySession(login.sessionId!).valid).toBe(true);
+    });
+
+    it('rejects remote URLs, SVG, oversized dimensions, malformed data and animation without replacing the saved avatar', async () => {
+        await upload(avatar);
+        const raw = Buffer.from(avatar.split(',')[1], 'base64');
+        const wide = Buffer.from(raw); wide.writeUInt32BE(257, 16);
+        const animation = Buffer.concat([raw.subarray(0, 33), Buffer.from([0, 0, 0, 0, 97, 99, 84, 76, 0, 0, 0, 0]), raw.subarray(33)]);
+        for (const value of [null, 12, 'https://example.com/avatar.png', 'data:image/svg+xml;base64,PHN2Zy8+', 'data:image/png;base64,dGV4dA==', avatar + '!', 'data:image/png;base64,' + wide.toString('base64'), 'data:image/png;base64,' + animation.toString('base64'), 'data:image/png;base64,' + raw.subarray(0, -12).toString('base64')]) {
+            expect((await upload(value)).status).toBe(400);
+            expect(db.getBaseConfig()!.avatar).toBe(avatar);
+        }
+        expect((await upload('x'.repeat(413000))).status).toBe(413);
+        expect(db.getBaseConfig()!.avatar).toBe(avatar);
+    });
 });
 
 describe('account settings and session expiry', () => {
@@ -71,6 +133,22 @@ describe('account settings and session expiry', () => {
         }
         db.db.query('UPDATE sessions SET expires_at = ? WHERE session_id = ?').run(new Date(Date.now() - 1000).toISOString(), sessionId);
         for (const path of paths) expect((await app.request(path, { headers: headers() })).status).toBe(401);
+    });
+
+    it('keeps fuzzy search public fields and private match filters isolated', async () => {
+        const sub = db.createKeywordSub({ keyword1: 'vmiss' });
+        for (const [id, status] of [[101, 1], [102, 2], [103, 3]]) {
+            db.createPost({ post_id: id, title: 'VMISS 补货', memo: '', category: 'trade', creator: 'alice', pub_date: new Date().toISOString(), push_status: status, sub_id: status === 2 ? undefined : sub.id });
+        }
+        const query = '/api/posts?search=vmsis&searchMode=fuzzy';
+        const publicData = (await (await app.request(query)).json()).data;
+        expect(publicData.total).toBe(3);
+        expect(Object.keys(publicData.posts[0]).sort()).toEqual(['category', 'creator', 'memo', 'post_id', 'pub_date', 'title']);
+        expect((await app.request(query + '&pushStatusIn=1,3')).status).toBe(401);
+        const matched = (await (await app.request(query + '&pushStatusIn=1,3', { headers: headers() })).json()).data;
+        expect(matched.total).toBe(2);
+        expect(matched.posts.every((post: any) => [1, 3].includes(post.push_status))).toBe(true);
+        expect((await app.request('/api/posts?searchMode=invalid')).status).toBe(400);
     });
 
     it('keeps private delivery aggregates out of every public analytics level', async () => {

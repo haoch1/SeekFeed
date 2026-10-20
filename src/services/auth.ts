@@ -24,6 +24,7 @@ export interface AuthResult {
   user?: {
     username: string;
     isInitialized: boolean;
+    avatar?: string | null;
   };
 }
 
@@ -198,6 +199,7 @@ export class AuthService {
         sessionData,
         user: {
           username: config.username,
+          avatar: config.avatar || null,
           isInitialized: true
         }
       };

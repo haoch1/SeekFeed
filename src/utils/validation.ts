@@ -103,6 +103,7 @@ export const paginationSchema = z.object({
     creator: z.string().max(100).optional(),
     category: categorySelectionSchema.optional(),
     search: z.string().max(200).optional(),
+    searchMode: z.enum(['contains', 'fuzzy']).default('contains'),
     subId: z.coerce.number().int().positive().optional(),
 });
 

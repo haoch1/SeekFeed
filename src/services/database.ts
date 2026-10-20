@@ -5,6 +5,7 @@ import { logger } from '../utils/logger';
 import { getAnalytics } from './analytics';
 import { HotService } from './hot';
 import { getKeywordAnalytics } from './keywordAnalytics';
+import { createFuzzyPostSearch } from '../utils/postSearch';
 
 export class DatabaseService {
   private static instance: DatabaseService | undefined;
@@ -194,6 +195,10 @@ export class DatabaseService {
       updates.push('session_expiry_hours = ?');
       values.push(config.session_expiry_hours);
     }
+    if (config.avatar !== undefined) {
+      updates.push('avatar = ?');
+      values.push(config.avatar);
+    }
 
     if (updates.length === 0) {
       return this.getBaseConfig();
@@ -364,6 +369,7 @@ export class DatabaseService {
       creator?: string;
       category?: string;
       search?: string;
+      searchMode?: 'contains' | 'fuzzy';
       subId?: number;
     }
   ): {
@@ -407,7 +413,7 @@ export class DatabaseService {
         }
       }
       
-      if (filters.search) {
+      if (filters.search && filters.searchMode !== 'fuzzy') {
         conditions.push('(p.title LIKE ? OR p.creator LIKE ?)');
         params.push(`%${filters.search}%`, `%${filters.search}%`);
       }
@@ -419,7 +425,24 @@ export class DatabaseService {
       }
     }
     
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    let whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    let fuzzyTotal: number | undefined;
+    if (filters?.search && filters.searchMode === 'fuzzy') {
+      const matches = createFuzzyPostSearch(filters.search);
+      const ids: number[] = [];
+      fuzzyTotal = 0;
+      // Stream only searchable fields; preserve private filters before evaluating search.
+      const candidates = this.db.query(`SELECT p.post_id, p.title, p.creator FROM posts p ${whereClause} ORDER BY p.pub_date DESC, p.post_id DESC`);
+      for (const row of candidates.iterate(...params) as Iterable<Pick<Post, 'post_id' | 'title' | 'creator'>>) {
+        if (!matches(row.title) && !matches(row.creator || '')) continue;
+        if (fuzzyTotal >= offset && ids.length < limit) ids.push(row.post_id);
+        fuzzyTotal++;
+      }
+      if (!ids.length) return { posts: [], total: fuzzyTotal, page, totalPages: Math.ceil(fuzzyTotal / limit) };
+      conditions.push(`p.post_id IN (${ids.map(() => '?').join(',')})`);
+      params.push(...ids);
+      whereClause = `WHERE ${conditions.join(' AND ')}`;
+    }
     
     // 查询文章，LEFT JOIN 订阅表以获取匹配的订阅详情
     const postsStmt = this.db.query(`
@@ -432,10 +455,10 @@ export class DatabaseService {
       FROM posts p
       LEFT JOIN keywords_sub ks ON p.sub_id = ks.id
       ${whereClause}
-      ORDER BY p.pub_date DESC 
+      ORDER BY p.pub_date DESC, p.post_id DESC
       LIMIT ? OFFSET ?
     `);
-    const posts = postsStmt.all(...params, limit, offset) as Post[];
+    const posts = postsStmt.all(...params, limit, fuzzyTotal === undefined ? offset : 0) as Post[];
     
     // 查询总数（使用与主查询相同的别名和 JOIN）
     const countStmt = this.db.query(`
@@ -444,8 +467,8 @@ export class DatabaseService {
       LEFT JOIN keywords_sub ks ON p.sub_id = ks.id
       ${whereClause}
     `);
-    const countResult = countStmt.get(...params) as { count: number };
-    const total = countResult?.count || 0;
+    const countResult = fuzzyTotal === undefined ? countStmt.get(...params) as { count: number } : null;
+    const total = fuzzyTotal ?? countResult?.count ?? 0;
     const totalPages = Math.ceil(total / limit);
     
     return {

@@ -24,8 +24,8 @@
 .hot-row { min-height: 92px; padding-block: 18px; border-bottom: 1px solid var(--border-light); transition: background-color .15s; }
 .hot-row:last-child { border-bottom: none; }
 .hot-row:hover { background: var(--bg-secondary); }
-.hot-rank { font-size: 15px; font-weight: 600; color: var(--text-secondary); font-variant-numeric: tabular-nums; width: 28px; text-align: center; }
-.hot-rank.top-rank { height: 28px; display: grid; place-items: center; border-radius: 6px; background: var(--primary-alpha); color: var(--primary); }
+.hot-rank { font-size: 15px; font-weight: 600; color: var(--text-secondary); font-variant-numeric: tabular-nums; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 6px; background: color-mix(in srgb, var(--primary) 4%, var(--bg-card)); text-align: center; }
+.hot-rank.top-rank { background: var(--primary-alpha); color: var(--primary); }
 .hot-post { min-width: 0; }
 .hot-post a { display: block; width: fit-content; max-width: 100%; font-size: 14px; font-weight: 600; line-height: 1.65; color: var(--text-primary); text-decoration: none; overflow-wrap: anywhere; }
 .hot-post a:hover { color: var(--primary); }

@@ -6,29 +6,56 @@ document.addEventListener("DOMContentLoaded", function () {
   const sessionId = localStorage.getItem("sessionId");
   const isLoggedIn = !!sessionId;
   const identityKey = 'seekfeed.identity';
+  let currentAvatar = null, identityUsername = null, avatarBusy = false, identityVersion = 0;
+  function renderAccountAvatars() {
+    document.querySelectorAll('[data-account-avatar]').forEach(node => {
+      node.replaceChildren();
+      if (!currentAvatar) { node.textContent = 'S'; return; }
+      const image = document.createElement('img');
+      image.src = currentAvatar; image.alt = '';
+      image.addEventListener('error', () => { node.textContent = 'S'; }, { once: true });
+      node.append(image);
+    });
+    const remove = document.getElementById('avatarRemoveBtn');
+    if (remove) remove.disabled = !currentAvatar || avatarBusy;
+  }
   function clearIdentity() {
+    identityVersion++;
+    identityUsername = null;
     document.documentElement.dataset.auth = 'guest';
     localStorage.removeItem('sessionId');
     localStorage.removeItem('user');
     sessionStorage.removeItem(identityKey);
+    currentAvatar = null;
+    renderAccountAvatars();
   }
-  function showIdentity(username, token = sessionId) {
+  function showIdentity(username, token = sessionId, avatar = currentAvatar) {
     const label = document.getElementById('accountLabel');
     label.textContent = username || (token ? '账户' : '访客');
     label.style.visibility = 'visible';
-    if (username && token) sessionStorage.setItem(identityKey, JSON.stringify({ sessionId: token, username }));
+    identityUsername = username;
+    currentAvatar = token && typeof avatar === 'string' && avatar.startsWith('data:image/png;base64,') && avatar.length <= 410000 ? avatar : null;
+    renderAccountAvatars();
+    document.getElementById('accountAvatarButton').setAttribute('aria-label', token ? '账号与头像' : '登录');
+    document.getElementById('accountAvatarHint').textContent = token ? '账号与头像' : '点击登录';
+    if (username && token) {
+      try { sessionStorage.setItem(identityKey, JSON.stringify({ sessionId: token, username, avatar: currentAvatar })); } catch { /* Identity can be loaded from the server if browser storage is full. */ }
+    }
   }
   function initIdentity() {
     let cached;
     try { cached = JSON.parse(sessionStorage.getItem(identityKey)); } catch { /* Ignore an invalid local cache. */ }
-    if (cached?.sessionId === sessionId && isLoggedIn) showIdentity(cached.username);
+    if (cached?.sessionId === sessionId && isLoggedIn) showIdentity(cached.username, sessionId, cached.avatar);
     else {
       sessionStorage.removeItem(identityKey);
       showIdentity(null);
     }
-    if (isLoggedIn) apiRequest('/auth/account', { silent: true }).then(result => {
-      if (result?.success) showIdentity(result.data.username);
-    });
+    const refreshProfile = async () => {
+      const version = identityVersion;
+      const result = await apiRequest('/auth/account', { silent: true });
+      if (result?.success && version === identityVersion) showIdentity(result.data.username, sessionId, result.data.avatar);
+    };
+    if (isLoggedIn) refreshProfile();
     window.addEventListener('storage', event => {
       if (event.key === 'sessionId' || event.key === null) {
         if (localStorage.getItem('sessionId') !== sessionId) {
@@ -37,24 +64,22 @@ document.addEventListener("DOMContentLoaded", function () {
           location.reload();
         }
       }
+      if (event.key === 'seekfeed.avatarChanged' && isLoggedIn) refreshProfile();
     });
   }
 
   // 根据登录状态显示/隐藏元素
-  const loginBtn = document.getElementById("loginBtn");
   const settingsDropdown = document.getElementById("settingsDropdown");
   const subscribedOnlyChip = document.getElementById("subscribedOnlyChip");
   const filterSubscription = document.getElementById("filterSubscription");
   
   if (isLoggedIn) {
     // 已登录：显示设置菜单和订阅相关功能，隐藏登录按钮
-    if (loginBtn) loginBtn.style.display = "none";
     if (settingsDropdown) settingsDropdown.style.display = "block";
     if (subscribedOnlyChip) subscribedOnlyChip.style.display = "inline-flex";
     if (filterSubscription) filterSubscription.style.display = "block";
   } else {
     // 未登录：显示登录按钮，隐藏设置菜单和订阅相关功能
-    if (loginBtn) loginBtn.style.display = "flex";
     if (settingsDropdown) settingsDropdown.style.display = "none";
     if (subscribedOnlyChip) subscribedOnlyChip.style.display = "none";
     if (filterSubscription) filterSubscription.style.display = "none";
@@ -313,6 +338,7 @@ document.addEventListener("DOMContentLoaded", function () {
     currentPage = requestedPage = state?.page || 1;
     el('searchInput').value = state?.search || '';
     el('filterCreator').value = state?.creator || '';
+    el('filterSearchMode').value = currentFilters.searchMode || 'contains';
     for (const [id, key] of [['filterCategory', 'category'], ['filterSubscription', 'subId'], ['filterStatus', 'pushStatus']]) el(id).value = currentFilters[key] || '';
     el('clearSearchBtn').style.display = el('searchInput').value ? 'block' : 'none';
     el('filterPanel').style.display = state?.expanded ? 'block' : 'none';
@@ -546,7 +572,7 @@ document.addEventListener("DOMContentLoaded", function () {
       el("filterPanel").style.display = open ? "block" : "none";
       el("filterToggleBtn").setAttribute("aria-expanded", String(open));
     });
-    [["filterCategory", "category"], ["filterSubscription", "subId"], ["filterStatus", "pushStatus"]].forEach(([id, key]) => {
+    [["filterCategory", "category"], ["filterSubscription", "subId"], ["filterStatus", "pushStatus"], ["filterSearchMode", "searchMode"]].forEach(([id, key]) => {
       el(id).addEventListener("change", e => {
         currentFilters[key] = e.target.value;
         if (key === "pushStatus") setMatched(activePath === '/matched');
@@ -563,6 +589,7 @@ document.addEventListener("DOMContentLoaded", function () {
       clearTimeout(searchTimer); clearTimeout(creatorTimer);
       searchTimer = creatorTimer = null;
       ["searchInput", "filterCreator", "filterCategory", "filterSubscription", "filterStatus"].forEach(id => el(id).value = "");
+      el('filterSearchMode').value = 'contains';
       window.SeekFeedControls.refreshSelects();
       el("clearSearchBtn").style.display = "none"; currentFilters = {}; setMatched(activePath === '/matched'); loadPosts(1);
     });
@@ -1167,10 +1194,11 @@ document.addEventListener("DOMContentLoaded", function () {
     addEventListener('popstate', () => navigate(location.pathname, false));
   }
   async function loadAccount() {
+    const version = identityVersion;
     const result = await apiRequest('/auth/account');
     if (result?.success) {
       el('accountUsername').value = result.data.username;
-      showIdentity(result.data.username);
+      if (version === identityVersion) showIdentity(result.data.username, sessionId, result.data.avatar);
       el('sessionHours').value = String(result.data.session_expiry_hours);
       window.SeekFeedControls.refreshSelects();
     }
@@ -1183,6 +1211,48 @@ document.addEventListener("DOMContentLoaded", function () {
     }).join('');
   }
   function initAccount() {
+    const upload = el('avatarUploadBtn'), remove = el('avatarRemoveBtn'), fileInput = el('avatarFile');
+    upload.addEventListener('click', () => fileInput.click());
+    const saveAvatar = async (button, action) => {
+      if (avatarBusy) return;
+      avatarBusy = true;
+      const version = ++identityVersion;
+      (button === upload ? remove : upload).disabled = true;
+      try {
+        await window.SeekFeedControls.pending(button, async () => {
+          const result = await action();
+          if (!result?.success) return Toast.error(result?.message || '头像保存失败，请重试。');
+          if (version !== identityVersion) return;
+          showIdentity(identityUsername, sessionId, result.data.avatar);
+          try { localStorage.setItem('seekfeed.avatarChanged', String(Date.now())); } catch { /* Cross-tab refresh is optional. */ }
+          Toast.success(result.message);
+        }, '保存中…');
+      } catch (error) {
+        Toast.error(error.message || '图片读取失败，请重新选择。');
+      } finally {
+        avatarBusy = false; upload.disabled = false; remove.disabled = !currentAvatar;
+      }
+    };
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files[0]; fileInput.value = '';
+      if (!file) return;
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return Toast.error('请选择 JPG、PNG 或 WebP 图片。');
+      if (file.size > 5 * 1024 * 1024) return Toast.error('图片不能超过 5 MB。');
+      await saveAvatar(upload, async () => {
+        const source = new Image(), url = URL.createObjectURL(file);
+        try {
+          source.src = url;
+          await source.decode();
+          if (!source.naturalWidth || !source.naturalHeight || source.naturalWidth * source.naturalHeight > 32000000) throw new Error('图片尺寸过大或无法读取，请换一张图片。');
+          const canvas = document.createElement('canvas'); canvas.width = canvas.height = 256;
+          const side = Math.min(source.naturalWidth, source.naturalHeight);
+          canvas.getContext('2d').drawImage(source, (source.naturalWidth - side) / 2, (source.naturalHeight - side) / 2, side, side, 0, 0, 256, 256);
+          const avatar = canvas.toDataURL('image/png');
+          return await apiRequest('/auth/avatar', { method: 'PUT', body: JSON.stringify({ avatar }) });
+        } finally { URL.revokeObjectURL(url); }
+      });
+    });
+    remove.addEventListener('click', () => saveAvatar(remove, () => apiRequest('/auth/avatar', { method: 'DELETE' })));
     el('sessionsList').addEventListener('click', event => {
       const button = event.target.closest('.revoke-session');
       if (!button) return;
@@ -1316,7 +1386,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (result.success) {
           this.showMessage("登录成功！", "success");
           localStorage.setItem("sessionId", result.sessionId);
-          showIdentity(result.user?.username, result.sessionId);
+          showIdentity(result.user?.username, result.sessionId, result.user?.avatar);
           
           // 延迟刷新页面以应用登录状态
           setTimeout(() => {
@@ -1335,9 +1405,10 @@ document.addEventListener("DOMContentLoaded", function () {
   function initLoginModal() {
     LoginModal.init();
 
-    // 登录按钮点击打开弹窗
-    document.getElementById("loginBtn")?.addEventListener("click", () => {
-      LoginModal.open();
+    document.getElementById('accountAvatarButton')?.addEventListener('click', () => {
+      if (!isLoggedIn) return LoginModal.open();
+      closeMobileSidebar(false);
+      navigate('/settings/account');
     });
   }
 

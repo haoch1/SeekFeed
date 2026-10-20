@@ -1,66 +1,65 @@
-# SeekFeed 组件规范
+# SeekFeed 界面规范
 
-界面参考 [ReUI Components](https://reui.io/components) 的布局与组件组织方式，使用 Hono JSX 和原生 JavaScript 实现。所有页面共用 `Layout.tsx` 和 `public/css/workspace.css`；不加载旧主题样式。
+## 实现与参考
 
-具体对照 ReUI 官方的 [带图标分段选项 c-tabs-9](https://github.com/keenthemes/reui/blob/main/public/r/styles/radix-nova/c-tabs-9.json)、[开关 c-switch-1](https://github.com/keenthemes/reui/blob/main/public/r/styles/radix-nova/c-switch-1.json) 和 [省略号分页 c-pagination-10](https://github.com/keenthemes/reui/blob/main/public/r/styles/radix-nova/c-pagination-10.json)。保留等宽选项、清晰选中态、统一图标间距、首尾页和省略号，并适配当前 Hono 页面和品牌色。
+界面参考 [ReUI](https://reui.io/components) 的组件组织、表单与面板层级，使用 Hono 服务端 JSX、原生 JavaScript 及 CSS 实现。具体对照包括分段选项、开关与分页；参考范围统一登记于 [README](../README.md#参考项目与资源)。
 
-## 设计变量
+`Layout.tsx` 提供公共页面结构，`workspace.css` 提供设计变量和通用组件，`mobile.css` 提供窄屏及触控适配。统计与热榜使用独立样式文件，颜色继承公共变量，不加载旧版主题文件。
+
+## 视觉约束
 
 | 类别 | 规范 |
 | --- | --- |
-| 主色 | `#4f46e5`，悬停 `#4338ca` |
-| 明亮背景、正文、边框 | `#ffffff`、`#18181b`、`#e4e4e7` |
-| 深色背景、正文、边框 | `#101012`、`#f4f4f5`、`#2d2d33` |
-| 字体 | 系统 sans-serif，中文使用 Microsoft YaHei 等本机字体 |
-| 字号 | 正文/控件 13–14px，辅助 11–12px，页面标题 24px |
-| 圆角 | 控件 6px，面板 8px；不混用大胶囊和渐变卡片 |
-| 线条 | 1px 中性边框，功能图标使用 Lucide、24px 网格、1.7px 描边 |
-| 间距 | 4px 基础刻度，内容区 30px，移动端 16px |
+| 主色 | 明亮主题 `#4f46e5`；深色主题 `#818cf8` |
+| 层级 | 中性页面背景、卡片背景与清晰边框，避免装饰性渐变 |
+| 字体 | 统一系统无衬线字体栈；中文、数字和字母使用一致的字号与字重规则 |
+| 字号 | 正文与控件以 13–14px 为主，辅助信息 11–12px，页面标题 24px |
+| 圆角 | 通用控件 6px，面板 8px，头像为圆形 |
+| 图标 | Lucide 线性图标，24px 网格、1.7px 描边，操作按钮按控件缩放 |
+| 间距 | 4px 基础刻度；同排卡片保持边缘、标题和操作区域对齐 |
+| 排名 | 所有热榜序号使用等尺寸圆角底框；前三名使用主色浅底，其余使用更浅底色 |
+| 图表 | 统一坐标、单位、图例与提示样式，按任务选择柱形、折线、环形、热力或排行 |
 
-颜色、边框、字体和焦点样式通过 CSS 变量统一提供；明暗主题只覆盖变量。
+主题变量控制颜色、边框、阴影与焦点。SeekFeed S 标识为品牌资源，功能图标许可见 [图标说明](../public/icons/README.md)。
 
-SeekFeed 品牌使用原创 S 形标识，界面、favicon、Apple 图标与 PWA 使用同一源文件。功能图标选自 [Lucide Static](https://lucide.dev/guide/static) 1.59.0，图标路径统一存放在 `src/components/icons.json` 中，服务端与动态组件均内联渲染 SVG，避免主题切换后外部引用失效；导航、按钮、关闭、主题切换、空状态与通知共用该图标集，许可见 `licenses/lucide.txt`。
+## 页面与面板
 
-## 组件
+热榜、最新帖子、命中订阅、订阅管理、统计与三项设置使用独立路由，支持直达、刷新及前进后退。配置页宽屏使用对齐的双栏面板，窄屏自然堆叠。
 
-- **工作台**：228px 侧栏、56px 顶栏、三栏统计、紧凑帖子列表。
-- **按钮**：主按钮、描边次按钮、文字按钮、危险按钮共享高度、圆角和焦点环。
-- **表单**：输入框、选择器、开关、分段选择、辅助文字共用样式；每个控件关联 label。
-- **反馈**：状态徽标、空状态、加载骨架与 Toast 使用一致色板，文案反映真实数据。
-- **页面**：订阅 `/subscriptions`、统计 `/statistics`、账号与安全 `/settings/account`、RSS `/settings/rss`、Telegram `/settings/telegram` 使用独立地址，支持直达、刷新和前进后退。配置在宽屏使用双栏卡片，窄屏堆叠，避免固定表单宽度留下大块空白。
-- **临时操作**：登录和危险操作确认使用居中对话框，支持 Escape、焦点管理。
-- **独立页面**：初始化、错误与 PWA 检查页面共用品牌、边框、输入和按钮。
+订阅列表、设备列表和作者排行使用限定高度及内部滚动，内容增加不应持续扩大相邻面板。空状态、加载及错误状态保留稳定布局。
 
-## 交互与适配
+移动端侧栏使用对话框语义与背景锁定。主要触控目标至少为 44px，表单输入避免触发浏览器自动缩放。内容自 320px 宽度起不应产生整页水平溢出；密集图表可在卡片内滚动。
 
-登录对话框支持 Escape、遮罩关闭、焦点圈定/恢复，背景设为 inert。窄屏折叠侧栏，表单在 320px 起保持无水平溢出。动效尊重 `prefers-reduced-motion`，所有可操作元素具备键盘焦点状态。
+手机热榜将分类、排序和图标刷新按钮置于同一行，不显示条数选择，固定请求前三十条。操作区域优先紧凑排布，避免单个组件独占一行造成无效留白。
 
-列表搜索和作者筛选独立防抖，使用 AbortController 避免旧响应覆盖新结果。列表翻页保留当前行高与滚动位置，数字按钮保留首尾页和省略号。错误保留当前结果并提供重试，空列表提供清空筛选入口。
+## 账号与认证呈现
 
-非登录输入由 `FieldInput` 统一标记 `data-1p-ignore` 和 `data-op-ignore`；登录表单保留 username/current-password 的语义。选择器支持方向键、Home/End、输入定位和 Escape。保存按钮有忙碌状态，禁止重复提交。
+访客点击头像登录，悬停或聚焦显示提示；管理员点击头像进入账号与头像设置，右侧仅显示退出图标。账号头像独立保存，可恢复默认。
 
-Telegram 统一使用 A 版纯文字格式：粗体标题、等宽 01–10 序号和简洁字段，不使用装饰图标；数据库原文保持不变。热榜底部只显示更新时间，异常时保留必要的延迟提醒。帖子与订阅通知启用链接预览。原生命令菜单使用 SeekFeed 头像和简短说明；动态文本必须转义，长列表按完整条目拆分消息。
+首次绘制根据本地会话状态预设导航展示，随后由服务端验证身份。账号名称缓存与当前会话绑定，失效或退出时清除，避免访客、管理员和用户名交替闪现。前端展示状态不构成服务端授权依据。
 
-## Surface contrast, aligned settings and category selection
+登录对话框支持 Escape、遮罩关闭、焦点圈定与恢复；背景使用 `inert`。普通设置字段与密码管理器自动填充语义分离；登录字段保留正确的用户名和当前密码标记。
 
-The workspace uses a light neutral canvas with white cards, visible cool-gray borders and subtle elevation. Dark surfaces use separate border tokens. ReUI card/input hierarchy is shared across all seven routes rather than tuned per screenshot. Two-column settings stretch the primary card to the full height of the two related cards, with its actions at the bottom; narrow screens stack naturally.
+## 控件与反馈
 
-Category controls use accessible single selects, with keyboard navigation and Escape. Hot ranking adds a matching count selector with exactly 30, 50 and 100; 30 is the initial value, and automatic updates preserve the selection.
+按钮统一高度、描边、圆角、焦点与忙碌生命周期。异步操作禁止重复提交；快速响应不显示进度，较慢响应显示延迟加载反馈，结束后恢复原图标和文本。
 
-Active devices show the IP recorded at login. Direct deployments use the socket address. Deployments behind a controlled reverse proxy can enable TRUST_PROXY=true; that proxy must overwrite X-Real-IP and keep the application port private. Existing sessions retain their original recorded IP.
+列表搜索使用独立防抖和 AbortController，仅提交最新响应。最新帖子与命中订阅分别保存筛选及页码。翻页失败保留原列表；后台刷新不清空已加载内容，也不移动阅读位置。
 
-The feed polls current results every 10 seconds while visible and refreshes on returning to the tab. Page one reconciles keyed post rows without a loading flash, preserving the visible post anchor. Older pages retain their contents and show a compact new-post action. Filters and page selection remain intact; hidden tabs and settings pages do not poll the post list.
+帖子筛选区提供包含匹配与容错匹配选项，默认包含匹配；两个列表分别保存匹配方式。容错搜索不扩大命中订阅的数据范围，也不应用于订阅规则或统计分析。
 
-## Shared motion and concise labels
+关键词推荐和热门标题词只负责填入输入框，分析由提交按钮或回车触发。重置、折叠、添加及移除对比均使用可辨识按钮。
 
-The topbar stays at the top while content scrolls. Route changes capture the outgoing and incoming content with View Transitions (200ms out, 300ms in, at most 8px motion), keeping the sidebar and topbar stable. Unsupported browsers use a short sequential fade. Rapid navigation, history and reduced-motion preferences must remain correct.
+图表命中区域限制在实际柱体、数据点及其紧邻范围。标签、图例、空白与滚动条不触发数据提示；图表滚动或失焦清除临时提示。支持键盘选择、Escape 取消与触控点选。
 
-Every pointer or keyboard activation has a shared 90ms press and 360ms release/tint feedback, independent of network latency. Labels and layout remain stable, including while a button is disabled for a request. Reduced-motion preferences suppress movement.
+## 动效与持续更新
 
-Buttons share one progress lifecycle: wait 280ms before showing progress, then keep it visible for at least 420ms and fade it out over 160ms. Fast operations do not show a spinner. Existing labels, icons and hit targets are restored after success or failure. Loading never fades an entire populated list. Background updates never animate or replace unchanged rows.
+页面切换保持侧栏及顶栏稳定，避免对正文执行造成字形残影的位移和叠层动画。主题切换和按钮反馈使用短时过渡，并尊重 `prefers-reduced-motion`。
 
-Remove generic page introductions and collection diagnostics from the primary surface. Keep timestamps, time ranges, chart units, validation, security consequences and actionable error messages.
+可见帖子列表每十秒检查更新，热榜每三十秒检查缓存；隐藏页面不持续刷新列表。按帖子 ID 复用行节点，仅更新变化内容。较早分页保留当前结果并提供新帖提示。
 
-Trend charts use compact start-time ticks (00:00 or month/day), complete time ranges in tooltips, and a compact rounded value badge above every bar. Badges use a soft brand tint and fine border, with coordinated bar/badge emphasis on hover and keyboard focus. Dense charts scroll within the card so value badges never overlap or shrink illegibly.
+## Telegram 呈现
 
-Post lists share synchronized pagination: compact previous/current/next controls in the toolbar and direct page numbers below. Filters reset to page one; failed requests retain the last successful page and rows. Rapid paging commits only the latest request. Manual page changes gently reveal the new rows and return to the toolbar below the fixed header; background updates never animate or move the reader to another page. Both pagers expose disabled boundaries and the current page to assistive technology.
+系统消息使用纯文字标题、粗体标题字段、等宽两位序号及普通链接。动态字段进行 HTML 转义，长列表按完整条目拆分；帖子原有内容保持原文，链接预览开启。
+
+热榜菜单仅保留 `/hot`，消息内通过按钮切换榜单。更新时间使用 UTC+8，异常时保留必要的延迟说明。

@@ -130,6 +130,7 @@ apiRoutes.get('/posts', createQueryValidationMiddleware(paginationSchema), async
                 creator: query.creator,
                 category: query.category,
                 search: query.search,
+                searchMode: query.searchMode,
                 subId: query.subId
             }
         );

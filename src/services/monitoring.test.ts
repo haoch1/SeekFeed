@@ -57,6 +57,31 @@ describe('subscription matching', () => {
 });
 
 describe('multi-category monitoring and search', () => {
+    it('limits typo tolerance to search, preserves recorded matches and computes full pagination totals', () => {
+        const sub = db.createKeywordSub({ keyword1: 'vmiss' });
+        db.batchCreatePosts([
+            post(1, { title: 'VMISS 补货', category: 'trade', push_status: 1, sub_id: sub.id }),
+            post(2, { title: 'VMISS 评测', category: 'info', push_status: 3, sub_id: sub.id }),
+            post(3, { title: 'VMISS 未命中', push_status: 2 }),
+            post(4, { title: '其他帖子', creator: 'vmiss', push_status: 0 }),
+            post(5, { title: '无关帖子', creator: 'dmit' }),
+        ]);
+        const filters = { search: 'vmsis', searchMode: 'fuzzy' as const };
+        expect(db.getPostsWithPagination(1, 1, { search: 'vmsis' }).total).toBe(0);
+        const first = db.getPostsWithPagination(1, 1, filters);
+        expect(first.total).toBe(4);
+        expect(first.totalPages).toBe(4);
+        const allIds = Array.from({ length: 4 }, (_, i) => db.getPostsWithPagination(i + 1, 1, filters).posts[0].post_id);
+        expect(new Set(allIds).size).toBe(4);
+        expect(db.getPostsWithPagination(5, 1, filters)).toMatchObject({ total: 4, totalPages: 4, posts: [] });
+        expect(db.getPostsWithPagination(1, 10, { ...filters, pushStatusIn: [1, 3], subId: sub.id }).total).toBe(2);
+        expect(db.getPostsWithPagination(1, 10, { ...filters, category: 'trade' }).total).toBe(1);
+        const matcher = new MatcherService(db);
+        expect(matcher.checkPostMatches(post(100, { title: 'vmsis 补货' }))).toHaveLength(0);
+        expect(matcher.checkPostMatches(post(100, { title: 'VMISS 补货' }))).toHaveLength(1);
+        expect(db.getKeywordAnalytics(['vmsis'], new Date().toISOString().slice(0, 10), 0, 'title').series[0].total).toBe(0);
+        expect(db.getPostByPostId(3)?.push_status).toBe(2);
+    });
     it('matches any selected board while requiring all keywords and respecting exclusions', () => {
         db.createKeywordSub({ keyword1: 'DMIT', keyword2: '补货', category: 'info,trade', exclude_keywords: '已出' });
         const matcher = new MatcherService(db);

@@ -19,7 +19,11 @@ body.is-overlay-open { position: fixed; top: var(--overlay-scroll-top); left: 0;
     .workspace-nav { overflow-y: auto; min-height: 0; overscroll-behavior: contain; padding-bottom: 12px; }
     .nav-item { min-height: 48px; font-size: 14px; }
     .workspace-account { flex-shrink: 0; margin-top: 8px; }
-    .workspace-account .account-login { min-height: 44px; }
+    .account-avatar { width: 44px; height: 44px; }
+    .account-profile { gap: 12px; padding-bottom: 18px; margin-bottom: 20px; align-items: flex-start; }
+    .profile-avatar { width: 56px; height: 56px; flex-basis: 56px; }
+    .account-avatar-actions { gap: 4px; }
+    .account-avatar-actions .btn { min-height: 40px; padding-inline: 9px; }
     .workspace-heading { flex-direction: row; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
     .workspace-heading h1 { font-size: 22px; letter-spacing: -.3px; }
     .workspace-heading h1 > svg { width: 24px; height: 24px; }

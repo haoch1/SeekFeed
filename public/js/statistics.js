@@ -351,7 +351,7 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             });
             el('analyticsTopics').addEventListener('click', event => {
                 const button = event.target.closest('[data-analysis-topic]');
-                if (button) keywordAnalysis.analyze(button.dataset.analysisTopic);
+                if (button) keywordAnalysis.prepare(button.dataset.analysisTopic);
             });
             el('notificationRangeSelector').querySelectorAll('button').forEach(button => button.addEventListener('click', () => {
                 const next = Number(button.dataset.days);

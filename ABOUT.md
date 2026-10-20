@@ -1,0 +1,25 @@
+# 关于 SeekFeed
+
+SeekFeed 是面向 NodeSeek 社区的自托管监控与分析平台，集成 RSS 帖子采集、实时热榜、关键词订阅、Telegram 通知及社区统计分析。
+
+## 项目定位
+
+项目采用单管理员模式。访客可访问论坛公开内容及其聚合统计；订阅规则、命中记录、投递状态、系统配置与设备管理仅对通过认证的管理员开放。项目不提供多用户租户隔离。
+
+SeekFeed 为独立项目，不属于 NodeSeek 官方产品。公开帖子及相关计数来自已配置 RSS 与 NodeSeek 公开列表；数据完整性取决于来源覆盖、保留范围与采集状态。热榜评分为本项目定义，不代表论坛官方排名。
+
+## 技术架构
+
+- 运行时与服务：Bun、Hono、TypeScript、服务端 JSX。
+- 数据存储：SQLite，包含订阅、帖子、会话、通知状态与热榜样本。
+- 前端：原生 JavaScript、CSS 变量及 SVG 图表，无客户端 React 运行时。
+- 热榜采集：Python、curl_cffi 与 Beautiful Soup。
+- 部署：Docker Compose、GHCR 多架构镜像及 GitHub Actions。
+
+## 设计与来源
+
+界面采用靛蓝主色、中性面板与统一线性图标，支持明暗主题、键盘操作和移动端触控。参考项目、具体采用范围及第三方资源许可统一记录于 [README](README.md#参考项目与资源)。
+
+## 相关文档
+
+[功能与部署入口](README.md) · [统计口径](docs/analytics.md) · [热榜规则](docs/hot-ranking.md) · [开发指南](CONTRIBUTING.md) · [MIT 许可证](LICENSE)

@@ -4,7 +4,7 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
     const offset = -new Date().getTimezoneOffset();
     const localDate = () => new Date(Date.now() + offset * 60000).toISOString().slice(0, 10);
     const percent = (n, total) => total ? (n / total * 100).toFixed(1).replace(/\.0$/, '') + '%' : '—';
-    let data, selected = 0, hours = 1, request = 0, lastLoad = 0, busy = false, controller, config, chartIndex = 0, collapsed = false;
+    let data, selected = 0, hours = 1, request = 0, lastLoad = 0, busy = false, controller, config, chartIndex = 0, collapsed = false, draft = false;
     const selectedTerm = () => data.series[selected];
     const normalize = term => (term || '').normalize('NFKC').toLocaleLowerCase('zh-CN').trim();
     const color = index => `var(--analytics-color-${index})`;
@@ -54,6 +54,7 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
         el('keywordAuthorLimit').value = '5';
         cancelRequest();
         data = config = undefined;
+        draft = false;
         selected = chartIndex = 0; hours = 1; lastLoad = 0;
         el('keywordAnalysisForm').reset();
         el('analysisDate').value = el('analysisDate').max = localDate();
@@ -255,18 +256,19 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
     function submit() {
         if(!el('keywordAnalysisForm').reportValidity())return;
         if(!el('analysisKeyword').value.trim()){el('keywordAnalysisStatus').textContent='请输入分析关键词。';el('analysisKeyword').focus();return;}
+        draft = false;
         config={q:el('analysisKeyword').value.trim(),compare1:el('analysisCompare1').value.trim(),compare2:el('analysisCompare2').value.trim(),date:el('analysisDate').value,offset:String(offset),scope:el('analysisScope').value};
         return window.SeekFeedControls.pending(el('keywordAnalyzeBtn'),()=>load());
     }
     return {
-        analyze(term) {
+        prepare(term, scroll = true) {
             cancelRequest();
+            draft = true;
             if (collapsed) el('keywordToggle').click();
             el('analysisKeyword').value = term;
-            el('analysisDate').value = localDate();
-            el('keywordAnalysis').scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+            if (scroll) el('keywordAnalysis').scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
             el('analysisKeyword').focus({ preventScroll: true });
-            submit();
+            el('keywordAnalysisStatus').textContent = '关键词已填入，请点击“开始分析”或按回车提交。';
         },
         init() {
             const mobile = matchMedia('(max-width: 760px), (max-width: 1000px) and (pointer: coarse)');
@@ -285,12 +287,12 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
                 el('keywordToggle').setAttribute('aria-expanded', String(!collapsed));
                 el('keywordToggle').querySelector('span').textContent = collapsed ? '展开' : '收起';
                 if (collapsed) { const wasBusy = busy; cancelRequest(); if (wasBusy) lastLoad = 0; }
-                else if (config && Date.now() - lastLoad > 60000) load(true);
+                else if (config && !draft && Date.now() - lastLoad > 60000) load(true);
             });
             el('keywordComparison').addEventListener('click',e=>{const button=e.target.closest('[data-term-index]');if(button){selected=Number(button.dataset.termIndex);render();el('keywordComparison').querySelector(`[data-term-index="${selected}"]`).focus({preventScroll:true});}});
             el('keywordBucketSelector').addEventListener('click',e=>{const button=e.target.closest('[data-hours]');if(!button)return;hours=Number(button.dataset.hours);el('keywordBucketSelector').querySelectorAll('button').forEach(n=>{n.classList.toggle('active',n===button);n.setAttribute('aria-pressed',String(n===button));});renderChart();});
             el('keywordDailyChart').addEventListener('click',e=>{const button=e.target.closest('[data-analysis-date]');if(button){el('analysisDate').value=button.dataset.analysisDate;submit();}});
-            el('keywordSuggestions').addEventListener('click',e=>{const button=e.target.closest('[data-keyword]');if(button){el('analysisKeyword').value=button.dataset.keyword;submit();}});
+            el('keywordSuggestions').addEventListener('click',e=>{const button=e.target.closest('[data-keyword]');if(button)this.prepare(button.dataset.keyword,false);});
             let width=0;new ResizeObserver(entries=>{const next=Math.round(entries[0].contentRect.width);if(next&&next!==width){width=next;renderChart();}}).observe(el('keywordHourChart'));
             let dailyWidth=0;new ResizeObserver(entries=>{const next=Math.round(entries[0].contentRect.width);if(next&&next!==dailyWidth){dailyWidth=next;renderDailyChart();}}).observe(el('keywordDailyChart'));
         },
@@ -298,6 +300,6 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
             const next=JSON.stringify(terms.slice(0,6).map(row=>row.term));if(el('keywordSuggestions').dataset.terms===next)return;
             el('keywordSuggestions').dataset.terms=next;el('keywordSuggestions').innerHTML=terms.slice(0,6).map(row=>`<button class="btn btn-text" type="button" data-keyword="${esc(row.term)}">${esc(row.term)}</button>`).join('');
         },
-        tick(){if(config&&!collapsed&&!busy&&Date.now()-lastLoad>60000)load(true);el('analysisDate').max=localDate();},
+        tick(){if(config&&!draft&&!collapsed&&!busy&&Date.now()-lastLoad>60000)load(true);el('analysisDate').max=localDate();},
     };
 };

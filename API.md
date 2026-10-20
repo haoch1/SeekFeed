@@ -1,617 +1,148 @@
-# SeekFeed API 文档
+# SeekFeed API
 
-## 基础信息
+## 协议与认证
 
-- **Base URL**: `http://localhost:3010`
-- **认证方式**: 数据库 Session，使用 Bearer 请求头
-- **Content-Type**: `application/json`
+默认服务地址为 `http://localhost:3010`。请求与响应使用 JSON；成功响应通常为 `{ "success": true, "data": ... }`，失败响应包含 `success: false` 与 `message`。
 
-## 认证与账号设置
+受保护请求使用 `Authorization: Bearer <sessionId>`。Session 为数据库保存的随机凭据，不是 JWT。访客可调用公开读取接口；携带无效、过期或已注销凭据时返回 `401`，不会自动降级为访客。
 
-`GET /auth/check-init` 检查初始化状态。首次使用通过 `POST /auth/init` 提交 `username`、`password`、`confirmPassword`，此接口只允许初始化一次。
+API、认证响应禁止共享缓存。客户端不得将私有响应交由 Service Worker 缓存。以下示例中的凭据和域名均为占位值。
 
-`POST /auth/login` 提交 JSON `{ "username": "admin", "password": "your-password" }`，成功返回 `{ "success": true, "sessionId": "随机会话凭据", "user": { "username": "admin", "isInitialized": true } }`。
+## 初始化与账号
 
-后续受保护请求携带 `Authorization: Bearer <sessionId>`。会话为数据库保存的随机凭据，默认 7 天过期，每个账号最多 5 个活跃会话。
+| 方法与路径 | 认证 | 请求与行为 |
+| --- | --- | --- |
+| `GET /auth/check-init` | 否 | 返回初始化状态 |
+| `POST /auth/init` | 否 | `username`、`password`、`confirmPassword`；仅允许首次初始化 |
+| `POST /auth/register` | 否 | 首次初始化的兼容入口，已有管理员时拒绝注册 |
+| `POST /auth/login` | 否 | `username`、`password`；成功返回顶层 `sessionId` 与 `user` |
+| `POST /auth/verify` | 凭据在请求体 | `{ "sessionId": "..." }`；验证会话 |
+| `POST /auth/refresh` | 凭据在请求体 | `{ "sessionId": "..." }`；更新有效会话 |
+| `POST /auth/logout` | 凭据在请求体 | `{ "sessionId": "..." }`；注销指定会话 |
+| `GET /auth/account` | 是 | 返回 `username`、`session_expiry_hours`、`avatar`，不返回密码或哈希 |
+| `PUT /auth/account` | 是 | `username`、`currentPassword`、可选 `newPassword`；成功后全部会话失效 |
+| `PUT /auth/preferences` | 是 | `session_expiry_hours` 仅接受 `1`、`24`、`168`、`720`，对新会话生效 |
+| `PUT /auth/avatar` | 是 | `{ "avatar": "data:image/png;base64,..." }`；独立保存头像 |
+| `DELETE /auth/avatar` | 是 | 恢复默认头像，返回 `data.avatar: null` |
+| `GET /auth/sessions` | 是 | 活跃设备、时间、IP、`current` 与设备管理标识 `id` |
+| `DELETE /auth/sessions/:id` | 是 | 注销自己的指定设备；`data.current` 表示当前设备是否被注销 |
+| `POST /auth/logout-all` | 是 | 注销包含当前设备在内的全部会话 |
 
-| 接口 | 请求 / 行为 |
+用户名修改接受 3–50 字符，新密码接受 8–50 字符；新密码为空时保留已有密码。默认会话有效期为七天，最多保留五个活跃会话。设备管理标识不可用于登录，错误格式返回 `400`，不存在的设备返回 `404`。
+
+头像入口接收静态 PNG Data URL：最大宽高为 256 × 256，解码后不超过 300 KiB，字符串不超过 410,000 字符，请求体上限为 412,000 字节。超限请求体返回 `413`；格式不符返回 `400`。网页上传入口接受最大 5 MiB 的 JPG、PNG 或 WebP，并在浏览器裁剪转换。SVG、远程 URL 与 APNG 不被接收。头像修改不改变密码，不注销会话。
+
+登录响应示例：
+
+```json
+{
+  "success": true,
+  "message": "登录成功",
+  "sessionId": "<sessionId>",
+  "user": { "username": "admin", "isInitialized": true, "avatar": null }
+}
+```
+
+## 公开帖子
+
+`GET /api/posts` 支持以下查询参数：
+
+| 参数 | 默认值／限制 |
 | --- | --- |
-| `POST /auth/verify` | JSON `{ "sessionId": "..." }` 验证会话 |
-| `POST /auth/logout` | JSON `{ "sessionId": "..." }` 注销该会话 |
-| `GET /auth/account` | 需认证；返回用户名和 `session_expiry_hours`，不返回密码 |
-| `PUT /auth/account` | 需认证；JSON `{ "username": "new-admin", "currentPassword": "...", "newPassword": "..." }`。新密码为空时保留密码；用户名 3–50 字，新密码 8–50 字。成功后所有会话失效，需要重新登录 |
-| `PUT /auth/preferences` | 需认证；JSON `{ "session_expiry_hours": 168 }`，仅接受 `1`、`24`、`168`、`720`；对新会话生效 |
-| `GET /auth/sessions` | 需认证；返回活跃设备、创建/到期时间、`current` 和不可用作登录凭据的管理标识 `id`，不暴露可重用的会话 ID |
-| `DELETE /auth/sessions/:id` | 需认证；使用设备列表的管理标识注销自己的指定设备，返回 `data.current` 标明是否为当前设备；无效格式为 400，不存在或不属于本账号为 404 |
-| `POST /auth/logout-all` | 需认证；注销包括当前设备在内的所有会话 |
+| `page` | 默认 1，正整数 |
+| `limit` | 默认 30，1–100 |
+| `search` | 最多 200 字符 |
+| `searchMode` | `contains`（默认）或 `fuzzy`；仅影响标题与作者搜索，不改变订阅命中或推送状态 |
+| `creator` | 最多 100 字符 |
+| `category` | 逗号分隔分类 |
+| `pushStatus` | 0–3，需认证 |
+| `pushStatusIn` | 逗号分隔状态，需认证 |
+| `pushStatusNot` | 0–3，需认证 |
+| `subId` | 正整数，需认证 |
 
-通用 `PUT /api/config` 不接受用户名、密码或会话有效期，账号设置必须使用上述接口验证。
+响应 `data` 包含 `posts`、`total`、`page`、`totalPages`。访客帖子字段仅包含 `post_id`、`title`、`memo`、`category`、`creator`、`pub_date`，不包含命中规则及推送状态。
 
-## 统计总览与关键词
+## 热榜
 
-`GET /api/stats/analytics?days=-1&offset=480&category=tech` 返回按发帖时间统计的总览。`days` 支持 `-1`（今日）、`7`、`30`、`0`（全部）；`offset` 为时区偏移分钟，范围 −840 至 840；`category` 可省略或传空字符串查看所有分类，最多 100 字符。分类过滤同时作用于各项统计，`availableCategories` 始终返回当前日期范围内可用的分类；`authors` 最多返回 50 名。公开响应不包含订阅规则和订阅 ID。
+`GET /api/hot` 为公开接口。查询参数：
 
-`GET /api/stats/keywords` 使用独立的 `date`、`offset`、`q`、`compare1`、`compare2` 和 `scope`，不继承总览分类。每个词独立返回全天、时段、七天趋势、分类和最多 50 名活跃作者；共同命中另外返回，不把多个关键词合并成一个数量。
+| 参数 | 可选值 |
+| --- | --- |
+| `period` | `live`（默认）、`day`、`week` |
+| `category` | 分类键，默认不筛选 |
+| `sort` | `heat`（默认）、`views`、`replies` |
+| `limit` | `30`（默认）、`50`、`100` |
 
-## 配置管理
+`POST /api/hot/refresh` 需要认证，遵守采集冷却和异常退避；采集未启用时返回 `409`。页面轮询及访客刷新读取已有缓存。响应中的原始热度用于排序，网页展示乘以 40 后四舍五入的整数。完整定义见 [热榜规则](docs/hot-ranking.md)。
 
-### 获取系统配置
+## 统计
+
+| 接口 | 认证 | 范围 |
+| --- | --- | --- |
+| `GET /api/stats/overview` | 可选 | 全部／今日收录总数；私有命中与投递字段仅对认证请求返回 |
+| `GET /api/stats/analytics` | 可选 | 社区总览、趋势、分类、作者、活跃时段与标题词 |
+| `GET /api/stats/keywords` | 可选 | 独立关键词序列、时段、七天趋势、分类、作者与交集 |
+| `GET /api/stats/charts` | 可选 | 兼容图表读取，`days` 默认 7 |
+| `GET /api/stats/subscription-ranking` | 是 | 订阅排行、规则统计与时间范围 |
+| `GET /api/stats`、`GET /api/match-stats` | 是 | 系统及匹配统计 |
+
+总览与订阅排行接受 `days=-1|7|30|0`，分别代表今日、近七天、近三十天、全部；默认 `-1`。`offset` 为整数时区偏移分钟，范围 −840 至 840，默认 0。总览可选 `category`，最多 100 字符；可用分类由 `availableCategories` 返回。活跃作者最多返回五十项。
+
+关键词查询：
+
 ```http
-GET /api/config
-Authorization: Bearer <sessionId>
+GET /api/stats/keywords?q=DMIT&compare1=Claude&date=2026-10-20&offset=480&scope=title
 ```
 
-**响应示例**:
-```json
-{
-  "success": true,
-  "data": {
-    "id": 1,
-    "username": "admin",
-    "bot_token": "123456:ABC-DEF...",
-    "chat_id": "123456789",
-    "bound_user_name": "John Doe",
-    "bound_user_username": "johndoe",
-    "stop_push": 0,
-    "only_title": 0,
-    "rss_url": "https://rss.nodeseek.com/",
-    "rss_interval_seconds": 60,
-    "rss_proxy": null,
-    "created_at": "2024-01-01T00:00:00.000Z",
-    "updated_at": "2024-01-01T00:00:00.000Z"
-  }
-}
-```
+`q` 必填，1–60 字符；`compare1`、`compare2` 可选，分别最多 60 字符。`date` 必填，为有效且不晚于所选时区当天的 `YYYY-MM-DD` 日期。`scope` 为 `title`（默认）或 `content`（标题与 RSS 摘要）。各词独立计数，不区分大小写，重复词去重。关键词分析不继承总览分类。
 
-### 更新系统配置
-```http
-PUT /api/config
-Authorization: Bearer <sessionId>
-Content-Type: application/json
+公开统计不包含订阅规则、命中状态、投递队列或通知指标。详细口径见 [统计分析](docs/analytics.md)。
 
-{
-  "chat_id": "987654321",
-  "stop_push": 0,
-  "only_title": 1,
-  "rss_url": "https://rss.nodeseek.com/",
-  "rss_interval_seconds": 60,
-  "rss_proxy": "http://127.0.0.1:7890"
-}
-```
+## 订阅
 
-### 设置 Telegram Bot Token
-```http
-POST /api/bot-token
-Authorization: Bearer <sessionId>
-Content-Type: application/json
+所有订阅接口需要认证。
 
-{
-  "bot_token": "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
-}
-```
+| 方法与路径 | 行为 |
+| --- | --- |
+| `GET /api/subscriptions` | 返回全部规则 |
+| `POST /api/subscriptions` | 新增规则，成功为 `201` |
+| `PUT /api/subscriptions/:id` | 部分更新，保留 ID 和历史关联 |
+| `DELETE /api/subscriptions/:id` | 删除规则 |
 
-## 订阅管理
+规则字段为 `keyword1`、`keyword2`、`keyword3`、`creator`、`category`、`exclude_keywords`、`enabled`。关键词及作者最多 100 字符，屏蔽词最多 500 字符；`enabled` 为 0 或 1。分类可由逗号分隔多个键。新增及完整更新后的规则至少保留一个关键词、作者或分类条件。空字符串可清除可选过滤条件。编辑规则不会重新匹配历史帖子。
 
-### 获取订阅列表
-```http
-GET /api/subscriptions
-Authorization: Bearer <sessionId>
-```
+## 配置与监控
 
-**响应示例**:
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": 1,
-      "keyword1": "Docker",
-      "keyword2": "容器",
-      "keyword3": null,
-      "creator": null,
-      "category": "tech",
-      "created_at": "2024-01-01T00:00:00.000Z",
-      "updated_at": "2024-01-01T00:00:00.000Z"
-    }
-  ]
-}
-```
+下表均需认证。
 
-### 添加订阅
-```http
-POST /api/subscriptions
-Authorization: Bearer <sessionId>
-Content-Type: application/json
+| 方法与路径 | 行为 |
+| --- | --- |
+| `GET /api/config`、`PUT /api/config` | 读取或更新允许的通知／RSS 配置，响应排除密码 |
+| `POST /api/bot-token` | 设置 `bot_token`，可选 `webhook_url` |
+| `GET /api/rss/config`、`PUT /api/rss/config` | RSS 地址、间隔与代理 |
+| `GET /api/rss/validate` | RSS 配置校验 |
+| `POST /api/rss/test-connection` | 测试请求中的 `rss_url` |
+| `POST /api/rss/restart` | 重启 RSS 调度 |
+| `POST /api/rss/fetch` | 执行一次受并发保护的采集与通知处理 |
+| `GET /api/scheduler/status` | 调度状态 |
+| `POST /api/scheduler/rss/run` | 手动执行 RSS 任务 |
+| `POST /api/posts/:postId/push/:subId` | 按指定订阅推送帖子 |
 
-{
-  "keyword1": "Docker",
-  "keyword2": "容器",
-  "keyword3": "部署",
-  "creator": "admin",
-  "category": "tech"
-}
-```
+RSS 更新字段为 `rss_url`、`rss_interval_seconds`（10–3600）及 `rss_proxy`。当前调度会读取新间隔；`/rss/restart` 用于显式重新启动任务。通用配置更新严格限制字段，不接受 `username`、`password`、`session_expiry_hours` 或 `avatar`。
 
-### 更新订阅
-```http
-PUT /api/subscriptions/1
-Authorization: Bearer <sessionId>
-Content-Type: application/json
+## Telegram
 
-{
-  "keyword1": "Kubernetes",
-  "keyword2": "K8s"
-}
-```
+`POST /telegram/webhook` 供 Telegram 入站更新使用，由 Webhook 密钥验证，不使用管理员 Session。其他管理接口需要管理员 Session。
 
-### 删除订阅
-```http
-DELETE /api/subscriptions/1
-Authorization: Bearer <sessionId>
-```
+| 路径前缀 | 主要接口 |
+| --- | --- |
+| `/api/webhook` | `GET /status`；`POST /setup`、`/disable`、`/test-connection`、`/start-polling`、`/stop-polling`、`/clear-webhook`、`/clear-settings`、`/manage-binding` |
+| `/api/push` | `GET /status`、`/bot-info`；`POST /setup`、`/set-chat-id`、`/test-send`、`/send-message` |
+| `/api/telegram` | `GET /status`；`POST /test`、`/send-test`、`/unbind` |
+| `/telegram` | `GET /bot-info`；`POST /set-webhook`、`/test-message` |
 
-## 文章管理
+Webhook 使用公网 HTTPS 地址；Polling 与 Webhook 为互斥连接方式。命令及热榜按钮仅向已绑定聊天开放。
 
-### 获取文章列表
-```http
-GET /api/posts?page=1&limit=20&pushStatus=0&creator=admin&category=tech
-Authorization: Bearer <sessionId>
-```
+## 状态码
 
-**查询参数**:
-- `page`: 页码（默认: 1）
-- `limit`: 每页数量（默认: 30，最大: 100）
-- `pushStatus`: 推送状态（0: 未推送, 1: 已推送, 2: 无需推送）
-- `creator`: 创建者筛选
-- `category`: 分类筛选
-
-**响应示例**:
-```json
-{
-  "success": true,
-  "data": {
-    "posts": [
-      {
-        "id": 1,
-        "post_id": 12345,
-        "title": "Docker 容器化部署指南",
-        "memo": "详细介绍如何使用 Docker 进行应用容器化部署...",
-        "category": "tech",
-        "creator": "admin",
-        "push_status": 0,
-        "sub_id": null,
-        "pub_date": "2024-01-01T00:00:00.000Z",
-        "push_date": null,
-        "created_at": "2024-01-01T00:00:00.000Z"
-      }
-    ],
-    "total": 100,
-    "page": 1,
-    "totalPages": 5
-  }
-}
-```
-
-### 手动抓取 RSS
-```http
-POST /api/rss/fetch
-Authorization: Bearer <sessionId>
-```
-
-**响应示例**:
-```json
-{
-  "success": true,
-  "data": {
-    "new": 5,
-    "updated": 0,
-    "skipped": 15
-  },
-  "message": "RSS 更新成功"
-}
-```
-
-### 手动推送文章
-```http
-POST /api/posts/12345/push/1
-Authorization: Bearer <sessionId>
-```
-
-## 统计信息
-
-### 获取系统统计
-```http
-GET /api/stats
-Authorization: Bearer <sessionId>
-```
-
-**响应示例**:
-```json
-{
-  "success": true,
-  "data": {
-    "total_posts": 1000,
-    "unpushed_posts": 50,
-    "pushed_posts": 800,
-    "skipped_posts": 150,
-    "total_subscriptions": 10,
-    "today_posts": 25,
-    "today_messages": 15,
-    "last_update": "2024-01-01T12:00:00.000Z"
-  }
-}
-```
-
-### 获取匹配统计
-```http
-GET /api/match-stats
-Authorization: Bearer <sessionId>
-```
-
-## 系统管理
-
-### 数据清理
-```http
-POST /api/cleanup
-Authorization: Bearer <sessionId>
-```
-
-**响应示例**:
-```json
-{
-  "success": true,
-  "data": {
-    "deletedCount": 100
-  },
-  "message": "清理完成，删除了 100 条记录"
-}
-```
-
-### RSS 配置管理
-
-#### 获取 RSS 配置
-```http
-GET /api/rss/config
-Authorization: Bearer <sessionId>
-```
-
-**响应示例**:
-```json
-{
-  "success": true,
-  "data": {
-    "rss_url": "https://rss.nodeseek.com/",
-    "rss_interval_seconds": 60,
-    "rss_proxy": ""
-  }
-}
-```
-
-#### 更新 RSS 配置
-```http
-PUT /api/rss/config
-Authorization: Bearer <sessionId>
-Content-Type: application/json
-
-{
-  "rss_url": "https://rss.nodeseek.com/",
-  "rss_interval_seconds": 60,
-  "rss_proxy": "http://127.0.0.1:7890"
-}
-```
-
-**参数说明**:
-- `rss_url`: RSS 源地址（可选）
-- `rss_interval_seconds`: 抓取间隔秒数，范围 10-3600（可选）
-- `rss_proxy`: HTTP/HTTPS 代理地址，留空表示不使用代理（可选）
-
-#### 测试 RSS 连接
-```http
-POST /api/rss/test-connection
-Authorization: Bearer <sessionId>
-Content-Type: application/json
-
-{
-  "rss_url": "https://rss.nodeseek.com/"
-}
-```
-
-**响应示例**:
-```json
-{
-  "success": true,
-  "data": {
-    "accessible": true,
-    "message": "RSS 源可正常访问"
-  }
-}
-```
-
-#### 重启 RSS 任务
-修改抓取间隔后需要重启任务才能生效：
-```http
-POST /api/rss/restart
-Authorization: Bearer <sessionId>
-```
-
-**响应示例**:
-```json
-{
-  "success": true,
-  "message": "RSS 任务已重启"
-}
-```
-
-### 获取定时任务状态
-```http
-GET /api/scheduler/status
-Authorization: Bearer <sessionId>
-```
-
-**响应示例**:
-```json
-{
-  "success": true,
-  "data": {
-    "rssTask": {
-      "running": true,
-      "nextRun": "2024-01-01T12:01:00.000Z"
-    },
-    "cleanupTask": {
-      "running": true,
-      "nextRun": "2024-01-02T02:00:00.000Z"
-    }
-  }
-}
-```
-
-### 手动执行 RSS 任务
-```http
-POST /api/scheduler/rss/run
-Authorization: Bearer <sessionId>
-```
-
-## Telegram 集成
-
-### Webhook 处理
-```http
-POST /telegram/webhook
-Content-Type: application/json
-
-{
-  "update_id": 123456,
-  "message": {
-    "message_id": 1,
-    "from": {
-      "id": 123456789,
-      "first_name": "John",
-      "username": "johndoe"
-    },
-    "chat": {
-      "id": 123456789,
-      "type": "private"
-    },
-    "date": 1640995200,
-    "text": "/start"
-  }
-}
-```
-
-### 设置 Webhook
-```http
-POST /telegram/set-webhook
-Authorization: Bearer <sessionId>
-Content-Type: application/json
-
-{
-  "webhookUrl": "https://your-domain.com/telegram/webhook"
-}
-```
-
-### 获取 Bot 信息
-```http
-GET /telegram/bot-info
-Authorization: Bearer <sessionId>
-```
-
-### 发送测试消息
-```http
-POST /telegram/test-message
-Authorization: Bearer <sessionId>
-Content-Type: application/json
-
-{
-  "message": "这是一条测试消息"
-}
-```
-
-## 错误响应格式
-
-所有错误响应都遵循以下格式：
-
-```json
-{
-  "success": false,
-  "message": "错误描述",
-  "code": "ERROR_CODE",
-  "details": {}
-}
-```
-
-### 常见错误码
-
-- `400 Bad Request`: 请求参数错误
-- `401 Unauthorized`: 未授权或 Token 无效
-- `403 Forbidden`: 权限不足
-- `404 Not Found`: 资源不存在
-- `500 Internal Server Error`: 服务器内部错误
-
-### 验证错误示例
-
-```json
-{
-  "success": false,
-  "message": "用户名不能为空",
-  "field": "username",
-  "code": "required"
-}
-```
-
-## 数据模型
-
-### BaseConfig
-```typescript
-interface BaseConfig {
-  id?: number;
-  username: string;
-  password: string;
-  bot_token?: string;
-  chat_id: string;
-  bound_user_name?: string;
-  bound_user_username?: string;
-  stop_push: number;
-  only_title: number;
-  rss_url?: string;           // RSS 源地址
-  rss_interval_seconds?: number;  // 抓取间隔秒数
-  rss_proxy?: string;         // HTTP/HTTPS 代理地址
-  created_at?: string;
-  updated_at?: string;
-}
-```
-
-### Post
-```typescript
-interface Post {
-  id?: number;
-  post_id: number;
-  title: string;
-  memo: string;
-  category: string;
-  creator: string;
-  push_status: number; // 0: 未推送, 1: 已推送, 2: 无需推送
-  sub_id?: number;
-  pub_date: string;
-  push_date?: string;
-  created_at?: string;
-}
-```
-
-### KeywordSub
-```typescript
-interface KeywordSub {
-  id?: number;
-  keyword1?: string;
-  keyword2?: string;
-  keyword3?: string;
-  creator?: string;
-  category?: string;
-  created_at?: string;
-  updated_at?: string;
-}
-```
-
-## 使用示例
-
-### JavaScript/Node.js
-```javascript
-const API_BASE = 'http://localhost:3010';
-let token = '';
-
-// 登录
-async function login(username, password) {
-  const response = await fetch(`${API_BASE}/auth/login`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ username, password }),
-  });
-  
-  const result = await response.json();
-  if (result.success) {
-    token = result.data.token;
-  }
-  return result;
-}
-
-// 获取文章列表
-async function getPosts(page = 1, limit = 20) {
-  const response = await fetch(`${API_BASE}/api/posts?page=${page}&limit=${limit}`, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-    },
-  });
-  
-  return await response.json();
-}
-
-// 添加订阅
-async function addSubscription(keywords) {
-  const response = await fetch(`${API_BASE}/api/subscriptions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      keyword1: keywords[0],
-      keyword2: keywords[1],
-      keyword3: keywords[2],
-    }),
-  });
-  
-  return await response.json();
-}
-```
-
-### Python
-```python
-import requests
-
-class SeekFeedAPI:
-    def __init__(self, base_url='http://localhost:3010'):
-        self.base_url = base_url
-        self.token = None
-    
-    def login(self, username, password):
-        response = requests.post(f'{self.base_url}/auth/login', json={
-            'username': username,
-            'password': password
-        })
-        
-        result = response.json()
-        if result['success']:
-            self.token = result['data']['token']
-        return result
-    
-    def get_posts(self, page=1, limit=20):
-        headers = {'Authorization': f'Bearer {self.token}'}
-        response = requests.get(
-            f'{self.base_url}/api/posts',
-            headers=headers,
-            params={'page': page, 'limit': limit}
-        )
-        return response.json()
-    
-    def add_subscription(self, keywords):
-        headers = {
-            'Authorization': f'Bearer {self.token}',
-            'Content-Type': 'application/json'
-        }
-        data = {
-            'keyword1': keywords[0] if len(keywords) > 0 else None,
-            'keyword2': keywords[1] if len(keywords) > 1 else None,
-            'keyword3': keywords[2] if len(keywords) > 2 else None,
-        }
-        response = requests.post(
-            f'{self.base_url}/api/subscriptions',
-            headers=headers,
-            json=data
-        )
-        return response.json()
-
-# 使用示例
-api = SeekFeedAPI()
-api.login('admin', 'password123')
-posts = api.get_posts(page=1, limit=10)
-```
+`200` 为成功，`201` 为新增成功，`400` 为输入不合法，`401` 为认证无效，`404` 为资源不存在，`409` 为功能状态冲突，`413` 为请求过大，`500` 为执行失败，`503` 为依赖服务未就绪。

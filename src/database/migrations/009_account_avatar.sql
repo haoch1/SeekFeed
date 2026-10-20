@@ -1,0 +1,1 @@
+ALTER TABLE base_config ADD COLUMN avatar TEXT DEFAULT NULL;

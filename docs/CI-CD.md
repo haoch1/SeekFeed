@@ -1,29 +1,52 @@
 # SeekFeed CI/CD
 
-工作流：`.github/workflows/docker-build.yml`。
+工作流位于 [docker-build.yml](../.github/workflows/docker-build.yml)。
 
-- `main`、`develop`、`v*` 标签、发往 `main` 的 PR 以及手动触发均执行测试与构建。
-- Bun 1.4.3 安装锁定依赖，运行 `bun test` 和生产构建。
-- Buildx 构建 `linux/amd64` 与 `linux/arm64` 镜像。
-- PR 只构建；分支/标签构建成功后发布到当前仓库所有者的 GHCR 空间，镜像名固定为 `seekfeed`。
-- `main` 生成 `latest`，`develop` 生成 `develop`，版本标签 `v1.2.3` 生成 `1.2.3`。
-- 每个提交额外生成 `sha-<短提交号>`，可固定部署版本。
+## 触发与验证
 
-当前公开镜像：[ghcr.io/haoch1/seekfeed](https://github.com/haoch1/SeekFeed/pkgs/container/seekfeed)。生产 Compose 默认使用此镜像。
+`main`、`develop` 分支推送、`v*` 标签、目标为 `main` 的 Pull Request 以及手动触发均进入工作流。
 
-工作流读取当前 `github.repository_owner`，没有硬编码个人账号。使用 GitHub 提供的 `GITHUB_TOKEN`；仓库 Actions 需允许写入 Packages。
-
-## 本地构建与发布
+测试任务使用 Bun 1.4.3 与 Python 3.12，依次安装锁定依赖、安装采集依赖、运行 Python 单元测试、Bun 测试及生产构建。测试通过后才执行容器构建。
 
 ```bash
-./build-and-push.sh
-# 先自行登录目标镜像仓库，再指定自己的镜像地址：
-SEEKFEED_IMAGE=registry.example.com/account/seekfeed SEEKFEED_TAG=1.0.0 ./build-and-push.sh --push
+bun install --frozen-lockfile
+python -m pip install -r collector/requirements.txt
+python -m unittest discover -s collector -p 'test_*.py'
+bun test
+bun run build
 ```
 
-脚本默认只构建 `seekfeed:latest`，只有显式提供 `--push` 才发布。部署时将自己的镜像地址设为 `SEEKFEED_IMAGE`，再执行：
+## 镜像与标签
+
+Buildx 构建 `linux/amd64` 与 `linux/arm64`。镜像地址根据仓库所有者生成，默认部署地址为 [ghcr.io/haoch1/seekfeed](https://github.com/haoch1/SeekFeed/pkgs/container/seekfeed)。
+
+| 来源 | 标签 |
+| --- | --- |
+| `main` | `main`、`latest`、`sha-<短提交号>` |
+| `develop` | `develop`、`sha-<短提交号>` |
+| `v1.2.3` | `1.2.3`、`sha-<短提交号>` |
+| Pull Request | 仅构建验证，不推送镜像 |
+
+GHCR 发布使用 `GITHUB_TOKEN`，发布任务需要 Packages 写权限。镜像包含 OCI 提交标识，可用于核对源码与运行版本。
+
+## 生产更新
+
+工作流发布镜像，不自动连接部署主机。管理员通过生产 Compose 拉取并启动：
 
 ```bash
 docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d --no-build
+docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml ps
+curl -f http://127.0.0.1:3010/health
+```
+
+可通过 `SEEKFEED_IMAGE` 固定提交标签或镜像摘要。更新前应备份数据库，检查目标镜像与提交；数据库迁移可能影响旧镜像兼容性，回滚方案需同时考虑结构版本。操作步骤见 [Docker 部署](Docker.md)。
+
+## 手动构建
+
+`build-and-push.sh` 默认仅构建 `seekfeed:latest`。发布到自定义仓库前需完成仓库登录，并显式传入 `--push`：
+
+```bash
+./build-and-push.sh
+SEEKFEED_IMAGE=registry.example.com/account/seekfeed SEEKFEED_TAG=1.0.0 ./build-and-push.sh --push
 ```

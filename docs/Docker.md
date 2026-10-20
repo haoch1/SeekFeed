@@ -1,91 +1,93 @@
 # SeekFeed Docker 部署
 
-## 全新安装
+## 运行方式
 
-在 SeekFeed 源码目录运行：
-
-```bash
-docker compose up -d --build
-docker compose logs -f seekfeed
-```
-
-访问 <http://localhost:3010> 并创建管理员。数据库和表结构会自动初始化。
-
-| 对象 | 名称 |
-| --- | --- |
-| Compose 项目、服务、容器 | `seekfeed` |
-| 本地镜像 | `seekfeed:latest` |
-| 数据卷 | `seekfeed_data` |
-| 日志卷 | `seekfeed_logs` |
-| 网络 | `seekfeed_network` |
-| 容器内数据库 | `/usr/src/app/data/seekfeed.db` |
-| 入口与应用进程标题 | `dist/seekfeed.js`、`SeekFeed` |
-
-容器直接运行 Bun 入口，使用 `bun` 非特权用户。进程标题为 `SeekFeed`；Windows 本地运行时任务管理器的可执行文件仍为 Bun 运行时 `bun.exe`。
-
-## 可选配置
-
-复制 `.env.example` 为 `.env`。例如：
-
-```dotenv
-PORT=3010
-CORS_ORIGINS=https://feed.example.com
-RSS_CHECK_ENABLED=true
-RSS_TIMEOUT=30000
-```
-
-Compose 将主机 `PORT` 映射到容器内固定的 3010。RSS URL、间隔、代理和 Telegram 配置在 Web 控制台管理。
-
-## 生产部署
+生产部署使用预构建 GHCR 镜像：
 
 ```bash
+cp .env.example .env
 docker compose -f docker-compose.prod.yml pull
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-生产配置拉取公开镜像 `ghcr.io/haoch1/seekfeed:latest`，包含 CPU/内存限制和滚动日志，默认只监听 `127.0.0.1:3010`。对外访问时按实际域名配置反向代理和 HTTPS。`SEEKFEED_BIND_ADDRESS` 可修改监听地址；如使用其他镜像仓库或固定摘要，设置 `SEEKFEED_IMAGE`。
+默认绑定 `127.0.0.1:3010`，通过同机反向代理提供公网 HTTPS。首次访问创建管理员，随后配置 RSS 与 Telegram。预构建镜像支持 amd64 与 arm64，并内置热榜 Python 依赖。
 
-推送 `main` 后 GitHub Actions 自动测试并发布 `latest`、`main` 和 `sha-<短提交号>` 标签。更新时再次执行上面的 `pull` 和 `up -d`，无需在服务器编译源码。
+开发或源码部署使用 `docker compose up -d --build`。同一实例的维护命令应始终使用对应 Compose 文件。
 
-## 日常维护
+| 对象 | 名称／路径 |
+| --- | --- |
+| Compose 项目、服务、容器 | `seekfeed` |
+| 生产镜像 | `ghcr.io/haoch1/seekfeed:latest` |
+| 数据卷、日志卷 | `seekfeed_data`、`seekfeed_logs` |
+| 网络 | `seekfeed_network` |
+| 数据库 | `/usr/src/app/data/seekfeed.db` |
+| 入口 | `dist/seekfeed.js` |
 
-```bash
-docker compose ps
-docker compose logs --tail=100 seekfeed
-curl http://localhost:3010/health
-docker compose restart seekfeed
+## 配置与代理
+
+配置模板见 [.env.example](../.env.example)。生产 Compose 将主机 `PORT` 映射到容器固定的 3010。`SEEKFEED_IMAGE` 可指定标签或摘要；`SEEKFEED_BIND_ADDRESS` 控制主机绑定地址。容器以内置非特权用户运行。
+
+RSS URL、抓取间隔、代理、Bot Token 与接收账号在网页设置中管理。公网来源应加入 `CORS_ORIGINS`。Webhook 必须使用 Telegram 可访问的 HTTPS 地址，可显式配置 `TELEGRAM_WEBHOOK_URL`。
+
+默认 `TRUST_PROXY=false`，登录设备记录 TCP 对端地址。只有受控反向代理作为唯一公网入口时，才设置 `TRUST_PROXY=true`，并保持应用端口仅绑定回环地址。Nginx 必须覆盖客户端提交的 IP 头：
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:3010;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
 ```
 
-## 数据备份与恢复
+直接暴露应用端口的部署应保持 `TRUST_PROXY=false`。已有会话保留创建时记录的 IP。
 
-停止服务后复制整个数据目录，包含可能存在的 SQLite WAL 文件：
+## 更新与版本核对
+
+```bash
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs --tail=100 seekfeed
+curl -f http://127.0.0.1:3010/health
+docker inspect seekfeed --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
+```
+
+启动时自动执行未应用的迁移。更新保留数据卷及其中的订阅、配置、会话和头像。正式升级前应记录运行版本并备份；回滚旧镜像前需核对其数据库结构兼容性，必要时恢复对应备份。备份恢复会撤销备份之后的数据变化。
+
+## 备份与恢复
+
+以下命令使用停机复制方式，避免仅复制主数据库文件遗漏未合并的 WAL。备份应使用独立目录并存储于受控位置；数据库包含 Bot Token、会话和配置等私有数据。
 
 ```bash
 mkdir -p backup
-docker compose stop seekfeed
+docker compose -f docker-compose.prod.yml stop seekfeed
 docker cp seekfeed:/usr/src/app/data/. ./backup/
-docker compose start seekfeed
+docker compose -f docker-compose.prod.yml start seekfeed
 ```
 
-恢复时先停止服务，再复制已备份的数据：
+恢复前停止服务，使用完整且一致的备份替换目标数据目录；应先移出原有目录内容，避免遗留 WAL 与恢复的主文件不匹配。复制示例：
 
 ```bash
-docker compose stop seekfeed
+docker compose -f docker-compose.prod.yml stop seekfeed
 docker cp ./backup/. seekfeed:/usr/src/app/data/
-docker compose start seekfeed
+docker compose -f docker-compose.prod.yml start seekfeed
 ```
 
-普通 `docker compose down` 保留数据卷。`docker compose down -v` 会删除数据卷，执行前自行确认备份。
+恢复后检查运行用户对目录及文件的写权限、健康状态、订阅和配置。在线备份应使用 SQLite Backup API 等一致性机制，不应直接复制正在写入的主文件。
 
-## 构建
+普通 `docker compose down` 保留数据卷；`down -v` 会删除数据卷。不得将清理数据卷作为常规升级步骤。
+
+## 资源与维护
+
+生产配置包含 CPU／内存限制、健康检查及 Docker 日志轮转。故障排查应结合容器状态、`/health` 和应用日志；采集异常可能处于退避期，不等同于 Web 服务不可用。
+
+清理旧文件或镜像前应核对绝对路径、运行容器引用和保留版本。数据库、WAL、SHM、环境文件与当前数据卷不属于部署缓存。旧备份应按明确的保留策略处理，不使用全局清理替代项目级检查。
+
+从源码构建：
 
 ```bash
 docker build -t seekfeed:latest .
 ```
 
-Dockerfile 使用 `bun.lock` 安装依赖，构建入口为 `src/seekfeed.ts`，镜像包含启动时所需 SQL 文件和静态资源。健康检查访问 `/health`。
-
-
-### Login IP behind a reverse proxy
-
-By default, device history records the TCP peer IP. When Nginx is the only public entry point, set `TRUST_PROXY=true` in `.env`, retain `SEEKFEED_BIND_ADDRESS=127.0.0.1`, and configure `proxy_set_header X-Real-IP $remote_addr;`. Nginx must overwrite this header rather than forwarding a caller-supplied value. Public/direct application ports must use `TRUST_PROXY=false`. Existing sessions keep the IP captured when they were created.
+Dockerfile 根据 `bun.lock` 安装依赖，并复制静态资源、采集器及启动迁移所需 SQL。完整发布流程见 [CI/CD](CI-CD.md)。
