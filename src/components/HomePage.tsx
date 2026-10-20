@@ -12,8 +12,8 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
   if (path === '/') path = '/hot';
   return (
     <Layout
-      title="SeekFeed"
-      description="NodeSeek RSS 文章列表"
+      title="SeekFeed · NodeSeek 社区动态"
+      description="浏览 NodeSeek 实时热榜、最新帖子与社区数据分析。"
       scriptSrc={["/js/category-breakdown.js", "/js/keyword-statistics.js", "/js/statistics.js", "/js/hot.js", "/js/home.js"]}
     >
       <DashboardSurface path={path}>

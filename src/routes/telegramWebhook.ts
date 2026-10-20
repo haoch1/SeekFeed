@@ -6,10 +6,12 @@ import { createValidationMiddleware } from '../utils/validation';
 import { createSuccessResponse, createErrorResponse } from '../utils/helpers';
 import type { ContextVariables } from '../types';
 import { logger } from '../utils/logger';
+import { requireSession } from '../middleware/session';
 
 type Variables = ContextVariables;
 
 export const telegramWebhookRoutes = new Hono<{ Variables: Variables }>();
+telegramWebhookRoutes.use('*', requireSession);
 
 // 验证 schemas
 const setupWebhookSchema = z.object({

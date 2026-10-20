@@ -5,10 +5,12 @@ import { createValidationMiddleware } from '../utils/validation';
 import { createSuccessResponse, createErrorResponse } from '../utils/helpers';
 import type { ContextVariables } from '../types';
 import { logger } from '../utils/logger';
+import { requireSession } from '../middleware/session';
 
 type Variables = ContextVariables;
 
 export const telegramPushRoutes = new Hono<{ Variables: Variables }>();
+telegramPushRoutes.use('*', requireSession);
 
 // 验证 schemas
 const sendMessageSchema = z.object({

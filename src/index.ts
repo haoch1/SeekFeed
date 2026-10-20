@@ -9,6 +9,7 @@ import { SchedulerService } from './services/scheduler';
 import { DatabaseMigrator } from './database/migrate';
 import { logger } from './utils/logger';
 import { getScheduler } from './services/runtime';
+import { requireSession } from './middleware/session';
 
 // 导入路由
 import { authRoutes } from './routes/auth';
@@ -72,14 +73,12 @@ app.get('/api/db/status', (c) => {
     const dbService = c.get('dbService');
     const tablesExist = dbService.checkTablesExist();
     const isInitialized = dbService.isInitialized();
-    const stats = isInitialized ? dbService.getComprehensiveStats() : null;
     
     return c.json({
       success: true,
       data: {
         tablesExist,
         initialized: isInitialized,
-        stats
       }
     });
   } catch (error) {
@@ -121,7 +120,7 @@ app.post('/api/db/init', async (c) => {
 });
 
 // 定时任务状态端点
-app.get('/api/scheduler/status', (c) => {
+app.get('/api/scheduler/status', requireSession, (c) => {
   try {
     const schedulerService = c.get('schedulerService');
     if (!schedulerService) {

@@ -127,6 +127,7 @@ button svg, a.icon-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
 .nav-item:hover { color: var(--text-primary); background: var(--bg-hover); }
 .nav-item.selected { color: var(--primary); background: var(--primary-alpha); }
 .nav-divider { height: 1px; background: var(--border-color); margin: 22px 10px; }
+.metric-strip.is-public { grid-template-columns: 1fr; }
 .workspace-account { display: flex; gap: 10px; align-items: center; padding: 12px 7px 0; border-top: 1px solid var(--border-color); }
 .account-avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: var(--primary-alpha); color: var(--primary); font-weight: 600; }
 .workspace-account strong { display: block; font-size: 12px; font-weight: 600; }

@@ -37,12 +37,20 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
                 data = { ...data, series: data.series.filter(row => remaining.has(normalize(row.term))), overlaps: data.overlaps.filter(row => row.terms.every(term => remaining.has(normalize(term)))) };
                 selected = Math.max(0, data.series.findIndex(row => row.term === active));
                 if (data.series.length) render();
-                else { data = undefined; el('keywordAnalysisResults').hidden = true; }
+                else { clearChartInspections(); data = undefined; el('keywordAnalysisResults').hidden = true; }
             }
         }
         (el('keywordAddCompare').hidden ? el('analysisCompare1') : el('keywordAddCompare')).focus({ preventScroll: true });
     }
+    function clearChartInspections() {
+        for (const id of ['keywordHourChart', 'keywordDailyChart']) {
+            const chart = el(id);
+            window.SeekFeedControls.chartInspection(chart);
+            chart.onpointermove = chart.onpointerleave = chart.onclick = chart.onkeydown = chart.onfocus = chart.onblur = null;
+        }
+    }
     function reset() {
+        clearChartInspections();
         el('keywordAuthorLimit').value = '5';
         cancelRequest();
         data = config = undefined;
@@ -52,10 +60,6 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
         compareVisible(1, false); compareVisible(2, false);
         el('keywordAnalysisResults').hidden = true;
         for (const id of ['keywordComparison', 'keywordMetrics', 'keywordOverlap', 'keywordHourChart', 'keywordDailyChart', 'keywordCategories', 'keywordAuthors']) el(id).replaceChildren();
-        for (const id of ['keywordHourChart', 'keywordDailyChart']) {
-            const chart = el(id);
-            chart.onpointermove = chart.onpointerleave = chart.onclick = chart.onkeydown = chart.onfocus = chart.onblur = null;
-        }
         el('keywordBucketSelector').querySelectorAll('button').forEach(button => {
             const active = button.dataset.hours === '1';
             button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active));
@@ -135,10 +139,12 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
         box.onkeydown = event => { if (event.key === 'Escape') { pinned = -1; reset(); event.preventDefault(); } };
         box.querySelectorAll('[data-day-index]').forEach(button => {
             button.onfocus = () => inspect(Number(button.dataset.dayIndex));
-            button.onblur = event => { if (!box.contains(event.relatedTarget)) { if (pinned >= 0) inspect(pinned); else reset(); } };
+            button.onblur = event => { if (!box.contains(event.relatedTarget)) dismiss(); };
         });
         box.querySelector('.keyword-line-scroll').scrollLeft = scrollLeft;
-        box.onpointerleave = () => { if (pinned >= 0) inspect(pinned); else if (!box.contains(document.activeElement)) reset(); };
+        const dismiss = () => { pinned = -1; reset(); };
+        window.SeekFeedControls.chartInspection(box, dismiss);
+        box.onpointerleave = dismiss;
         reset();
     }
     function renderChart() {
@@ -190,7 +196,10 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
             if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();select(e.key==='Home'?0:e.key==='End'?buckets.length-1:chartIndex+(e.key==='ArrowRight'?1:-1));
         };
         const reset=(force=false)=>{if(!force && pinned>=0){select(pinned);return;}if(!force && document.activeElement===box)return;tooltip.hide();box.querySelectorAll('.is-active').forEach(n=>n.classList.remove('is-active'));el('keywordChartReadout').textContent=`${data.date} · ${multiple?'各词并排对比，':'每柱 '}${hours} 小时 · ${data.partial?'截至 '+new Date(Date.parse(data.to)+offset*60000).toISOString().slice(11,16):'全天'} · UTC${offset>=0?'+':'−'}${Math.abs(offset/60)}`;};
-        box.onpointerleave=box.onblur=()=>reset();reset();
+        const dismiss = () => { pinned = -1; reset(true); };
+        window.SeekFeedControls.chartInspection(box, dismiss);
+        box.onpointerleave = box.onblur = dismiss;
+        reset();
     }
     function render() {
         el('keywordAnalysisResults').hidden=false;

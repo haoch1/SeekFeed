@@ -20,6 +20,13 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         {description && <meta name="description" content={description} />}
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="SeekFeed" />
+        <meta property="og:title" content={title} />
+        {description && <meta property="og:description" content={description} />}
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content={title} />
+        {description && <meta name="twitter:description" content={description} />}
 
         {/* PWA Config */}
         <meta name="theme-color" content="#4f46e5" />

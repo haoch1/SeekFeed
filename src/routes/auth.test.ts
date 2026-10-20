@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import { Hono } from 'hono';
 import { authRoutes } from './auth';
 import { telegramRoutes } from './telegram';
+import { telegramPushRoutes } from './telegramPush';
+import { telegramWebhookRoutes } from './telegramWebhook';
 import { AuthService } from '../services/auth';
 import { DatabaseService } from '../services/database';
 import { SessionService, sessionManagementId } from '../services/session';
@@ -39,6 +41,80 @@ beforeEach(() => {
 
 describe('account settings and session expiry', () => {
     const headers = () => ({ Authorization: `Bearer ${sessionId}`, 'Content-Type': 'application/json' });
+
+    it('publishes only forum fields to guests, including after an authenticated cache read', async () => {
+        const sub = db.createKeywordSub({ keyword1: 'private-rule-example', creator: 'secret-author', exclude_keywords: 'secret-exclusion' });
+        db.createPost({ post_id: 101, title: 'Public forum title', memo: 'Public excerpt', category: 'tech', creator: 'public-author', pub_date: new Date().toISOString(), push_status: 3, sub_id: sub.id });
+        const privateRead = await app.request('/api/posts', { headers: headers() });
+        const privatePost = (await privateRead.json()).data.posts[0];
+        expect(privatePost.sub_keyword1).toBe('private-rule-example');
+        expect(privatePost.push_status).toBe(3);
+        expect(privateRead.headers.get('Cache-Control')).toContain('no-store');
+        const publicRead = await app.request('/api/posts');
+        const body = await publicRead.json();
+        expect(publicRead.status).toBe(200);
+        expect(Object.keys(body.data.posts[0]).sort()).toEqual(['category', 'creator', 'memo', 'post_id', 'pub_date', 'title']);
+        expect(body.data.total).toBe(1);
+        expect(JSON.stringify(body)).not.toMatch(/private-rule-example|secret-author|secret-exclusion|sub_id|push_status|push_date/);
+        expect(publicRead.headers.get('Cache-Control')).toContain('no-store');
+        expect(publicRead.headers.get('Vary')).toContain('Authorization');
+        expect((await (await app.request('/api/posts?subId=' + sub.id, { headers: headers() })).json()).data.total).toBe(1);
+    });
+
+    it('rejects private guest filters and invalid credentials on public and private APIs', async () => {
+        for (const query of ['pushStatus=3', 'pushStatusIn=1,3', 'pushStatusNot=2', 'subId=1', 'pushStatusIn=']) {
+            expect((await app.request('/api/posts?' + query)).status).toBe(401);
+        }
+        const paths = ['/api/posts', '/api/hot', '/api/stats/overview', '/api/stats/analytics', '/api/stats/subscription-ranking', '/api/config', '/api/subscriptions'];
+        for (const path of paths) {
+            expect((await app.request(path, { headers: { Authorization: 'Bearer forged' } })).status).toBe(401);
+        }
+        db.db.query('UPDATE sessions SET expires_at = ? WHERE session_id = ?').run(new Date(Date.now() - 1000).toISOString(), sessionId);
+        for (const path of paths) expect((await app.request(path, { headers: headers() })).status).toBe(401);
+    });
+
+    it('keeps private delivery aggregates out of every public analytics level', async () => {
+        const sub = db.createKeywordSub({ keyword1: 'private-rule-example' });
+        db.createPost({ post_id: 101, title: 'Public forum title', memo: '', category: 'tech', creator: 'public-author', pub_date: new Date().toISOString(), push_status: 3, sub_id: sub.id });
+        const privateData = (await (await app.request('/api/stats/analytics', { headers: headers() })).json()).data;
+        expect(privateData.totals.matched).toBe(1);
+        expect(privateData.subscriptions.total).toBe(1);
+        const publicData = (await (await app.request('/api/stats/analytics')).json()).data;
+        expect(publicData.totals).toEqual({ posts: 1, authors: 1 });
+        expect(publicData.categories[0]).toEqual({ category: 'tech', count: 1, authors: 1 });
+        expect(publicData.authors[0]).toEqual({ creator: 'public-author', count: 1 });
+        expect(Object.keys(publicData.trend[0]).sort()).toEqual(['count', 'time']);
+        expect(JSON.stringify(publicData)).not.toMatch(/matched|pushed|pending|unprocessed|subscriptions|delivery|ranking|ruleStats|private-rule-example/);
+        const overview = (await (await app.request('/api/stats/overview')).json()).data;
+        expect(Object.keys(overview).sort()).toEqual(['last_update', 'today_posts', 'total_posts']);
+    });
+
+    it('requires a valid session for every subscription operation', async () => {
+        const sub = db.createKeywordSub({ keyword1: 'private-rule-example' });
+        for (const authorization of [undefined, 'Bearer forged']) {
+            for (const [method, path] of [['GET', '/api/subscriptions'], ['POST', '/api/subscriptions'], ['PUT', '/api/subscriptions/' + sub.id], ['DELETE', '/api/subscriptions/' + sub.id]]) {
+                const response = await app.request(path, { method, headers: { 'Content-Type': 'application/json', ...(authorization ? { Authorization: authorization } : {}) }, ...(method === 'GET' ? {} : { body: JSON.stringify({ keyword1: 'changed' }) }) });
+                expect(response.status).toBe(401);
+                expect(await response.text()).not.toContain('private-rule-example');
+            }
+        }
+        expect(db.getKeywordSubById(sub.id!)!.keyword1).toBe('private-rule-example');
+        const response = await app.request('/api/subscriptions', { headers: headers() });
+        expect(response.status).toBe(200);
+        expect(await response.text()).toContain('private-rule-example');
+    });
+
+    it('protects Telegram management even when its routers are mounted independently', async () => {
+        const isolated = new Hono();
+        isolated.use('*', async (c: any, next) => { c.set('authService', new AuthService(db)); c.set('dbService', db); await next(); });
+        isolated.route('/push', telegramPushRoutes);
+        isolated.route('/webhook', telegramWebhookRoutes);
+        for (const [path, method] of [['/push/bot-info', 'GET'], ['/push/send-message', 'POST'], ['/webhook/status', 'GET'], ['/webhook/disable', 'POST']]) {
+            for (const authorization of [undefined, 'Bearer forged']) {
+                expect((await isolated.request(path, { method, headers: authorization ? { Authorization: authorization } : {} })).status).toBe(401);
+            }
+        }
+    });
 
     it('validates keyword analysis inputs and exposes only aggregates, independently of private rules', async () => {
         db.createKeywordSub({ keyword1: 'private-rule-example' });

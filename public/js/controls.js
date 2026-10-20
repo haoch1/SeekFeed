@@ -3,6 +3,14 @@
     const paths = JSON.parse(document.getElementById('seekfeedIcons')?.textContent || '{}');
     const icon = name => `<svg data-icon="${name}" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths[name] || paths.info || ''}</svg>`;
     const selects = new Map();
+    const chartInspectors = new Map();
+    function dismissCharts(target) {
+        chartInspectors.forEach((dismiss, box) => { if (!target || !box.contains(target)) dismiss(); });
+    }
+    document.addEventListener('pointerdown', event => dismissCharts(event.target));
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') dismissCharts(); });
+    window.addEventListener('scroll', () => dismissCharts(), { passive: true });
+    window.addEventListener('resize', () => dismissCharts());
     const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
     const pressAnimations = new Map();
     const controlSelector = 'button, a.btn, a.icon-btn, a.nav-item, a.workspace-brand, summary, label.mode-option';
@@ -298,6 +306,6 @@
         button.setAttribute('aria-pressed', String(show));
         button.setAttribute('aria-label', `${show ? '隐藏' : '显示'}${button.dataset.secretLabel || (input.id === 'botToken' ? ' Bot Token' : '密码')}`);
     });
-    window.SeekFeedControls = { icon, beginPending, pending, closeSelect: close, refreshSelects: () => selects.forEach(s => s.refresh()) };
+    window.SeekFeedControls = { icon, beginPending, pending, closeSelect: close, refreshSelects: () => selects.forEach(s => s.refresh()), dismissCharts, chartInspection: (box, dismiss) => dismiss ? chartInspectors.set(box, dismiss) : chartInspectors.delete(box) };
     document.addEventListener('DOMContentLoaded', () => document.querySelectorAll('select').forEach(enhance));
 })();

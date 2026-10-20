@@ -1,4 +1,4 @@
-import { getClientInfo } from '../utils/clientInfo';
+import { optionalSession, requireSession } from '../middleware/session';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { DatabaseService } from '../services/database';
@@ -87,10 +87,10 @@ function buildWebhookUrl(c: any): string {
 
 type Variables = ContextVariables & {
     authService: AuthService;
-    jwtPayload: any;
 }
 
 export const apiRoutes = new Hono<{ Variables: Variables }>();
+apiRoutes.use('*', optionalSession);
 
 const hotQuery = z.object({
     period: z.enum(['live', 'day', 'week']).default('live'),
@@ -108,6 +108,11 @@ apiRoutes.get('/posts', createQueryValidationMiddleware(paginationSchema), async
     try {
         const query = c.get('validatedQuery');
         const dbService = c.get('dbService');
+
+        const authenticated = Boolean(c.get('sessionData'));
+        if (!authenticated && ['pushStatus', 'pushStatusIn', 'pushStatusNot', 'subId'].some(key => c.req.query(key) !== undefined)) {
+            return c.json(createErrorResponse('请先登录后查看订阅命中和推送状态'), 401);
+        }
 
         // 解析 pushStatusIn 参数（格式: "1,3"）
         let pushStatusIn: number[] | undefined;
@@ -129,7 +134,11 @@ apiRoutes.get('/posts', createQueryValidationMiddleware(paginationSchema), async
             }
         );
 
-        return c.json(createSuccessResponse(result));
+        const data = authenticated ? result : {
+            ...result,
+            posts: result.posts.map(({ post_id, title, memo, category, creator, pub_date }) => ({ post_id, title, memo, category, creator, pub_date })),
+        };
+        return c.json(createSuccessResponse(data));
     } catch (error) {
         return c.json(createErrorResponse(`获取文章列表失败: ${error}`), 500);
     }
@@ -161,11 +170,23 @@ const analyticsQuery = z.object({
 apiRoutes.get('/stats/analytics', createQueryValidationMiddleware(analyticsQuery), (c) => {
     const { days, offset, category } = c.get('validatedQuery');
     const { ranking, ruleStats, ...publicData } = c.get('dbService').getAnalytics(days, offset, category);
+    if (!c.get('sessionData')) {
+        const { period, totals, trend, categories, availableCategories, authors, authorDistribution, activity, topics } = publicData;
+        return c.json(createSuccessResponse({
+            period, totals: { posts: totals.posts, authors: totals.authors },
+            trend: trend.map(({ time, count }) => ({ time, count })),
+            categories: categories.map(({ category, count, authors }) => ({ category, count, authors })),
+            availableCategories, authors: authors.map(({ creator, count }) => ({ creator, count })),
+            authorDistribution, activity, topics,
+        }));
+    }
     return c.json(createSuccessResponse(publicData));
 });
 
 apiRoutes.get('/stats/overview', (c) => {
-    return c.json(createSuccessResponse(c.get('dbService').getComprehensiveStats()));
+    const stats = c.get('dbService').getComprehensiveStats();
+    const { total_posts, today_posts, last_update } = stats;
+    return c.json(createSuccessResponse(c.get('sessionData') ? stats : { total_posts, today_posts, last_update }));
 });
 
 const keywordAnalyticsQuery = z.object({
@@ -186,32 +207,8 @@ apiRoutes.get('/stats/keywords', createQueryValidationMiddleware(keywordAnalytic
     return c.json(createSuccessResponse(c.get('dbService').getKeywordAnalytics(terms, date, offset, scope)));
 });
 
-const sessionMiddleware = async (c: any, next: any) => {
-    const authHeader = c.req.header('Authorization');
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return c.json(createErrorResponse('请提供有效的认证token'), 401);
-    }
-
-    const sessionId = authHeader.substring(7);
-    const authService = c.get('authService');
-
-    // 获取客户端IP地址用于验证
-    const { ipAddress } = getClientInfo(c);
-
-    const verification = await authService.verifySession(sessionId, ipAddress);
-    if (!verification.valid) {
-        return c.json(createErrorResponse(verification.message || 'Session无效'), 401);
-    }
-
-    // 设置session数据和向后兼容的payload
-    c.set('sessionData', verification.sessionData);
-    c.set('jwtPayload', verification.payload);
-    await next();
-};
-
 // 应用Session中间件到所有后续API路由
-apiRoutes.use('*', sessionMiddleware);
+apiRoutes.use('*', requireSession);
 
 apiRoutes.post('/hot/refresh', async c => {
     if (process.env.HOT_COLLECT_ENABLED !== 'true') return c.json(createErrorResponse('热榜采集未启用'), 409);

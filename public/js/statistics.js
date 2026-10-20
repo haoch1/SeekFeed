@@ -38,6 +38,7 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
         if (!currentData || box.clientWidth < 10) return;
         const data = currentData.trend;
         if (!data.length) {
+            window.SeekFeedControls.chartInspection(box);
             box.innerHTML = empty('所选时段暂无发帖数据');
             box.removeAttribute('tabindex');
             box.onpointermove = box.onpointerleave = box.onfocus = box.onblur = box.onkeydown = box.onclick = null;
@@ -117,9 +118,11 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
         const togglePin = index => { pinned = pinned === index ? -1 : index; if (pinned < 0) clearSelection(); else select(pinned); };
         box.onpointermove = event => { if (event.pointerType !== 'touch') select(pointerIndex(event)); };
         box.onclick = event => { if (event.clientY <= box.querySelector('svg').getBoundingClientRect().bottom) togglePin(pointerIndex(event)); };
-        box.onpointerleave = () => { if (pinned >= 0) select(pinned); else if (document.activeElement !== box) clearSelection(); };
+        const dismiss = () => { pinned = -1; clearSelection(); };
+        window.SeekFeedControls.chartInspection(box, dismiss);
+        box.onpointerleave = dismiss;
         box.onfocus = () => select(focusIndex < 0 ? data.length - 1 : focusIndex);
-        box.onblur = () => { if (pinned >= 0) select(pinned); else clearSelection(); };
+        box.onblur = dismiss;
         box.onkeydown = event => {
             if (event.key === 'Escape') { pinned = -1; clearSelection(); event.preventDefault(); return; }
             if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); togglePin(Math.max(0, focusIndex)); return; }

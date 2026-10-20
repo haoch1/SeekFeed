@@ -5,6 +5,39 @@
 document.addEventListener("DOMContentLoaded", function () {
   const sessionId = localStorage.getItem("sessionId");
   const isLoggedIn = !!sessionId;
+  const identityKey = 'seekfeed.identity';
+  function clearIdentity() {
+    localStorage.removeItem('sessionId');
+    localStorage.removeItem('user');
+    sessionStorage.removeItem(identityKey);
+  }
+  function showIdentity(username, token = sessionId) {
+    const label = document.getElementById('accountLabel');
+    label.textContent = username || (token ? '账户' : '访客');
+    label.style.visibility = 'visible';
+    if (username && token) sessionStorage.setItem(identityKey, JSON.stringify({ sessionId: token, username }));
+  }
+  function initIdentity() {
+    let cached;
+    try { cached = JSON.parse(sessionStorage.getItem(identityKey)); } catch { /* Ignore an invalid local cache. */ }
+    if (cached?.sessionId === sessionId && isLoggedIn) showIdentity(cached.username);
+    else {
+      sessionStorage.removeItem(identityKey);
+      showIdentity(null);
+    }
+    if (isLoggedIn) apiRequest('/auth/account', { silent: true }).then(result => {
+      if (result?.success) showIdentity(result.data.username);
+    });
+    window.addEventListener('storage', event => {
+      if (event.key === 'sessionId' || event.key === null) {
+        if (localStorage.getItem('sessionId') !== sessionId) {
+          sessionStorage.removeItem(identityKey);
+          document.getElementById('mainContent').replaceChildren();
+          location.reload();
+        }
+      }
+    });
+  }
 
   // 根据登录状态显示/隐藏元素
   const loginBtn = document.getElementById("loginBtn");
@@ -120,7 +153,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       if (response.status === 401) {
         if (sessionId) {
-          localStorage.removeItem("sessionId");
+          clearIdentity();
           window.location.reload();
         }
         return null;
@@ -350,7 +383,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const updated = createPostElement(post);
         for (const selector of ['.post-header', '.post-memo', '.post-meta', '.delivery-status']) {
           const old = item.querySelector(selector), next = updated.querySelector(selector);
-          if (old.outerHTML !== next.outerHTML) old.replaceWith(next);
+          if (old && next && old.outerHTML !== next.outerHTML) old.replaceWith(next);
         }
         item.dataset.signature = updated.dataset.signature;
       }
@@ -395,12 +428,12 @@ document.addEventListener("DOMContentLoaded", function () {
     item.dataset.postId = String(post.post_id);
     item.dataset.signature = JSON.stringify(post);
     const href = `https://www.nodeseek.com/post-${Number(post.post_id)}-1`;
-    const tags = [post.sub_keyword1, post.sub_keyword2, post.sub_keyword3].filter(Boolean)
+    const tags = (isLoggedIn ? [post.sub_keyword1, post.sub_keyword2, post.sub_keyword3] : []).filter(Boolean)
       .map(word => `<span class="tag tag-blue">${escapeHtml(word)}</span>`).join("");
     const status = { 0: "待匹配", 1: "待推送", 2: "未命中", 3: "已推送" }[post.push_status] || "未知";
     const date = new Date(post.pub_date);
     const time = Number.isNaN(date.getTime()) ? "时间未知" : new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
-    item.innerHTML = `<div class="post-content"><div class="post-header"><h3 class="post-title"><a href="${href}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(post.title)}">${escapeHtml(post.title)}</a></h3></div><p class="post-memo">${escapeHtml(post.memo || "")}</p><div class="post-meta"><span class="post-category">${escapeHtml(getCategoryName(post.category))}</span><span>${escapeHtml(post.creator)}</span><span class="post-date">${time}</span>${tags ? `<span class="post-sub-tags">${tags}</span>` : ""}</div></div><div class="post-actions"><span class="delivery-status" data-status="${Number(post.push_status)}">${status}</span><a class="icon-btn" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="打开帖子">${renderIcon("external")}</a></div>`;
+    item.innerHTML = `<div class="post-content"><div class="post-header"><h3 class="post-title"><a href="${href}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(post.title)}">${escapeHtml(post.title)}</a></h3></div><p class="post-memo">${escapeHtml(post.memo || "")}</p><div class="post-meta"><span class="post-category">${escapeHtml(getCategoryName(post.category))}</span><span>${escapeHtml(post.creator)}</span><span class="post-date">${time}</span>${tags ? `<span class="post-sub-tags">${tags}</span>` : ""}</div></div><div class="post-actions">${isLoggedIn ? `<span class="delivery-status" data-status="${Number(post.push_status)}">${status}</span>` : ''}<a class="icon-btn" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="打开帖子">${renderIcon("external")}</a></div>`;
     return item;
   }
   function escapeHtml(value) {
@@ -558,6 +591,7 @@ document.addEventListener("DOMContentLoaded", function () {
     Object.entries(fields).forEach(([id, value]) => el(id).textContent = Number(value || 0).toLocaleString());
   }
   async function updateMonitor(quiet = false) {
+    if (!isLoggedIn) return;
     const result = await apiRequest("/api/scheduler/status", { silent: quiet });
     const status = result?.data?.rssTask;
     const label = el("monitorStatus");
@@ -1007,9 +1041,16 @@ document.addEventListener("DOMContentLoaded", function () {
   let routeRequest = 0;
   const routeScroll = new Map();
   async function navigate(path, push = true) {
+    window.SeekFeedControls.dismissCharts();
     if (path === '/settings') path = '/settings/account';
     const [name, title] = routeMap[path] || routeMap['/'];
-    if (!isLoggedIn && !['feed', 'stats', 'hot'].includes(name)) { LoginModal.open(); return; }
+    if (!isLoggedIn && !['/', '/posts', '/statistics', '/hot'].includes(path)) {
+      if (!activePath) {
+        history.replaceState({}, '', '/hot');
+        navigate('/hot', false);
+      }
+      LoginModal.open(); return;
+    }
     const id = ++routeRequest;
     const root = document.documentElement;
     const content = el('mainContent');
@@ -1070,8 +1111,8 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     el('sidebarBackdrop').addEventListener('click', closeSidebar);
     document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSidebar(); });
-    document.querySelectorAll('[data-auth-only]').forEach(item => item.style.display = isLoggedIn ? 'inline-flex' : 'none');
-    el('accountLabel').textContent = isLoggedIn ? '管理员' : '访客';
+    document.querySelectorAll('[data-auth-only]').forEach(item => item.style.display = isLoggedIn ? '' : 'none');
+    document.querySelector('.metric-strip').classList.toggle('is-public', !isLoggedIn);
     document.querySelectorAll('[data-route]').forEach(link => link.addEventListener('click', e => {
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
       e.preventDefault(); closeSidebar();
@@ -1085,7 +1126,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const result = await apiRequest('/auth/account');
     if (result?.success) {
       el('accountUsername').value = result.data.username;
-      el('accountLabel').textContent = result.data.username;
+      showIdentity(result.data.username);
       el('sessionHours').value = String(result.data.session_expiry_hours);
       window.SeekFeedControls.refreshSelects();
     }
@@ -1105,7 +1146,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const result = await apiRequest('/auth/sessions/' + encodeURIComponent(button.dataset.sessionId), { method: 'DELETE' });
         if (!result?.success) return Toast.error(result?.message || '退出失败，请重试。');
         if (result.data.current) {
-          localStorage.removeItem('sessionId'); localStorage.removeItem('user'); location.href = '/';
+          clearIdentity(); location.href = '/';
         } else {
           const row = button.closest('.session-item');
           const next = row.nextElementSibling?.querySelector('.revoke-session') || row.previousElementSibling?.querySelector('.revoke-session') || el('logoutAllBtn');
@@ -1118,7 +1159,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (el('accountNewPassword').value !== el('accountConfirmPassword').value) return Toast.error('两次输入的新密码不一致。');
       const result = await apiRequest('/auth/account', { method: 'PUT', body: JSON.stringify({ username: el('accountUsername').value.trim(), currentPassword: el('accountCurrentPassword').value, newPassword: el('accountNewPassword').value }) });
       if (!result?.success) return Toast.error(result?.message || '保存失败');
-      localStorage.removeItem('sessionId'); localStorage.removeItem('user'); location.href = '/';
+      clearIdentity(); location.href = '/';
     }));
     el('sessionSettingsForm').addEventListener('submit', pendingSubmit(async e => {
       e.preventDefault();
@@ -1128,7 +1169,7 @@ document.addEventListener("DOMContentLoaded", function () {
     el('logoutAllBtn').addEventListener('click', async () => {
       if (!await confirmAction('退出所有设备？', '当前设备也会退出，所有设备都需要重新登录。', '确认退出')) return;
       const result = await window.SeekFeedControls.pending(el('logoutAllBtn'), () => apiRequest('/auth/logout-all', { method: 'POST' }));
-      if (result?.success) { localStorage.removeItem('sessionId'); localStorage.removeItem('user'); location.href = '/'; }
+      if (result?.success) { clearIdentity(); location.href = '/'; }
       else Toast.error(result?.message || '退出失败');
     });
   }
@@ -1231,6 +1272,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (result.success) {
           this.showMessage("登录成功！", "success");
           localStorage.setItem("sessionId", result.sessionId);
+          showIdentity(result.user?.username, result.sessionId);
           
           // 延迟刷新页面以应用登录状态
           setTimeout(() => {
@@ -1268,7 +1310,7 @@ document.addEventListener("DOMContentLoaded", function () {
       } catch {
         // Local sign-out still completes if the server session has expired.
       } finally {
-        localStorage.removeItem("sessionId");
+        clearIdentity();
         window.location.reload();
       }
     });
@@ -1278,6 +1320,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // 初始化
   // ============================================
   function init() {
+    initIdentity();
     initTheme();
     Drawer.init();
     initFilters();
