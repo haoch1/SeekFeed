@@ -41,8 +41,8 @@ function botFixture() {
 describe('Telegram hot ranking', () => {
     it('renders aligned numbers, safe titles, actual zero counts and a bounded message', () => {
         const text = hotRankingMessage(ranking());
-        expect(text).toContain('<code>01</code>\u2002<a');
-        expect(text).toContain('<code>10</code>\u2002<a');
+        expect(text).toContain('1️⃣\u2002<a');
+        expect(text).toContain('🔟\u2002<a');
         expect(text).toContain('📊 浏览量 1,000  ·  💬 回复 0');
         expect(text).not.toMatch(/👁|📖/);
         expect(text).not.toContain('🧪');
