@@ -28,7 +28,7 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/" }) => {
                 <FieldInput type="text" id="keyword3" class="input-field" placeholder="关键词3（同时命中）" aria-label="关键词3" maxlength="100" />
               </div>
             </div>
-            <div class="match-rules"><p>不区分大小写，多个关键词需同时命中。</p><details class="match-rule-details"><summary>规则说明<Icon name="chevron-down" /></summary><div><p><span id="subscriptionMatchScope">正在读取匹配范围…</span> <a href="/settings/telegram" data-route>调整范围</a></p><p>摘要由 RSS 提供，可能不含完整正文。正则表达式按所填标志匹配。</p><p>作者、分类与关键词需同时满足；留空则不限。屏蔽词命中标题或摘要时不通知。</p></div></details></div>
+            <details class="match-rules match-rule-details"><summary><span>不区分大小写，多个关键词需同时命中。</span><span class="match-rule-toggle">规则说明<Icon name="chevron-down" /></span></summary><div><p><span id="subscriptionMatchScope">正在读取匹配范围…</span> <a href="/settings/telegram" data-route>调整范围</a></p><p>摘要由 RSS 提供，可能不含完整正文。正则表达式按所填标志匹配。</p><p>作者、分类与关键词需同时满足；留空则不限。屏蔽词命中标题或摘要时不通知。</p></div></details>
             {/* 第二行：作者和分类 */}
             <div class="sub-form-row">
               <div class="sub-form-group">
