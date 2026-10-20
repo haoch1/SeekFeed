@@ -51,7 +51,7 @@ export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
                     <div class="keyword-query-options">
                         <FieldInput id="analysisDate" type="date" class="input-field" aria-label="关键词分析日期" required />
                         <select id="analysisScope" class="input-field" aria-label="关键词匹配范围"><option value="title">仅标题</option><option value="content">标题与 RSS 摘要</option></select>
-                        <button id="keywordAnalyzeBtn" type="submit" class="btn btn-primary"><Icon name="chart" />开始分析</button>
+                        <button id="keywordAnalyzeBtn" type="submit" class="btn btn-primary">开始分析</button>
                     </div>
                 </form>
                 <div id="keywordSuggestions" class="keyword-suggestions" aria-label="快速分析热门标题词"></div>
