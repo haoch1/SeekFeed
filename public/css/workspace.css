@@ -611,17 +611,8 @@ button:disabled { pointer-events: none; }
 @keyframes theme-crossfade { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { ::view-transition-new(root) { animation: none; } }
 
-/* Route snapshots crossfade only the content; navigation and the sticky header stay steady. */
-html.route-transition { view-transition-name: none; }
-html.route-transition .workspace-content { view-transition-name: workspace-route; }
-html.route-transition::view-transition { pointer-events: none; }
-html.route-transition::view-transition-old(root), html.route-transition::view-transition-new(root) { animation: none; }
-html.route-transition::view-transition-group(workspace-route) { animation: none; }
-html.route-transition::view-transition-image-pair(workspace-route) { isolation: isolate; }
-html.route-transition::view-transition-old(workspace-route) { animation: route-leave .2s ease-out both; mix-blend-mode: normal; }
-html.route-transition::view-transition-new(workspace-route) { animation: route-enter .3s cubic-bezier(.2,.7,.2,1) both; mix-blend-mode: normal; }
-@keyframes route-leave { to { opacity: 0; transform: translateY(-4px); } }
-@keyframes route-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-@media (prefers-reduced-motion: reduce) {
-    html.route-transition::view-transition-old(workspace-route), html.route-transition::view-transition-new(workspace-route) { animation: none; }
-}
+/* Route content fades sequentially in JavaScript: old and new text never overlap. */
+
+.subscription-controls { flex-wrap: wrap; }
+.subscription-item.is-editing { background: var(--primary-alpha); box-shadow: inset 3px 0 var(--primary); }
+#addSubForm { scroll-margin-top: 80px; }

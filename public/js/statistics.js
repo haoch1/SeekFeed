@@ -1,5 +1,6 @@
 /* Operational analytics use one publication-time cohort across every panel. */
 window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon: icon, getCategoryName, isLoggedIn }) {
+    const keywordAnalysis = window.SeekFeedKeywordAnalysis({ apiRequest, escapeHtml: esc, getCategoryName });
     const el = id => document.getElementById(id);
     const number = value => Number(value || 0).toLocaleString('zh-CN');
     const percent = (part, total) => total ? `${(part / total * 100).toFixed(1).replace(/\.0$/, '')}%` : '—';
@@ -197,6 +198,7 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
     }
     function render(data) {
         currentData = data;
+        keywordAnalysis.suggestions(data.topics.terms);
         const { totals: t, period: p } = data;
         const range = rangeText(p);
         el('analyticsPeriodLabel').textContent = `${days === -1 ? '今日' : days === 0 ? '全部记录' : `近 ${days} 天`} · ${range}`;
@@ -269,6 +271,7 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
         load,
         loadNotifications,
         init() {
+            keywordAnalysis.init();
             el('notificationRangeSelector').querySelectorAll('button').forEach(button => button.addEventListener('click', () => {
                 const next = Number(button.dataset.days);
                 if (notificationDays === next) return;
@@ -296,6 +299,7 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             new ResizeObserver(entries => { const next = Math.round(entries[0].contentRect.width); if (next > 0 && next !== width) { width = next; renderTrend(); } }).observe(el('analyticsTrend'));
         },
         tick() {
+            if (!el('statsPage').hidden) keywordAnalysis.tick();
             if (!el('statsPage').hidden && !inflight && Date.now() - lastLoad >= 30000) load(true);
             if (!el('subscriptionsPage').hidden && !notificationBusy && Date.now() - notificationLoad >= 30000) loadNotifications();
         },

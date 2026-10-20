@@ -4,6 +4,7 @@ import type { BaseConfig, Post, KeywordSub } from '../types';
 import { logger } from '../utils/logger';
 import { getAnalytics } from './analytics';
 import { HotService } from './hot';
+import { getKeywordAnalytics } from './keywordAnalytics';
 
 export class DatabaseService {
   private static instance: DatabaseService | undefined;
@@ -24,6 +25,11 @@ export class DatabaseService {
     const data = this.db.transaction(() => getAnalytics(this.db, days, offset))();
     this.setCache(key, data, 10000);
     return data;
+  }
+
+  getKeywordAnalytics(terms: string[], date: string, offset: number, scope: 'title' | 'content') {
+    // Queries are user-selected; do not grow the shared cache with arbitrary terms.
+    return this.db.transaction(() => getKeywordAnalytics(this.db, terms, date, offset, scope))();
   }
 
   // 静态工厂方法

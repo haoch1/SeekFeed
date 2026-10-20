@@ -39,6 +39,37 @@ export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
                     <div id="analyticsCategoryLegend" class="analytics-status-list"></div>
                 </article>
             </div>
+            <article id="keywordAnalysis" class="analytics-card keyword-analysis">
+                <div class="analytics-card-heading"><div><h2>关键词分析</h2><span class="analytics-caption">按所选日期统计，每个词独立计数</span></div></div>
+                <form id="keywordAnalysisForm" class="keyword-analysis-form">
+                    <div class="keyword-query-fields">
+                        <div class="keyword-query"><Icon name="search" /><FieldInput id="analysisKeyword" type="search" class="input-field" placeholder="关键词，如 DMIT" aria-label="分析关键词" required maxlength="60" /></div>
+                        <FieldInput id="analysisCompare1" class="input-field" placeholder="对比关键词 1" aria-label="对比关键词 1" maxlength="60" hidden />
+                        <FieldInput id="analysisCompare2" class="input-field" placeholder="对比关键词 2" aria-label="对比关键词 2" maxlength="60" hidden />
+                        <button id="keywordAddCompare" type="button" class="btn btn-secondary"><Icon name="plus" />添加对比</button>
+                    </div>
+                    <div class="keyword-query-options">
+                        <FieldInput id="analysisDate" type="date" class="input-field" aria-label="关键词分析日期" required />
+                        <select id="analysisScope" class="input-field" aria-label="关键词匹配范围"><option value="title">仅标题</option><option value="content">标题与 RSS 摘要</option></select>
+                        <button id="keywordAnalyzeBtn" type="submit" class="btn btn-primary"><Icon name="chart" />开始分析</button>
+                    </div>
+                </form>
+                <div id="keywordSuggestions" class="keyword-suggestions" aria-label="快速分析热门标题词"></div>
+                <p id="keywordAnalysisStatus" class="keyword-analysis-status" role="status">输入关键词，查看全天与各时段的发帖分布。</p>
+                <div id="keywordAnalysisResults" class="keyword-analysis-results" hidden>
+                    <div id="keywordComparison" class="keyword-comparison" role="group" aria-label="选择查看的关键词"></div>
+                    <div id="keywordMetrics" class="keyword-metrics"></div>
+                    <div id="keywordOverlap" class="keyword-overlap" hidden></div>
+                    <div class="keyword-chart-heading"><h3>时段分布</h3><div id="keywordBucketSelector" class="analytics-period" role="group" aria-label="关键词时间粒度">{[1, 3, 6].map(hours => <button type="button" class={`chart-range-btn${hours === 1 ? ' active' : ''}`} data-hours={hours} aria-pressed={hours === 1 ? 'true' : 'false'}>{hours} 小时</button>)}</div></div>
+                    <div id="keywordChartReadout" class="analytics-caption" aria-live="polite"></div>
+                    <div id="keywordHourChart" class="keyword-hour-chart" tabindex="0" role="group" aria-label="关键词时段柱形图，方向键查看数据"></div>
+                    <div class="keyword-dimensions">
+                        <section><h3>近 7 天</h3><div id="keywordDailyChart" class="keyword-daily-chart"></div></section>
+                        <section><h3>分类分布</h3><div id="keywordCategories" class="keyword-ranked"></div></section>
+                        <section><h3>活跃作者</h3><div id="keywordAuthors" class="keyword-ranked"></div></section>
+                    </div>
+                </div>
+            </article>
             <article id="analyticsCategoryCard" class="analytics-card">
                 <div class="analytics-card-heading"><div><h2>分类分析</h2><span id="analyticsCategoryCount" class="analytics-caption">所有分类</span></div><div class="analytics-category-search"><Icon name="search" /><FieldInput type="search" id="analyticsCategorySearch" class="input-field" placeholder="搜索分类" aria-label="搜索统计分类" /></div></div>
                 <div class="analytics-category-table-wrap" tabindex="0" role="region" aria-label="全部分类统计，可滚动查看更多分类"><table class="analytics-category-table"><thead><tr><th>分类</th><th>帖子</th><th>作者</th><th>占比</th></tr></thead><tbody id="analyticsCategoryRows"></tbody></table></div>

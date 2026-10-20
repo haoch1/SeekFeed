@@ -161,16 +161,21 @@
                 menu.append(actions);
             }
             document.body.append(menu);
-            const rect = button.getBoundingClientRect();
-            const height = Math.min(menu.scrollHeight, 260);
-            const viewportWidth = document.documentElement.clientWidth;
-            const width = Math.min(viewportWidth - 16, Math.max(rect.width, select.multiple ? 210 : 140));
-            const below = innerHeight - rect.bottom - 12;
-            menu.style.width = `${width}px`;
-            menu.style.left = `${Math.max(8, Math.min(rect.left, viewportWidth - width - 8))}px`;
-            menu.style.maxHeight = `${Math.max(80, Math.min(260, Math.max(below, rect.top - 12)))}px`;
-            menu.style.top = `${below >= height || below >= rect.top ? rect.bottom + 5 : Math.max(8, rect.top - Math.min(height, rect.top - 12) - 5)}px`;
-            state.menu = menu; active = state; refresh();
+            state.menu = menu;
+            state.place = () => {
+                const rect = button.getBoundingClientRect();
+                if (rect.bottom < 0 || rect.top > innerHeight) return close();
+                const height = Math.min(menu.scrollHeight, 260);
+                const viewportWidth = document.documentElement.clientWidth;
+                const width = Math.min(viewportWidth - 16, Math.max(rect.width, select.multiple ? 210 : 140));
+                const below = innerHeight - rect.bottom - 12;
+                menu.style.width = `${width}px`;
+                menu.style.left = `${Math.max(8, Math.min(rect.left, viewportWidth - width - 8))}px`;
+                menu.style.maxHeight = `${Math.max(80, Math.min(260, Math.max(below, rect.top - 12)))}px`;
+                menu.style.top = `${below >= height || below >= rect.top ? rect.bottom + 5 : Math.max(8, rect.top - Math.min(height, rect.top - 12) - 5)}px`;
+            };
+            active = state; state.place(); refresh();
+            if (active !== state) return;
             button.setAttribute('aria-expanded', 'true');
             highlight(Math.max(0, select.selectedIndex));
         };
@@ -277,7 +282,9 @@
         finally { await finish(); }
     }
     document.addEventListener('pointerdown', e => { if (active && !active.button.contains(e.target) && !active.menu.contains(e.target)) close(); });
-    document.addEventListener('scroll', e => { if (active && !active.menu.contains(e.target)) close(); }, true);
+    // Focus, scroll anchoring and browser automation can queue a scroll after click.
+    // Keep the popup attached to its trigger instead of dismissing a fresh menu.
+    document.addEventListener('scroll', e => { if (active && !active.menu.contains(e.target)) active.place(); }, true);
     addEventListener('resize', close);
     document.addEventListener('click', e => {
         const button = e.target.closest('[data-toggle-secret]');
@@ -287,7 +294,7 @@
         input.type = show ? 'text' : 'password';
         button.innerHTML = icon(show ? 'eye-off' : 'eye');
         button.setAttribute('aria-pressed', String(show));
-        button.setAttribute('aria-label', `${show ? '隐藏' : '显示'}${input.id === 'botToken' ? ' Bot Token' : '密码'}`);
+        button.setAttribute('aria-label', `${show ? '隐藏' : '显示'}${button.dataset.secretLabel || (input.id === 'botToken' ? ' Bot Token' : '密码')}`);
     });
     window.SeekFeedControls = { icon, beginPending, pending, closeSelect: close, refreshSelects: () => selects.forEach(s => s.refresh()) };
     document.addEventListener('DOMContentLoaded', () => document.querySelectorAll('select').forEach(enhance));

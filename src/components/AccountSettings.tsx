@@ -2,6 +2,13 @@ import type { FC } from 'hono/jsx';
 import { FieldInput } from './Controls';
 import { Icon } from './DashboardSurface';
 
+const PasswordInput: FC<any> = ({ id, label, ...props }) => (
+    <div class="secret-field">
+        <FieldInput {...props} id={id} type="password" class="input-field" spellcheck="false" />
+        <button type="button" class="secret-toggle icon-btn" data-toggle-secret={id} data-secret-label={label} aria-label={`显示${label}`} aria-pressed="false"><Icon name="eye" /></button>
+    </div>
+);
+
 export const AccountSettings: FC<{ active?: boolean }> = ({ active = false }) => (
     <section id="accountPage" class="route-page" hidden={!active}>
         <div class="workspace-heading"><div><h1>账号与安全</h1></div></div>
@@ -10,9 +17,9 @@ export const AccountSettings: FC<{ active?: boolean }> = ({ active = false }) =>
                 <div class="section-heading"><h2>账号信息</h2><p>修改账号需要验证当前密码，保存后请重新登录。</p></div>
                 <form id="accountForm" class="form-stack" method="post">
                     <div class="form-group"><label class="form-label" for="accountUsername">用户名</label><FieldInput id="accountUsername" class="input-field" required minlength="3" maxlength="50" spellcheck="false" /></div>
-                    <div class="form-group"><label class="form-label" for="accountCurrentPassword">当前密码</label><FieldInput id="accountCurrentPassword" type="password" class="input-field" required maxlength="50" /></div>
-                    <div class="form-group"><label class="form-label" for="accountNewPassword">新密码</label><FieldInput id="accountNewPassword" type="password" class="input-field" minlength="8" maxlength="50" placeholder="不修改密码时留空" /><span class="form-hint">8–50 个字符，建议使用随机生成的强密码。</span></div>
-                    <div class="form-group"><label class="form-label" for="accountConfirmPassword">确认新密码</label><FieldInput id="accountConfirmPassword" type="password" class="input-field" minlength="8" maxlength="50" placeholder="再次输入新密码" /></div>
+                    <div class="form-group"><label class="form-label" for="accountCurrentPassword">当前密码</label><PasswordInput id="accountCurrentPassword" label="当前密码" required maxlength="50" /></div>
+                    <div class="form-group"><label class="form-label" for="accountNewPassword">新密码</label><PasswordInput id="accountNewPassword" label="新密码" minlength="8" maxlength="50" placeholder="不修改密码时留空" /><span class="form-hint">8–50 个字符，建议使用随机生成的强密码。</span></div>
+                    <div class="form-group"><label class="form-label" for="accountConfirmPassword">确认新密码</label><PasswordInput id="accountConfirmPassword" label="确认新密码" minlength="8" maxlength="50" placeholder="再次输入新密码" /></div>
                     <div class="form-actions"><button class="btn btn-primary" type="submit">保存账号信息</button></div>
                 </form>
             </section>

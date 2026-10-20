@@ -25,10 +25,11 @@ window.SeekFeedHot = (() => {
       row.querySelector('.hot-rank').setAttribute('aria-label', `第 ${index + 1} 名`);
       text('a', post.title); text('.hot-category', post.categoryLabel); text('.hot-author', post.author);
       const views = post.views, replies = post.replies;
-      text('.hot-views span', number(views)); text('.hot-replies span', number(replies)); text('.hot-heat', post.heat.toFixed(1));
+      const heat = String(Math.round(post.heat * 100));
+      text('.hot-views span', number(views)); text('.hot-replies span', number(replies)); text('.hot-heat', heat);
       row.querySelector('.hot-views').setAttribute('aria-label', `浏览量 ${number(views)}`);
       row.querySelector('.hot-replies').setAttribute('aria-label', `回复量 ${number(replies)}`);
-      row.querySelector('.hot-heat').setAttribute('aria-label', `热度 ${post.heat.toFixed(1)}`);
+      row.querySelector('.hot-heat').setAttribute('aria-label', `热度 ${heat}`);
       keep.add(row);
       if (list.children[index] !== row) list.insertBefore(row, list.children[index] || null);
     }

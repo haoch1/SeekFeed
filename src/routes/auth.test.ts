@@ -40,6 +40,40 @@ beforeEach(() => {
 describe('account settings and session expiry', () => {
     const headers = () => ({ Authorization: `Bearer ${sessionId}`, 'Content-Type': 'application/json' });
 
+    it('validates keyword analysis inputs and exposes only aggregates, independently of private rules', async () => {
+        db.createKeywordSub({ keyword1: 'private-rule-example' });
+        const response = await app.request('/api/stats/keywords?q=DMIT&compare1=dmit&compare2=香港&date=2026-01-02&offset=480');
+        expect(response.status).toBe(200);
+        const body = await response.json();
+        expect(body.data.series.map((row: any) => row.term)).toEqual(['DMIT', '香港']);
+        expect(body.data.totalPosts).toBe(0);
+        expect(JSON.stringify(body)).not.toContain('private-rule-example');
+        expect(JSON.stringify(body)).not.toContain('unused-test-hash');
+        const valid = 'q=dmit&date=2026-01-02';
+        for (const query of ['q=&date=2026-01-02', 'q=hi&date=2026-02-30', 'q=hi&date=2026-13-01', 'q=hi&date=2099-01-01', valid + '&offset=840.1', valid + '&scope=full', valid + '&offset=-841', 'date=2026-01-02&q=' + 'x'.repeat(61), valid + '&compare1=' + 'x'.repeat(61)]) {
+            expect((await app.request('/api/stats/keywords?' + query)).status).toBe(400);
+        }
+    });
+
+    it('edits rule fields in place, permits clearing filters and preserves paused status and post history', async () => {
+        const sub = db.createKeywordSub({ keyword1: 'old', keyword2: 'filter', creator: 'alice', category: 'tech', exclude_keywords: 'noise', enabled: 0 });
+        db.createPost({ post_id: 101, title: 'old post', memo: '', category: 'tech', creator: 'alice', pub_date: '2026-01-02T01:00:00Z', push_status: 3, sub_id: sub.id });
+        const replacement = { keyword1: 'new', keyword2: '', keyword3: '', creator: '', category: '', exclude_keywords: '' };
+        const path = '/api/subscriptions/' + sub.id;
+        expect((await app.request(path, { method: 'PUT', body: JSON.stringify(replacement) })).status).toBe(401);
+        const response = await app.request(path, { method: 'PUT', headers: headers(), body: JSON.stringify(replacement) });
+        expect(response.status).toBe(200);
+        expect((await response.json()).data).toMatchObject({ id: sub.id, enabled: 0, keyword1: 'new', keyword2: null, creator: null, category: null, exclude_keywords: '' });
+        expect(db.getAllKeywordSubs()).toHaveLength(1);
+        expect(db.getRecentPosts(1)[0]).toMatchObject({ sub_id: sub.id, push_status: 3 });
+        const empty = await app.request(path, { method: 'PUT', headers: headers(), body: JSON.stringify({ keyword1: '  ' }) });
+        expect(empty.status).toBe(400);
+        expect(db.getKeywordSubById(sub.id!)!.keyword1).toBe('new');
+        expect((await app.request('/api/subscriptions/9999', { method: 'PUT', headers: headers(), body: JSON.stringify(replacement) })).status).toBe(404);
+        expect((await app.request(path, { method: 'PUT', headers: headers(), body: JSON.stringify({ enabled: 1 }) })).status).toBe(200);
+        expect(db.getKeywordSubById(sub.id!)!.enabled).toBe(1);
+    });
+
     it('opens the hot ranking as home while preserving first-time initialization', async () => {
         const home = await app.request('/');
         expect(home.status).toBe(302);

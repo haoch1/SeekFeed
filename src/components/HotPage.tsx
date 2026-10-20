@@ -2,7 +2,7 @@ import type { FC } from 'hono/jsx';
 import { Icon } from './DashboardSurface';
 
 export const HotPage: FC<{ active: boolean }> = ({ active }) => <section id="hotPage" class="route-page" hidden={!active}>
-    <div class="workspace-heading"><div><h1>热榜</h1></div><button id="hotRefresh" type="button" class="btn btn-secondary"><Icon name="sync" /><span>刷新榜单</span></button></div>
+    <div class="workspace-heading"><div><h1>热榜</h1></div><button id="hotRefresh" type="button" class="btn btn-secondary"><Icon name="sync" /><span>立即刷新</span></button></div>
     <section class="hot-panel" aria-label="社区热榜">
         <div class="hot-toolbar">
             <div class="hot-tabs" role="tablist" aria-label="热榜时间范围">

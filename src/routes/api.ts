@@ -167,6 +167,24 @@ apiRoutes.get('/stats/overview', (c) => {
     return c.json(createSuccessResponse(c.get('dbService').getComprehensiveStats()));
 });
 
+const keywordAnalyticsQuery = z.object({
+    q: z.string().trim().min(1).max(60),
+    compare1: z.string().trim().max(60).default(''),
+    compare2: z.string().trim().max(60).default(''),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
+        const parsed = new Date(`${value}T00:00:00Z`);
+        return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+    }),
+    offset: z.coerce.number().int().min(-840).max(840).default(0),
+    scope: z.enum(['title', 'content']).default('title'),
+});
+apiRoutes.get('/stats/keywords', createQueryValidationMiddleware(keywordAnalyticsQuery), c => {
+    const { q, compare1, compare2, date, offset, scope } = c.get('validatedQuery');
+    if (Date.parse(`${date}T00:00:00Z`) - offset * 60000 > Date.now()) return c.json(createErrorResponse('请选择今天或之前的日期'), 400);
+    const terms = [q, compare1, compare2].filter(Boolean).filter((term, index, all) => all.findIndex(value => value.normalize('NFKC').toLowerCase() === term.normalize('NFKC').toLowerCase()) === index);
+    return c.json(createSuccessResponse(c.get('dbService').getKeywordAnalytics(terms, date, offset, scope)));
+});
+
 const sessionMiddleware = async (c: any, next: any) => {
     const authHeader = c.req.header('Authorization');
 
@@ -358,6 +376,12 @@ apiRoutes.put('/subscriptions/:id',
             const validatedData = c.get('validatedData');
             const dbService = c.get('dbService');
 
+            const existing = dbService.getKeywordSubById(id);
+            if (!existing) return c.json(createErrorResponse('订阅不存在'), 404);
+            const merged = { ...existing, ...validatedData };
+            if (![merged.keyword1, merged.keyword2, merged.keyword3, merged.creator, merged.category].some(value => value?.trim())) {
+                return c.json(createErrorResponse('至少需要提供一个关键词或过滤条件'), 400);
+            }
             const subscription = dbService.updateKeywordSub(id, validatedData);
 
             if (!subscription) {

@@ -137,6 +137,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // ============================================
   // 主题切换
   // ============================================
+  let themeTransition;
   function initTheme() {
     const savedTheme = localStorage.getItem("theme");
     if (savedTheme) {
@@ -155,7 +156,6 @@ document.addEventListener("DOMContentLoaded", function () {
     };
     updateThemeIcon();
     let themeTimer;
-    let themeTransition;
     themeButton?.addEventListener("click", () => {
       const currentTheme = document.documentElement.getAttribute("data-theme");
       const newTheme = currentTheme === "dark" ? "light" : "dark";
@@ -165,10 +165,8 @@ document.addEventListener("DOMContentLoaded", function () {
         localStorage.setItem("theme", newTheme);
         updateThemeIcon();
       };
-      if (document.startViewTransition && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      if (document.startViewTransition && routeAnimation?.playState !== 'running' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         themeTransition?.skipTransition();
-        routeTransition?.skipTransition();
-        root.classList.remove('route-transition');
         themeTransition = document.startViewTransition(apply);
         return;
       }
@@ -840,6 +838,37 @@ document.addEventListener("DOMContentLoaded", function () {
   // ============================================
   // 订阅管理
   // ============================================
+  let editingSubscription = null;
+  const subscriptionRecords = new Map();
+  function cancelSubscriptionEdit() {
+    editingSubscription = null;
+    el('addSubForm').reset();
+    el('subFormTitle').textContent = '新建订阅';
+    const saveButton = el('saveSubscriptionBtn');
+    (saveButton.querySelector('.button-content') || saveButton).textContent = '添加订阅';
+    el('cancelSubscriptionEdit').hidden = true;
+    el('subscriptionsList').querySelectorAll('.is-editing').forEach(item => item.classList.remove('is-editing'));
+    window.SeekFeedControls.refreshSelects();
+  }
+  function editSubscription(id) {
+    const sub = subscriptionRecords.get(id);
+    if (!sub || el('saveSubscriptionBtn').disabled) return;
+    editingSubscription = id;
+    for (const field of ['keyword1', 'keyword2', 'keyword3', 'excludeKeywords', 'subCreator', 'subCategory']) {
+      const key = { excludeKeywords: 'exclude_keywords', subCreator: 'creator', subCategory: 'category' }[field] || field;
+      const input = el(field), value = sub[key] || '';
+      if (field === 'subCategory' && value && ![...input.options].some(option => option.value === value)) input.add(new Option(getCategoryName(value), value));
+      input.value = value;
+    }
+    el('subFormTitle').textContent = `编辑订阅 #${id}`;
+    el('saveSubscriptionBtn').textContent = '保存修改';
+    el('cancelSubscriptionEdit').hidden = false;
+    el('subscriptionsList').querySelectorAll('.subscription-item').forEach(item => item.classList.toggle('is-editing', Number(item.dataset.id) === id));
+    window.SeekFeedControls.refreshSelects();
+    const form = el('addSubForm');
+    if (form.getBoundingClientRect().top < 80 || form.getBoundingClientRect().top > innerHeight - 160) form.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
+    el('keyword1').focus({preventScroll:true});
+  }
   function filterSubscriptions() {
     const query = el('subscriptionSearch').value.trim().toLocaleLowerCase();
     const items = [...el('subscriptionsList').querySelectorAll('.subscription-item')];
@@ -854,8 +883,11 @@ document.addEventListener("DOMContentLoaded", function () {
     const result = await apiRequest("/api/subscriptions");
     const container = el("subscriptionsList");
     if (!result?.success) { container.textContent = "订阅加载失败，请刷新页面重试。"; return; }
-    container.innerHTML = result.data.length ? result.data.map(sub => `<div class="subscription-item ${sub.enabled === 0 ? "paused" : ""}" data-id="${sub.id}"><div class="subscription-description"><div class="subscription-id">订阅 <span>#${sub.id}</span></div><div class="subscription-keywords">${[sub.keyword1, sub.keyword2, sub.keyword3].filter(Boolean).map(word => `<span class="tag tag-blue">${escapeHtml(word)}</span>`).join("") || '<span class="tag">按作者 / 分类订阅</span>'}</div><div class="subscription-filters"><span class="subscription-state">${sub.enabled === 0 ? "已暂停" : "监控中"}</span>${sub.creator ? `<span>作者 ${escapeHtml(sub.creator)}</span>` : ""}${sub.category ? `<span>${escapeHtml(getCategoryName(sub.category))}</span>` : ""}</div>${sub.exclude_keywords ? `<div class="subscription-exclusions">屏蔽：${escapeHtml(sub.exclude_keywords)}</div>` : ""}</div><div class="subscription-controls"><button class="btn btn-secondary btn-xs toggle-sub" data-enabled="${sub.enabled === 0 ? 1 : 0}">${renderIcon(sub.enabled === 0 ? 'play' : 'pause')}${sub.enabled === 0 ? "恢复" : "暂停"}</button><button class="btn btn-danger btn-xs delete-sub">${renderIcon('trash')}删除</button></div></div>`).join("") : '<div class="empty-state-small"><div class="empty-title">还没有订阅</div><p class="form-hint">添加关键词、作者或分类，开始接收有价值的动态。</p></div>';
+    subscriptionRecords.clear(); result.data.forEach(sub => subscriptionRecords.set(sub.id, sub));
+    container.innerHTML = result.data.length ? result.data.map(sub => `<div class="subscription-item ${sub.enabled === 0 ? "paused" : ""}" data-id="${sub.id}"><div class="subscription-description"><div class="subscription-id">订阅 <span>#${sub.id}</span></div><div class="subscription-keywords">${[sub.keyword1, sub.keyword2, sub.keyword3].filter(Boolean).map(word => `<span class="tag tag-blue">${escapeHtml(word)}</span>`).join("") || '<span class="tag">按作者 / 分类订阅</span>'}</div><div class="subscription-filters"><span class="subscription-state">${sub.enabled === 0 ? "已暂停" : "监控中"}</span>${sub.creator ? `<span>作者 ${escapeHtml(sub.creator)}</span>` : ""}${sub.category ? `<span>${escapeHtml(getCategoryName(sub.category))}</span>` : ""}</div>${sub.exclude_keywords ? `<div class="subscription-exclusions">屏蔽：${escapeHtml(sub.exclude_keywords)}</div>` : ""}</div><div class="subscription-controls"><button type="button" class="btn btn-secondary btn-xs edit-sub">${renderIcon('edit')}编辑</button><button class="btn btn-secondary btn-xs toggle-sub" data-enabled="${sub.enabled === 0 ? 1 : 0}">${renderIcon(sub.enabled === 0 ? 'play' : 'pause')}${sub.enabled === 0 ? "恢复" : "暂停"}</button><button class="btn btn-danger btn-xs delete-sub">${renderIcon('trash')}删除</button></div></div>`).join("") : '<div class="empty-state-small"><div class="empty-title">还没有订阅</div><p class="form-hint">添加关键词、作者或分类，开始接收有价值的动态。</p></div>';
     filterSubscriptions();
+    container.querySelectorAll('.edit-sub').forEach(button => button.addEventListener('click', () => editSubscription(Number(button.closest('.subscription-item').dataset.id))));
+    container.querySelectorAll('.subscription-item').forEach(item => item.classList.toggle('is-editing', Number(item.dataset.id) === editingSubscription));
     container.querySelectorAll(".toggle-sub").forEach(btn => btn.addEventListener("click", async () => {
       const item = btn.closest('.subscription-item');
       if (item.dataset.busy) return;
@@ -887,6 +919,7 @@ document.addEventListener("DOMContentLoaded", function () {
       try { result = await window.SeekFeedControls.pending(btn, () => apiRequest(`/api/subscriptions/${item.dataset.id}`, { method: "DELETE" })); }
       finally { delete item.dataset.busy; other.disabled = false; }
       if (result?.success) {
+        if (Number(item.dataset.id) === editingSubscription) cancelSubscriptionEdit();
         item.remove();
         filterSubscriptions();
         if (!container.querySelector('.subscription-item')) loadSubscriptions();
@@ -901,16 +934,21 @@ document.addEventListener("DOMContentLoaded", function () {
       : '匹配范围可在 Telegram 设置中查看。';
   }
   function initSubscriptions() {
+    el('cancelSubscriptionEdit').addEventListener('click', cancelSubscriptionEdit);
     el('subscriptionSearch').addEventListener('input', () => { filterSubscriptions(); el('subscriptionsList').scrollTop = 0; });
     el("addSubForm").addEventListener("submit", pendingSubmit(async e => {
       e.preventDefault();
-      const data = { keyword1: el("keyword1").value.trim() || undefined, keyword2: el("keyword2").value.trim() || undefined,
-        keyword3: el("keyword3").value.trim() || undefined, creator: el("subCreator").value.trim() || undefined,
-        category: el("subCategory").value || undefined, exclude_keywords: el("excludeKeywords").value.trim(), enabled: 1 };
+      const data = { keyword1: el("keyword1").value.trim(), keyword2: el("keyword2").value.trim(),
+        keyword3: el("keyword3").value.trim(), creator: el("subCreator").value.trim(),
+        category: el("subCategory").value, exclude_keywords: el("excludeKeywords").value.trim() };
+      const editId = editingSubscription;
       if (![data.keyword1, data.keyword2, data.keyword3, data.creator, data.category].some(Boolean)) return Toast.warning("请至少填写一个订阅条件");
-      const result = await apiRequest("/api/subscriptions", { method: "POST", body: JSON.stringify(data) });
-      if (!result?.success) return Toast.error(result?.message || "添加失败");
-      Toast.success("订阅已添加"); el("addSubForm").reset(); loadSubscriptions(); loadFilterSubscriptions(); updateStats(); analytics.loadNotifications();
+      el('cancelSubscriptionEdit').disabled = true;
+      let result;
+      try { result = await apiRequest(editId ? `/api/subscriptions/${editId}` : "/api/subscriptions", { method: editId ? "PUT" : "POST", body: JSON.stringify(data) }); }
+      finally { el('cancelSubscriptionEdit').disabled = false; }
+      if (!result?.success) return Toast.error(result?.message || (editId ? "修改失败" : "添加失败"));
+      Toast.success(editId ? '订阅已更新' : '订阅已添加'); cancelSubscriptionEdit(); loadSubscriptions(); loadFilterSubscriptions(); updateStats(); analytics.loadNotifications();
     }));
   }
   const routeMap = {
@@ -921,7 +959,6 @@ document.addEventListener("DOMContentLoaded", function () {
   };
   let activePath = null;
   let routeAnimation;
-  let routeTransition;
   let routeRequest = 0;
   const routeScroll = new Map();
   async function navigate(path, push = true) {
@@ -929,10 +966,11 @@ document.addEventListener("DOMContentLoaded", function () {
     const [name, title] = routeMap[path] || routeMap['/'];
     if (!isLoggedIn && !['feed', 'stats', 'hot'].includes(name)) { LoginModal.open(); return; }
     const id = ++routeRequest;
-    routeTransition?.skipTransition();
-    routeAnimation?.cancel();
     const root = document.documentElement;
     const content = el('mainContent');
+    const opacity = getComputedStyle(content).opacity;
+    themeTransition?.skipTransition();
+    routeAnimation?.cancel();
     const animate = activePath && activePath !== path && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const apply = () => {
       if (id !== routeRequest) return;
@@ -959,23 +997,19 @@ document.addEventListener("DOMContentLoaded", function () {
       window.scrollTo({ top: routeScroll.get(path) || 0, behavior: 'instant' });
       if (push) document.querySelector(`#${name}Page h1`)?.focus({ preventScroll: true });
     };
-    // Capture both pages before hiding either; the application shell stays in place.
-    if (animate && document.startViewTransition) {
-      root.classList.add('route-transition');
-      routeTransition = document.startViewTransition(apply);
-      try { await routeTransition.finished; }
-      catch { /* Interrupted navigation still commits the latest requested route. */ }
-      finally { if (id === routeRequest) root.classList.remove('route-transition'); }
-    } else if (animate && content.animate) {
-      root.classList.remove('route-transition');
-      routeAnimation = content.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 100, fill: 'forwards', easing: 'ease-out' });
+    // Finish fading the current DOM before switching content. No overlapping snapshots
+    // or text translation: matching headings stay sharp even during rapid navigation.
+    root.classList.remove('route-transition');
+    if (animate && content.animate) {
+      routeAnimation = content.animate([{ opacity }, { opacity: 0 }], { duration: 100, fill: 'forwards', easing: 'ease-out' });
+      routeAnimation.id = 'route-leave';
       try { await routeAnimation.finished; } catch { return; }
       if (id !== routeRequest) return;
       apply();
       routeAnimation.cancel();
-      routeAnimation = content.animate([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 220, easing: 'cubic-bezier(.2,.7,.2,1)' });
+      routeAnimation = content.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: 'cubic-bezier(.2,.7,.2,1)' });
+      routeAnimation.id = 'route-enter';
     } else {
-      root.classList.remove('route-transition');
       apply();
     }
   }

@@ -14,7 +14,7 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
     <Layout
       title="SeekFeed"
       description="NodeSeek RSS 文章列表"
-      scriptSrc={["/js/statistics.js", "/js/hot.js", "/js/home.js"]}
+      scriptSrc={["/js/keyword-statistics.js", "/js/statistics.js", "/js/hot.js", "/js/home.js"]}
     >
       <DashboardSurface path={path}>
 
@@ -24,7 +24,7 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
           {/* 添加订阅表单 */}
           <form id="addSubForm" class="sub-form" method="post">
             {/* 第一行：关键词 */}
-            <div class="section-heading"><h2>新建订阅</h2></div><div class="sub-form-row"><label class="form-label" for="keyword1">匹配关键词</label></div>
+            <div class="section-heading"><h2 id="subFormTitle">新建订阅</h2></div><div class="sub-form-row"><label class="form-label" for="keyword1">匹配关键词</label></div>
             <div class="sub-form-row"><div class="sub-keywords-inputs">
                 <FieldInput type="text" id="keyword1" class="input-field" placeholder="关键词1，如 DMIT" aria-label="关键词1" maxlength="100" />
                 <FieldInput type="text" id="keyword2" class="input-field" placeholder="关键词2（同时命中）" aria-label="关键词2" maxlength="100" />
@@ -60,7 +60,8 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
             <div class="sub-form-row"><div class="sub-form-group" style="width:100%"><label for="excludeKeywords" class="sub-form-label">屏蔽词</label><FieldInput type="text" id="excludeKeywords" class="input-field" placeholder="如：出号, 求购, 已出（逗号分隔）" maxlength="500" /></div></div>
             {/* 第三行：添加按钮 */}
             <div class="sub-form-row sub-form-row-action">
-              <button type="submit" class="btn btn-primary">添加订阅</button>
+              <button id="saveSubscriptionBtn" type="submit" class="btn btn-primary">添加订阅</button>
+              <button id="cancelSubscriptionEdit" type="button" class="btn btn-secondary" hidden>取消编辑</button>
             </div>
           </form>
 
@@ -115,7 +116,7 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
             <dl class="diagnostic-list rss-diagnostics"><div><dt>自动监控</dt><dd id="rssRunningStatus">读取状态中</dd></div><div><dt>抓取频率</dt><dd id="rssRunningInterval">—</dd></div><div><dt>上次成功同步</dt><dd id="rssLastSuccess">—</dd></div></dl>
             <button id="fetchRssBtn" class="btn btn-primary">
               <Icon name="sync" />
-              立即抓取 RSS
+              立即刷新
             </button>
           </div>
         </div>
