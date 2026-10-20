@@ -4,6 +4,20 @@
     const icon = name => `<svg data-icon="${name}" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths[name] || paths.info || ''}</svg>`;
     const selects = new Map();
     const chartInspectors = new Map();
+    // SVG coordinates only: captions, axis surroundings and native scrollbars
+    // must never act as a data point, including when a focused chart is scrolled.
+    function chartPointer(event, svg) {
+        if (!svg || event.target.closest?.('svg') !== svg) return null;
+        const bounds = svg.getBoundingClientRect();
+        if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) return null;
+        const view = svg.viewBox.baseVal;
+        return { x: (event.clientX - bounds.left) * view.width / bounds.width, y: (event.clientY - bounds.top) * view.height / bounds.height };
+    }
+    function nearChartSegment(point, start, end, tolerance = 7) {
+        const dx = end.x - start.x, dy = end.y - start.y;
+        const ratio = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / (dx * dx + dy * dy || 1)));
+        return Math.hypot(point.x - start.x - ratio * dx, point.y - start.y - ratio * dy) <= tolerance;
+    }
     const scrollLocks = new Set();
     let lockedScroll = 0;
     function lockScroll(owner) {
@@ -322,6 +336,6 @@
         button.setAttribute('aria-pressed', String(show));
         button.setAttribute('aria-label', `${show ? '隐藏' : '显示'}${button.dataset.secretLabel || (input.id === 'botToken' ? ' Bot Token' : '密码')}`);
     });
-    window.SeekFeedControls = { icon, beginPending, pending, lockScroll, unlockScroll, closeSelect: close, refreshSelects: () => selects.forEach(s => s.refresh()), dismissCharts, chartInspection: (box, dismiss) => dismiss ? chartInspectors.set(box, dismiss) : chartInspectors.delete(box) };
+    window.SeekFeedControls = { icon, beginPending, pending, lockScroll, unlockScroll, chartPointer, nearChartSegment, closeSelect: close, refreshSelects: () => selects.forEach(s => s.refresh()), dismissCharts, chartInspection: (box, dismiss) => dismiss ? chartInspectors.set(box, dismiss) : chartInspectors.delete(box) };
     document.addEventListener('DOMContentLoaded', () => document.querySelectorAll('select').forEach(enhance));
 })();

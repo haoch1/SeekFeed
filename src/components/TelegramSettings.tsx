@@ -4,7 +4,7 @@ import { FieldInput } from './Controls';
 
 export const TelegramSettings: FC<{ active?: boolean }> = ({ active = false }) => (
     <section id="telegramPage" class="route-page" hidden={!active}>
-        <div class="workspace-heading"><div><h1>Telegram</h1></div></div>
+        <div class="workspace-heading"><div><h1><Icon name="send" /><span>Telegram</span></h1></div></div>
         <div class="page-body settings-content">
             <section class="settings-section" aria-labelledby="telegramDeliveryTitle">
                 <div class="section-heading"><h4 id="telegramDeliveryTitle">推送设置</h4></div>

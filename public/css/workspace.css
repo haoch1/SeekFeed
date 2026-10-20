@@ -141,8 +141,12 @@ html { scroll-padding-top: 72px; }
 .breadcrumb-divider { color: var(--text-muted); }
 .mobile-menu { display: none; }
 .workspace-content { padding: 28px 30px; max-width: none; margin: 0 auto; }
+html:not([data-auth="session"]) [data-auth-only], html[data-auth="session"] [data-guest-only] { display: none !important; }
 .workspace-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
 .workspace-heading h1 { font-size: 24px; font-weight: 650; line-height: 1.3; letter-spacing: -.6px; color: var(--text-primary); }
+.workspace-heading h1 { display: flex; align-items: center; gap: 10px; }
+.workspace-heading h1 > svg { width: 26px; height: 26px; flex-shrink: 0; color: var(--primary); }
+.workspace-account .account-login { margin-left: auto; min-height: 38px; padding: 7px 10px; gap: 5px; flex-shrink: 0; font-size: 12px; }
 .workspace-heading p { margin: 8px 0 0; color: var(--text-secondary); font-size: 13px; }
 .heading-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .metric-strip { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--border-color); border-radius: 8px; padding: 18px 0; margin-bottom: 22px; background: var(--bg-card); }

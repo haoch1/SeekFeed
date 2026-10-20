@@ -19,7 +19,7 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
       <DashboardSurface path={path}>
 
       {/* 订阅管理页面 */}
-      <section id="subscriptionsPage" class="route-page" hidden={path !== "/subscriptions"}><div class="workspace-heading"><div><h1>订阅管理</h1></div></div>
+      <section id="subscriptionsPage" class="route-page" hidden={path !== "/subscriptions"}><div class="workspace-heading"><div><h1><Icon name="list" /><span>订阅管理</span></h1></div></div>
         <div class="page-body">
           {/* 添加订阅表单 */}
           <form id="addSubForm" class="sub-form" method="post">
@@ -85,7 +85,7 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
       </section>
 
       {/* RSS 配置页面 */}
-      <section id="rssPage" class="route-page" hidden={path !== "/settings/rss"}><div class="workspace-heading"><div><h1>RSS 配置</h1></div></div>
+      <section id="rssPage" class="route-page" hidden={path !== "/settings/rss"}><div class="workspace-heading"><div><h1><Icon name="rss" /><span>RSS 配置</span></h1></div></div>
         <div class="page-body">
           <form id="rssConfigForm" class="form-stack" method="post">
             <div class="form-group">

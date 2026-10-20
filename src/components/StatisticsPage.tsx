@@ -5,7 +5,7 @@ import { FieldInput } from './Controls';
 export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
     <section id="statsPage" class="route-page" hidden={!active}>
         <div class="workspace-heading analytics-heading">
-            <div><h1>统计信息</h1></div>
+            <div><h1><Icon name="chart" /><span>统计信息</span></h1></div>
             <div id="chartRangeSelector" class="analytics-period" role="group" aria-label="统计时间范围">
                 {[[-1, '今日'], [7, '近 7 天'], [30, '近 30 天'], [0, '全部']].map(([days, label]) => (
                     <button type="button" class={`chart-range-btn${days === -1 ? ' active' : ''}`} data-days={days} aria-pressed={days === -1 ? 'true' : 'false'}>{label}</button>
@@ -46,7 +46,7 @@ export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
                     <div class="keyword-query-fields">
                         <div class="keyword-query"><Icon name="search" /><FieldInput id="analysisKeyword" type="search" class="input-field" placeholder="关键词，如 DMIT" aria-label="分析关键词" required maxlength="60" /></div>
                         {[1, 2].map(index => <div id={`analysisCompareField${index}`} class="keyword-compare-field" hidden><FieldInput id={`analysisCompare${index}`} class="input-field" placeholder={`对比关键词 ${index}`} aria-label={`对比关键词 ${index}`} maxlength="60" hidden /><button type="button" class="icon-btn" data-remove-compare={index} aria-label={`移除对比关键词 ${index}`}><Icon name="close" /></button></div>)}
-                        <button id="keywordAddCompare" type="button" class="btn btn-secondary"><Icon name="plus" />添加对比</button>
+                        <button id="keywordAddCompare" type="button" class="btn btn-secondary" aria-label="添加对比" title="添加对比"><Icon name="plus" /><span>添加对比</span></button>
                     </div>
                     <div class="keyword-query-options">
                         <FieldInput id="analysisDate" type="date" class="input-field" aria-label="关键词分析日期" required />

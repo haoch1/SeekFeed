@@ -53,12 +53,18 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
         <link href="/css/hot.css" rel="stylesheet" />
         <link href="/css/mobile.css" rel="stylesheet" />
 
-        {/* 主题初始化脚本 - 防止闪烁 */}
+        {/* Establish presentation before the first body paint. APIs still verify the session. */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
             (function() {
-              const savedTheme = localStorage.getItem('theme');
+              let savedTheme;
+              try {
+                document.documentElement.dataset.auth = localStorage.getItem('sessionId') ? 'session' : 'guest';
+                savedTheme = localStorage.getItem('theme');
+              } catch {
+                document.documentElement.dataset.auth = 'guest';
+              }
               if (savedTheme === 'dark') {
                 document.documentElement.setAttribute('data-theme', 'dark');
               } else if (savedTheme === 'light') {

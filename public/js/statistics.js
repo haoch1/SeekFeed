@@ -98,7 +98,7 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             tooltip.firstElementChild.textContent = bucketText(data[focusIndex]);
             tooltip.querySelector('strong').textContent = number(data[focusIndex].count) + ' 篇';
             tooltip.hidden = false;
-            if (document.activeElement === box) {
+            if (document.activeElement === box && box.matches(':focus-visible')) {
                 const start = Math.max(0, x(focusIndex) - slot / 2 - 8), end = x(focusIndex) + slot / 2 + 8;
                 if (focusIndex === 0) scroller.scrollLeft = 0;
                 else if (start < scroller.scrollLeft) scroller.scrollLeft = start;
@@ -114,15 +114,28 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             if (selected >= 0) { columns[selected].removeAttribute('data-active'); labels[selected].removeAttribute('data-active'); }
             selected = -1; showReadout();
         }
-        const pointerIndex = event => Math.max(0, Math.min(data.length - 1, Math.floor((event.clientX - box.getBoundingClientRect().left + scroller.scrollLeft - left) / step)));
+        const pointerIndex = event => {
+            const point = window.SeekFeedControls.chartPointer(event, box.querySelector('svg'));
+            if (!point) return -1;
+            const tolerance = event.pointerType === 'touch' ? 14 : 5;
+            if (trendStyle === 'line') {
+                const points = data.map((row, i) => ({ x: x(i), y: y(row.count) }));
+                for (let i = 0; i < points.length; i++) {
+                    if (window.SeekFeedControls.nearChartSegment(point, points[i], points[Math.min(i + 1, points.length - 1)], tolerance + 2)) return Math.abs(point.x - points[i].x) <= Math.abs(point.x - (points[i + 1]?.x ?? points[i].x)) ? i : i + 1;
+                }
+                return -1;
+            }
+            return data.findIndex((row, i) => Math.abs(point.x - x(i)) <= barWidth / 2 + tolerance && point.y >= y(row.count) - tolerance && point.y <= bottom + tolerance);
+        };
         const togglePin = index => { pinned = pinned === index ? -1 : index; if (pinned < 0) clearSelection(); else select(pinned); };
-        box.onpointerdown = event => { focusIndex = pointerIndex(event); box.focus({ preventScroll: true }); };
-        box.onpointermove = event => { if (event.pointerType !== 'touch') select(pointerIndex(event)); };
-        box.onclick = event => { if (event.clientY <= box.querySelector('svg').getBoundingClientRect().bottom) togglePin(pointerIndex(event)); };
         const dismiss = () => { pinned = -1; clearSelection(); };
+        box.onpointerdown = event => { const index = pointerIndex(event); if (index < 0) return dismiss(); focusIndex = index; box.focus({ preventScroll: true }); };
+        box.onpointermove = event => { if (event.pointerType !== 'touch') { const index = pointerIndex(event); if (index < 0) dismiss(); else select(index); } };
+        box.onclick = event => { const index = pointerIndex(event); if (index >= 0) togglePin(index); else dismiss(); };
+        scroller.onscroll = () => { if (!box.matches(':focus-visible')) dismiss(); };
         window.SeekFeedControls.chartInspection(box, dismiss);
         box.onpointerleave = dismiss;
-        box.onfocus = () => select(focusIndex < 0 ? data.length - 1 : focusIndex);
+        box.onfocus = () => { if (box.matches(':focus-visible')) select(focusIndex < 0 ? data.length - 1 : focusIndex); };
         box.onblur = dismiss;
         box.onkeydown = event => {
             if (event.key === 'Escape') { pinned = -1; clearSelection(); event.preventDefault(); return; }
@@ -131,7 +144,7 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             event.preventDefault();
             select(event.key === 'Home' ? 0 : event.key === 'End' ? data.length - 1 : focusIndex + (event.key === 'ArrowRight' ? 1 : -1));
         };
-        if (document.activeElement === box) select(focusIndex);
+        if (document.activeElement === box && box.matches(':focus-visible')) select(focusIndex);
     }
 
     function empty(text) { return `<div class="analytics-empty">${icon('chart')}<span>${text}</span></div>`; }

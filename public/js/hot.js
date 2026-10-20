@@ -53,7 +53,7 @@ window.SeekFeedHot = (() => {
     if (el('hotFreshness').textContent !== freshness) el('hotFreshness').textContent = freshness;
     el('hotError').hidden = !data.error && (!data.stale || !data.updatedAt);
     el('hotError').textContent = data.error || '采集延迟，当前显示上次保存的榜单。';
-    el('hotFreshness').parentElement.classList.toggle('has-error', !el('hotError').hidden);
+    el('hotFreshness').closest('.hot-statusbar').classList.toggle('has-error', !el('hotError').hidden);
     const select = el('hotCategory');
     const values = JSON.stringify(data.categories);
     if (select.dataset.categories !== values) {
@@ -92,11 +92,22 @@ window.SeekFeedHot = (() => {
       if ((activeController.signal.aborted && activeController.signal.reason !== 'timeout') || id !== request) return;
       el('hotError').hidden = false;
       el('hotError').textContent = '榜单读取失败，已保留当前内容。请点击刷新重试。';
-      el('hotFreshness').parentElement.classList.add('has-error');
+      el('hotFreshness').closest('.hot-statusbar').classList.add('has-error');
       if (!signature) { el('hotList').hidden = true; el('hotEmpty').hidden = false; el('hotEmpty').querySelector('.empty-desc').textContent = '连接恢复后会自动重试。'; }
     } finally { clearTimeout(timeout); if (id === request) { loading = false; el('hotResults').setAttribute('aria-busy', 'false'); } }
   }
   function init() {
+    const mobile = matchMedia('(max-width: 760px), (max-width: 1000px) and (pointer: coarse)');
+    let desktopLimit = el('hotLimit').value;
+    const placeRefresh = () => {
+      el('hotPage').querySelector(mobile.matches ? '.hot-filters' : '.workspace-heading').appendChild(el('hotRefresh'));
+      if (mobile.matches) { desktopLimit = el('hotLimit').value; el('hotLimit').value = '30'; }
+      else el('hotLimit').value = desktopLimit;
+      window.SeekFeedControls.refreshSelects();
+      if (lastLoaded) load();
+    };
+    placeRefresh();
+    mobile.addEventListener('change', placeRefresh);
     el('hotRefresh').addEventListener('click', event => window.SeekFeedControls.pending(event.currentTarget, () => load()));
     for (const select of ['hotCategory', 'hotSort', 'hotLimit']) el(select).addEventListener('change', () => load());
     const tabs = [...document.querySelectorAll('[data-hot-period]')];

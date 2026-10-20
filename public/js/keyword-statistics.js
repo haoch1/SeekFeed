@@ -126,23 +126,32 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
             guide.removeAttribute('hidden'); guide.setAttribute('x1', x(index)); guide.setAttribute('x2', x(index));
             tooltip.show(rows[index].date, data.series.map(series => series.daily[index].count), x(index) - box.querySelector('.keyword-line-scroll').scrollLeft, y(Math.max(...data.series.map(series => series.daily[index].count))), pinned === index);
         };
-        const pointerIndex = event => Math.max(0, Math.min(6, Math.floor((event.clientX - box.querySelector('svg').getBoundingClientRect().left - left) / step)));
+        const pointerIndex = event => {
+            const point = window.SeekFeedControls.chartPointer(event, box.querySelector('svg'));
+            if (!point) return -1;
+            for (const series of data.series) for (let i = 0; i < rows.length; i++) {
+                const start = { x: x(i), y: y(series.daily[i].count) }, next = Math.min(i + 1, rows.length - 1);
+                if (window.SeekFeedControls.nearChartSegment(point, start, { x: x(next), y: y(series.daily[next].count) }, event.pointerType === 'touch' ? 14 : 7)) return Math.abs(point.x - x(i)) <= Math.abs(point.x - x(next)) ? i : next;
+            }
+            return -1;
+        };
         box.onpointermove = event => {
-            if (event.pointerType !== 'touch') inspect(pointerIndex(event));
+            if (event.pointerType !== 'touch') { const index = pointerIndex(event); if (index < 0) dismiss(); else inspect(index); }
         };
         box.onclick = event => {
-            if (!event.target.closest('svg')) return;
             const index = pointerIndex(event);
+            if (index < 0) return dismiss();
             pinned = pinned === index ? -1 : index;
             if (pinned < 0) reset(); else inspect(pinned);
         };
         box.onkeydown = event => { if (event.key === 'Escape') { pinned = -1; reset(); event.preventDefault(); } };
         box.querySelectorAll('[data-day-index]').forEach(button => {
-            button.onfocus = () => inspect(Number(button.dataset.dayIndex));
+            button.onfocus = () => { if (button.matches(':focus-visible')) inspect(Number(button.dataset.dayIndex)); };
             button.onblur = event => { if (!box.contains(event.relatedTarget)) dismiss(); };
         });
         box.querySelector('.keyword-line-scroll').scrollLeft = scrollLeft;
         const dismiss = () => { pinned = -1; reset(); };
+        box.querySelector('.keyword-line-scroll').onscroll = dismiss;
         window.SeekFeedControls.chartInspection(box, dismiss);
         box.onpointerleave = dismiss;
         reset();
@@ -183,14 +192,22 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
             el('keywordChartReadout').textContent=row.available?readout:`${data.date} ${time(row.hour)}–${time(row.hour+hours)} · 尚未到该时段`;
             box.setAttribute('aria-label',el('keywordChartReadout').textContent+'。左右方向键查看相邻时段。');
             box.querySelectorAll('[data-keyword-bucket]').forEach((column,i)=>column.classList.toggle('is-active',i===chartIndex));
-            if(document.activeElement===box){const start=x(chartIndex)-step/2;if(start<scroller.scrollLeft)scroller.scrollLeft=start;else if(start+step>scroller.scrollLeft+box.clientWidth)scroller.scrollLeft=start+step-box.clientWidth;}
+            if(document.activeElement===box && box.matches(':focus-visible')){const start=x(chartIndex)-step/2;if(start<scroller.scrollLeft)scroller.scrollLeft=start;else if(start+step>scroller.scrollLeft+box.clientWidth)scroller.scrollLeft=start+step-box.clientWidth;}
             tooltip.show(`${data.date} · ${time(row.hour)}–${row.hour + hours === 24 ? '24:00' : time(row.hour + hours)}`, row.values, x(chartIndex) - scroller.scrollLeft, y(Math.max(...row.values)), pinned === chartIndex, row.available);
         };
-        const pointerIndex = event => Math.max(0, Math.min(buckets.length - 1, Math.floor((event.clientX - box.getBoundingClientRect().left + scroller.scrollLeft - left) / step)));
-        box.onpointerdown = event => { chartIndex = pointerIndex(event); box.focus({ preventScroll: true }); };
-        box.onpointermove=e=>{if(e.pointerType !== 'touch')select(pointerIndex(e));};
-        box.onclick = event => { if (!event.target.closest('svg')) return; const index = pointerIndex(event); pinned = pinned === index ? -1 : index; if (pinned < 0) reset(true); else select(pinned); };
-        box.onfocus=()=>select(chartIndex);
+        const pointerIndex = event => {
+            const point = window.SeekFeedControls.chartPointer(event, box.querySelector('svg'));
+            if (!point) return -1;
+            const tolerance = event.pointerType === 'touch' ? 14 : 5;
+            return buckets.findIndex((row, i) => row.values.some((count, termIndex) => {
+                const cx = x(i) + (termIndex - (data.series.length - 1) / 2) * barStep;
+                return Math.abs(point.x - cx) <= bar / 2 + tolerance && point.y >= (row.available ? y(count) : top) - tolerance && point.y <= bottom + tolerance;
+            }));
+        };
+        box.onpointerdown = event => { const index = pointerIndex(event); if (index < 0) return dismiss(); chartIndex = index; box.focus({ preventScroll: true }); };
+        box.onpointermove=e=>{if(e.pointerType !== 'touch'){const index=pointerIndex(e);if(index<0)dismiss();else select(index);}};
+        box.onclick = event => { const index = pointerIndex(event); if (index < 0) return dismiss(); pinned = pinned === index ? -1 : index; if (pinned < 0) reset(true); else select(pinned); };
+        box.onfocus=()=>{if(box.matches(':focus-visible'))select(chartIndex);};
         box.onkeydown=e=>{
             if(e.key==='Escape'){pinned=-1;reset(true);e.preventDefault();return;}
             if(e.key==='Enter'||e.key===' '){e.preventDefault();pinned=pinned===chartIndex?-1:chartIndex;if(pinned<0)reset(true);else select(pinned);return;}
@@ -198,6 +215,7 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
         };
         const reset=(force=false)=>{if(!force && pinned>=0){select(pinned);return;}if(!force && document.activeElement===box)return;tooltip.hide();box.querySelectorAll('.is-active').forEach(n=>n.classList.remove('is-active'));el('keywordChartReadout').textContent=`${data.date} · ${multiple?'各词并排对比，':'每柱 '}${hours} 小时 · ${data.partial?'截至 '+new Date(Date.parse(data.to)+offset*60000).toISOString().slice(11,16):'全天'} · UTC${offset>=0?'+':'−'}${Math.abs(offset/60)}`;};
         const dismiss = () => { pinned = -1; reset(true); };
+        scroller.onscroll = () => { if (!box.matches(':focus-visible')) dismiss(); };
         window.SeekFeedControls.chartInspection(box, dismiss);
         box.onpointerleave = box.onblur = dismiss;
         reset();
@@ -251,6 +269,10 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
             submit();
         },
         init() {
+            const mobile = matchMedia('(max-width: 760px), (max-width: 1000px) and (pointer: coarse)');
+            const placeAnalyze = () => el('keywordAnalysisForm').querySelector(mobile.matches ? '.keyword-query-fields' : '.keyword-query-options').appendChild(el('keywordAnalyzeBtn'));
+            placeAnalyze();
+            mobile.addEventListener('change', placeAnalyze);
             el('analysisDate').value=el('analysisDate').max=localDate();
             el('keywordAnalysisForm').addEventListener('submit',e=>{e.preventDefault();submit();});
             el('keywordAddCompare').addEventListener('click',()=>{const index=[1,2].find(index=>el('analysisCompare'+index).hidden);if(!index)return;compareVisible(index,true);el('analysisCompare'+index).focus();});

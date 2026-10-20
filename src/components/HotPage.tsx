@@ -2,7 +2,7 @@ import type { FC } from 'hono/jsx';
 import { Icon } from './DashboardSurface';
 
 export const HotPage: FC<{ active: boolean }> = ({ active }) => <section id="hotPage" class="route-page" hidden={!active}>
-    <div class="workspace-heading"><div><h1>热榜</h1></div><button id="hotRefresh" type="button" class="btn btn-secondary"><Icon name="sync" /><span>立即刷新</span></button></div>
+    <div class="workspace-heading"><div><h1><Icon name="flame" /><span>热榜</span></h1></div><button id="hotRefresh" type="button" class="btn btn-secondary" aria-label="立即刷新" title="立即刷新"><Icon name="sync" /><span>立即刷新</span></button></div>
     <section class="hot-panel" aria-label="社区热榜">
         <div class="hot-toolbar">
             <div class="hot-tabs" role="tablist" aria-label="热榜时间范围">
@@ -14,7 +14,7 @@ export const HotPage: FC<{ active: boolean }> = ({ active }) => <section id="hot
                 <select id="hotLimit" class="filter-select" aria-label="热榜条数" data-1p-ignore="true" data-op-ignore="true"><option value="30">前 30 条</option><option value="50">前 50 条</option><option value="100">前 100 条</option></select>
             </div>
         </div>
-        <div class="hot-statusbar"><span id="hotFreshness" role="status">正在读取榜单…</span><span id="hotError" role="status" hidden></span></div>
+        <div class="hot-statusbar"><div class="hot-status-text"><span id="hotFreshness" role="status">正在读取榜单…</span><span id="hotError" role="status" hidden></span></div></div>
         <div id="hotResults" role="tabpanel" aria-labelledby="hotTab-live" aria-busy="true">
             <div class="hot-table-heading" aria-hidden="true"><span>排名</span><span>帖子</span><span><Icon name="eye" /><span id="hotViewsLabel">浏览量</span></span><span><Icon name="message" /><span id="hotRepliesLabel">回复量</span></span><span><Icon name="flame" />热度</span></div>
             <ol id="hotList" class="hot-list">{[1, 2, 3, 4, 5, 6].map(() => <li class="hot-skeleton"><span class="skeleton skeleton-line"></span><span class="skeleton skeleton-title"></span></li>)}</ol>

@@ -4,7 +4,7 @@ import { Icon } from './DashboardSurface';
 
 export const AccountSettings: FC<{ active?: boolean }> = ({ active = false }) => (
     <section id="accountPage" class="route-page" hidden={!active}>
-        <div class="workspace-heading"><div><h1>账号与安全</h1></div></div>
+        <div class="workspace-heading"><div><h1><Icon name="settings" /><span>账号与安全</span></h1></div></div>
         <div class="settings-content page-body">
             <section class="settings-section">
                 <div class="section-heading"><h2>账号信息</h2><p>修改账号需要验证当前密码，保存后请重新登录。</p></div>

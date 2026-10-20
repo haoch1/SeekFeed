@@ -7,6 +7,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const isLoggedIn = !!sessionId;
   const identityKey = 'seekfeed.identity';
   function clearIdentity() {
+    document.documentElement.dataset.auth = 'guest';
     localStorage.removeItem('sessionId');
     localStorage.removeItem('user');
     sessionStorage.removeItem(identityKey);
@@ -525,7 +526,8 @@ document.addEventListener("DOMContentLoaded", function () {
     el("navLatest").classList.toggle("selected", !active);
     ["navLatest", "navMatched"].forEach(id => el(id).removeAttribute("aria-current"));
     el(active ? "navMatched" : "navLatest").setAttribute("aria-current", "page");
-    el("pageTitle").textContent = el("breadcrumbCurrent").textContent = active ? "命中订阅" : "最新帖子";
+    el("breadcrumbCurrent").textContent = active ? "命中订阅" : "最新帖子";
+    el("pageTitle").innerHTML = renderIcon(active ? "bell" : "posts") + `<span>${active ? "命中订阅" : "最新帖子"}</span>`;
   }
   function initFilters() {
     el('newPostsBtn').addEventListener('click', async () => { await loadPosts(1); el('feedPage').scrollIntoView({ block: 'start', behavior: 'instant' }); });
