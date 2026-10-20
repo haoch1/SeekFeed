@@ -3,11 +3,15 @@ import { createDatabaseConnection } from '../config/database';
 import type { BaseConfig, Post, KeywordSub } from '../types';
 import { logger } from '../utils/logger';
 import { getAnalytics } from './analytics';
+import { HotService } from './hot';
 
 export class DatabaseService {
   private static instance: DatabaseService | undefined;
   private queryCache: Map<string, { data: any; timestamp: number; ttl: number }>;
   private readonly CACHE_TTL = 60000; // 1分钟缓存
+  private hotService?: HotService;
+
+  getHotService(): HotService { return this.hotService ??= new HotService(this.db); }
 
   constructor(private db: Database) {
     this.queryCache = new Map();

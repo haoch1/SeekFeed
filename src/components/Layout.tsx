@@ -43,6 +43,7 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
         <link href="/css/charts.css" rel="stylesheet" />
         <link href="/css/workspace.css" rel="stylesheet" />
         <link href="/css/analytics.css" rel="stylesheet" />
+        <link href="/css/hot.css" rel="stylesheet" />
 
         {/* 主题初始化脚本 - 防止闪烁 */}
         <script

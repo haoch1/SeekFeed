@@ -1,6 +1,7 @@
 import { AccountSettings } from './AccountSettings';
 import { TelegramSettings } from './TelegramSettings';
 import { StatisticsPage } from './StatisticsPage';
+import { HotPage } from './HotPage';
 import { FieldInput } from './Controls';
 import type { FC } from "hono/jsx";
 import { Layout } from "./Layout";
@@ -11,7 +12,7 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/" }) => {
     <Layout
       title="SeekFeed"
       description="NodeSeek RSS 文章列表"
-      scriptSrc={["/js/statistics.js", "/js/home.js"]}
+      scriptSrc={["/js/statistics.js", "/js/hot.js", "/js/home.js"]}
     >
       <DashboardSurface path={path}>
 
@@ -116,6 +117,7 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/" }) => {
       <AccountSettings active={path === "/settings/account"} />
 
       <StatisticsPage active={path === "/statistics"} />
+      <HotPage active={path === "/hot"} />
 
       </DashboardSurface>
       <div id="drawerOverlay" class="drawer-overlay" style="display:none"></div>

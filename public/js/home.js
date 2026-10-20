@@ -826,6 +826,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
   const routeMap = {
     '/': ['feed', '最新帖子'], '/matched': ['feed', '命中订阅'],
+    '/hot': ['hot', '热榜'],
     '/subscriptions': ['subscriptions', '订阅管理'], '/statistics': ['stats', '统计信息'],
     '/settings/account': ['account', '账号与安全'], '/settings/rss': ['rss', 'RSS 配置'], '/settings/telegram': ['telegram', 'Telegram'],
   };
@@ -834,7 +835,7 @@ document.addEventListener("DOMContentLoaded", function () {
   function navigate(path, push = true) {
     if (path === '/settings') path = '/settings/account';
     const [name, title] = routeMap[path] || routeMap['/'];
-    if (!isLoggedIn && !['feed', 'stats'].includes(name)) { LoginModal.open(); return; }
+    if (!isLoggedIn && !['feed', 'stats', 'hot'].includes(name)) { LoginModal.open(); return; }
     if (activePath) routeScroll.set(activePath, scrollY);
     if (push && location.pathname !== path) history.pushState({}, '', path);
     window.SeekFeedControls.closeSelect();
@@ -851,6 +852,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (name === 'rss') loadRssConfig();
     if (name === 'telegram') loadTelegramConfig();
     if (name === 'stats') analytics.load();
+    if (name === 'hot') window.SeekFeedHot.load();
     if (name === 'account') loadAccount();
     activePath = path;
     window.scrollTo({ top: routeScroll.get(path) || 0, behavior: 'instant' });
@@ -1068,6 +1070,7 @@ document.addEventListener("DOMContentLoaded", function () {
     initLoginModal();
     initLogout();
     analytics.init();
+    window.SeekFeedHot.init();
 
     initAccount();
     navigate(location.pathname, false);

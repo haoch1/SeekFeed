@@ -17,7 +17,7 @@ let sessionId: string;
 
 beforeEach(() => {
     const sqlite = new Database(':memory:');
-    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences']) {
+    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking']) {
         sqlite.exec(readFileSync(new URL(`../database/migrations/${name}.sql`, import.meta.url), 'utf8'));
     }
     db = new DatabaseService(sqlite);
@@ -37,6 +37,16 @@ beforeEach(() => {
 
 describe('account settings and session expiry', () => {
     const headers = () => ({ Authorization: `Bearer ${sessionId}`, 'Content-Type': 'application/json' });
+
+    it('publishes safe hot ranking data while protecting collection and rejecting invalid filters', async () => {
+        expect((await app.request('/api/hot')).status).toBe(200);
+        const body = await (await app.request('/api/hot')).json();
+        expect(body.data.posts).toEqual([]);
+        expect(JSON.stringify(body)).not.toContain('unused-test-hash');
+        for (const query of ['period=month', 'sort=unknown', 'category=%3Cscript%3E']) expect((await app.request('/api/hot?' + query)).status).toBe(400);
+        expect((await app.request('/api/hot/refresh', {method:'POST'})).status).toBe(401);
+        expect((await app.request('/api/hot/refresh', {method:'POST',headers:{Authorization:'Bearer forged'}})).status).toBe(401);
+    });
 
     it('keeps analytics aggregates public and subscription identifiers and keywords authenticated', async () => {
         const sub = db.createKeywordSub({ keyword1: 'private-rule-example' });

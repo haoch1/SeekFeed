@@ -150,3 +150,6 @@ coverage/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+# Python collector cache
+__pycache__/
+*.py[cod]

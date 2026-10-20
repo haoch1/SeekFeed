@@ -91,6 +91,16 @@ type Variables = ContextVariables & {
 
 export const apiRoutes = new Hono<{ Variables: Variables }>();
 
+const hotQuery = z.object({
+    period: z.enum(['live', 'day', 'week']).default('live'),
+    category: z.string().max(80).regex(/^[a-zA-Z0-9_-]*$/).default(''),
+    sort: z.enum(['heat', 'views', 'replies']).default('heat'),
+});
+apiRoutes.get('/hot', createQueryValidationMiddleware(hotQuery), c => {
+    const { period, category, sort } = c.get('validatedQuery');
+    return c.json(createSuccessResponse(c.get('dbService').getHotService().ranking(period, category, sort)));
+});
+
 // 公开路由（无需认证）
 apiRoutes.get('/posts', createQueryValidationMiddleware(paginationSchema), async (c) => {
     try {
@@ -181,6 +191,13 @@ const sessionMiddleware = async (c: any, next: any) => {
 
 // 应用Session中间件到所有后续API路由
 apiRoutes.use('*', sessionMiddleware);
+
+apiRoutes.post('/hot/refresh', async c => {
+    if (process.env.HOT_COLLECT_ENABLED !== 'true') return c.json(createErrorResponse('热榜采集未启用'), 409);
+    const service = c.get('dbService').getHotService();
+    const success = await service.refresh();
+    return c.json(createSuccessResponse({ collected: success, ...service.ranking() }));
+});
 
 apiRoutes.get('/stats/subscription-ranking', createQueryValidationMiddleware(analyticsQuery), (c) => {
     const { days, offset } = c.get('validatedQuery');

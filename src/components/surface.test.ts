@@ -3,7 +3,7 @@ import { HomePage } from './HomePage';
 
 describe('server rendered workspace', () => {
     it('renders all independent destinations without SVG namespace/raw HTML conflicts', () => {
-        for (const path of ['/', '/matched', '/subscriptions', '/statistics', '/settings/account', '/settings/rss', '/settings/telegram']) {
+        for (const path of ['/', '/hot', '/matched', '/subscriptions', '/statistics', '/settings/account', '/settings/rss', '/settings/telegram']) {
             const html = HomePage({ path }).toString();
             expect(html).toContain('SeekFeed');
             expect(html).not.toContain('<use');

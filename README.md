@@ -11,6 +11,7 @@ NodeSeek 新帖监控、关键词筛选与 Telegram 消息通知。基于 **Bun 
 - Telegram Bot 消息通知、每轮发送上限、失败重试与待发送队列。
 - 帖子搜索、多条件筛选、分页、真实发送统计和监控状态。
 - 社区分析：发帖趋势、完整分类明细、作者贡献、活跃时段与热门标题词，支持今日、近 7 天、近 30 天和全部记录。
+- 独立热榜：真实浏览与回复计数，实时、24 小时、7 天排行，支持分类和热度/浏览/回复排序。[采集范围与排名规则](docs/hot-ranking.md)
 - 网页与 Telegram 使用相同的订阅 ID；统计页的订阅和通知表现可按需展开。
 - Session 登录、首次使用创建管理员、PWA 桌面安装与静态资源缓存。
 
@@ -77,6 +78,8 @@ bun run db:resetuser # 重置管理员账号
 | `CORS_ORIGINS` | `http://localhost:3010` | 跨域来源，逗号分隔 |
 | `RSS_CHECK_ENABLED` | `true` | 自动监控开关，关闭时仍可手动同步 |
 | `RSS_TIMEOUT` | `30000` | 抓取超时，毫秒 |
+| `HOT_COLLECT_ENABLED` | Docker `true`，本地 `false` | 每 5 分钟独立采集热榜，失败保留缓存并退避 |
+| `HOT_COLLECTOR_PYTHON` | Docker 已配置，本地 `python3` | 安装 `collector/requirements.txt` 的 Python 路径 |
 | `TELEGRAM_WEBHOOK_URL` | 无 | 可选 Webhook URL |
 
 RSS 地址、抓取间隔、代理、Bot Token 与消息接收账号分别在独立设置页管理。「账号与安全」支持修改用户名和密码、设置 1 小时/1 天/7 天/30 天的登录有效期、查看活跃设备与退出所有设备。修改账号需验证当前密码并重新登录。PWA 只缓存静态资源，消息通知通过 Telegram 发送。

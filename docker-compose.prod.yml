@@ -8,6 +8,7 @@ services:
     ports:
       - "${SEEKFEED_BIND_ADDRESS:-127.0.0.1}:${PORT:-3010}:3010"
     environment:
+      HOT_COLLECT_ENABLED: ${HOT_COLLECT_ENABLED:-true}
       NODE_ENV: production
       PORT: 3010
       HOST: 0.0.0.0
