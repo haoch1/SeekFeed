@@ -302,6 +302,22 @@ export class DatabaseService {
     return stmt.get(postId) as Post | null;
   }
 
+  dismissMatchedPost(postId: number): boolean {
+    const result = this.db.query(`
+      UPDATE posts SET match_dismissed = 1
+      WHERE post_id = ? AND push_status IN (1, 3)
+    `).run(postId);
+    if (result.changes) this.clearCacheByPattern('Posts');
+    return result.changes > 0;
+  }
+
+  getVisibleMatchedPostsCount(): number {
+    return (this.db.query(`
+      SELECT COUNT(*) AS count FROM posts
+      WHERE push_status IN (1, 3) AND match_dismissed = 0
+    `).get() as { count: number }).count;
+  }
+
   /**
    * 批量查询文章，根据 post_id 数组
    */
@@ -351,7 +367,7 @@ export class DatabaseService {
   getUnpushedPosts(): Post[] {
     const stmt = this.db.query(`
       SELECT * FROM posts 
-      WHERE push_status IN (0, 1)
+      WHERE push_status IN (0, 1) AND match_dismissed = 0
       ORDER BY pub_date ASC
     `);
     
@@ -386,6 +402,10 @@ export class DatabaseService {
     
 
     if (filters) {
+      if (filters.pushStatusIn?.some(status => status === 1 || status === 3) ||
+          filters.pushStatus === 1 || filters.pushStatus === 3 || filters.subId !== undefined) {
+        conditions.push('p.match_dismissed = 0');
+      }
       if (filters.pushStatusIn && filters.pushStatusIn.length > 0) {
         const placeholders = filters.pushStatusIn.map(() => '?').join(',');
         conditions.push(`p.push_status IN (${placeholders})`);
@@ -757,6 +777,7 @@ export class DatabaseService {
   // 获取综合统计信息
   getComprehensiveStats(): {
     total_posts: number;
+    visible_matched_posts: number;
     pushed_posts: number; // 已推送成功 (状态 3)
     matched_not_pushed: number; // 已匹配但未推送 (状态 1)
     total_subscriptions: number;
@@ -775,6 +796,7 @@ export class DatabaseService {
 
       return {
         total_posts: totalPosts,
+        visible_matched_posts: this.getVisibleMatchedPostsCount(),
         pushed_posts: pushedPosts,
         matched_not_pushed: matchedNotPushed,
         total_subscriptions: totalSubscriptions,
@@ -786,6 +808,7 @@ export class DatabaseService {
       logger.error('获取综合统计信息失败:', error);
       return {
         total_posts: 0,
+        visible_matched_posts: 0,
         pushed_posts: 0,
         matched_not_pushed: 0,
         total_subscriptions: 0,

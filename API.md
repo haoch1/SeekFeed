@@ -62,6 +62,10 @@ API、认证响应禁止共享缓存。客户端不得将私有响应交由 Serv
 
 响应 `data` 包含 `posts`、`total`、`page`、`totalPages`。访客帖子字段仅包含 `post_id`、`title`、`memo`、`category`、`creator`、`pub_date`，不包含命中规则及推送状态。
 
+`DELETE /api/matched-posts/:id` 需要有效会话，`:id` 为论坛帖子 ID。该接口将已命中帖子从命中订阅列表中持久移除，并停止后续自动推送；原始帖子、推送历史及已发送的 Telegram 消息保留。重复删除返回成功，非命中帖子或不存在的 ID 返回 `404`。命中状态及订阅筛选结果均排除已移除帖子，公开帖子列表不受影响。
+
+`GET /api/stats/overview` 的认证响应包含 `visible_matched_posts`，表示当前保留的命中帖子数；`pushed_posts` 仍表示历史推送成功数。
+
 ## 热榜
 
 `GET /api/hot` 为公开接口。查询参数：

@@ -1,5 +1,5 @@
 import type { HotPeriod, HotService } from '../hot';
-import { telegramMessage, telegramPostLink, telegramRow, telegramText, telegramTimestamp } from './messages';
+import { telegramMessage, telegramPostRow, telegramText, telegramTimestamp } from './messages';
 
 export const hotEntryKeyboard = { inline_keyboard: [[{ text: '论坛热榜', callback_data: 'hot:open' }]] };
 
@@ -26,8 +26,7 @@ export function hotRankingMessage(data: ReturnType<HotService['ranking']>): stri
     const title = { live: '实时热榜', day: '日榜', week: '周榜' }[data.period];
     let text = '';
     for (const [index, post] of data.posts.slice(0, 10).entries()) {
-        const rank = String(index + 1).padStart(2, '0');
-        const row = telegramRow(rank, telegramPostLink(post.postId, post.title), `浏览量 ${post.views.toLocaleString('zh-CN')} · 回复量 ${post.replies.toLocaleString('zh-CN')} · ${telegramText(post.categoryLabel)}`, true);
+        const row = telegramPostRow(index, post.postId, post.title, `浏览量 ${post.views.toLocaleString('zh-CN')} · 回复量 ${post.replies.toLocaleString('zh-CN')} · ${telegramText(post.categoryLabel)}`);
         if (text.length + row.length > 3400) break;
         text += row;
     }

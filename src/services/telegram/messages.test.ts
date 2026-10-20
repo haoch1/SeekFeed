@@ -21,7 +21,7 @@ describe('Telegram message layout and escaping', () => {
     it('aligns single and double digit post numbers and normalizes presentation without changing stored titles', () => {
         const post = { post_id: 42, title: '  \u200b【出】标题 & 更多  ' } as any;
         for (const [index, label] of [[0, '01'], [8, '09'], [9, '10']] as const) {
-            expect(recentPostRow(post, index)).toStartWith(`<code>${label}</code>  <a `);
+            expect(recentPostRow(post, index)).toStartWith(`<b>${label}</b>  <a `);
             expect(recentPostRow(post, index)).toContain('><b>[出]标题 &amp; 更多</b></a>');
         }
         expect(post.title).toBe('  \u200b【出】标题 & 更多  ');
@@ -33,6 +33,7 @@ describe('Telegram message layout and escaping', () => {
         const replies: any[] = [];
         await (service as any).handlePostCommand({ reply: async (...args: any[]) => replies.push(args) });
         expect(replies[0][0]).toStartWith('<b>SeekFeed · 最近帖子</b>');
+        expect(replies[0][0]).toContain('<b>01</b>  <a');
         expect(replies[0][0]).toContain('<a href="https://www.nodeseek.com/post-42-1"><b>[出]标题</b></a>');
         expect(replies[0][1].parse_mode).toBe('HTML');
         expect(replies[0][1].link_preview_options.is_disabled).toBe(false);
@@ -140,6 +141,7 @@ describe('Shared Telegram templates', () => {
         const updates: any[] = [];
         const service = new TelegramPushService({
             getBaseConfig: () => ({ chat_id: '42', stop_push: 0 }),
+            getPostByPostId: () => null,
             updatePostPushStatus: (...args: any[]) => updates.push(args),
         } as any, '123:test');
         const calls: any[] = [];

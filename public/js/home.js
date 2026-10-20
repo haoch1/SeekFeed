@@ -315,6 +315,7 @@ document.addEventListener("DOMContentLoaded", function () {
   let liveRefreshing = false;
   let searchTimer, creatorTimer;
   const feedStates = new Map();
+  const matchedPostActions = new Set();
   const isFeedPath = path => path === '/posts' || path === '/matched';
   const el = id => document.getElementById(id);
 
@@ -400,7 +401,7 @@ document.addEventListener("DOMContentLoaded", function () {
     requestedPage = selected;
     pageCount = Math.max(1, totalPages);
     renderedFilters = JSON.stringify(currentFilters);
-    if (totalPages <= 1) list.style.minHeight = '';
+    if (totalPages <= 1 || selected === totalPages) list.style.minHeight = '';
     el('feedError').hidden = true;
     if (!posts.length && page > 1 && totalPages > 0) return loadPosts(totalPages);
     const existing = new Map([...list.querySelectorAll('.post-card')].map(item => [item.dataset.postId, item]));
@@ -428,7 +429,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (kept) window.scrollBy({ top: kept.getBoundingClientRect().top - anchorTop, behavior: 'instant' });
     }
     el("emptyState").style.display = posts.length ? "none" : "block";
-    el("emptyState").querySelector(".empty-title").textContent = "暂无文章";
+    el("emptyState").querySelector(".empty-title").textContent = activePath === '/matched' ? "暂无命中帖子" : "暂无文章";
     el("emptyState").querySelector(".empty-desc").textContent = Object.values(currentFilters).some(Boolean) ? "没有符合条件的帖子，试试清除筛选。" : "同步 RSS 后，最新帖子会显示在这里。";
     updatePagination(selected, totalPages, total);
     if (!isLoggedIn && !Object.values(currentFilters).some(Boolean)) el("overviewTotal").textContent = total.toLocaleString();
@@ -464,7 +465,22 @@ document.addEventListener("DOMContentLoaded", function () {
     const status = { 0: "待匹配", 1: "待推送", 2: "未命中", 3: "已推送" }[post.push_status] || "未知";
     const date = new Date(post.pub_date);
     const time = Number.isNaN(date.getTime()) ? "时间未知" : new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
-    item.innerHTML = `<div class="post-content"><div class="post-header"><h3 class="post-title"><a href="${href}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(post.title)}">${escapeHtml(post.title)}</a></h3></div><p class="post-memo">${escapeHtml(post.memo || "")}</p><div class="post-meta"><span class="post-category">${escapeHtml(getCategoryName(post.category))}</span><span>${escapeHtml(post.creator)}</span><span class="post-date">${time}</span>${tags ? `<span class="post-sub-tags">${tags}</span>` : ""}</div></div><div class="post-actions">${isLoggedIn ? `<span class="delivery-status" data-status="${Number(post.push_status)}">${status}</span>` : ''}<a class="icon-btn" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="打开帖子">${renderIcon("external")}</a></div>`;
+    const canDeleteMatch = isLoggedIn && activePath === '/matched' && [1, 3].includes(Number(post.push_status));
+    item.innerHTML = `<div class="post-content"><div class="post-header"><h3 class="post-title"><a href="${href}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(post.title)}">${escapeHtml(post.title)}</a></h3></div><p class="post-memo">${escapeHtml(post.memo || "")}</p><div class="post-meta"><span class="post-category">${escapeHtml(getCategoryName(post.category))}</span><span>${escapeHtml(post.creator)}</span><span class="post-date">${time}</span>${tags ? `<span class="post-sub-tags">${tags}</span>` : ""}</div></div><div class="post-actions">${isLoggedIn ? `<span class="delivery-status" data-status="${Number(post.push_status)}">${status}</span>` : ''}<div class="post-action-buttons"><a class="icon-btn" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="打开帖子">${renderIcon("external")}</a>${canDeleteMatch ? `<button type="button" class="icon-btn delete-matched" aria-label="从命中订阅删除" title="删除命中帖子">${renderIcon('trash')}</button>` : ''}</div></div>`;
+    item.querySelector('.delete-matched')?.addEventListener('click', async event => {
+      const button = event.currentTarget;
+      if (matchedPostActions.has(post.post_id)) return;
+      matchedPostActions.add(post.post_id);
+      try {
+        if (!await confirmAction('删除这条命中帖子？', '删除后不再显示，也不会继续推送。最新帖子和已发送的 Telegram 消息会保留。', '删除帖子')) return;
+        const result = await window.SeekFeedControls.pending(button, () => apiRequest(`/api/matched-posts/${Number(post.post_id)}`, { method: 'DELETE' }));
+        if (!result?.success) { Toast.error(result?.message || '删除失败，请重试'); return; }
+        Toast.success('已从命中订阅删除');
+        item.remove();
+        if (activePath === '/matched') await loadPosts(currentPage);
+        await updateStats();
+      } finally { matchedPostActions.delete(post.post_id); }
+    });
     return item;
   }
   function escapeHtml(value) {
@@ -624,7 +640,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!result?.success) return;
     const data = result.data;
     const fields = { overviewTotal: data.total_posts,
-      overviewMatched: data.matched_not_pushed + data.pushed_posts, overviewPushed: data.pushed_posts };
+      overviewMatched: data.visible_matched_posts, overviewPushed: data.pushed_posts };
     Object.entries(fields).forEach(([id, value]) => el(id).textContent = Number(value || 0).toLocaleString());
   }
   async function updateMonitor(quiet = false) {

@@ -22,7 +22,7 @@ const avatar = 'data:image/png;base64,' + readFileSync(new URL('../../public/ico
 
 beforeEach(() => {
     const sqlite = new Database(':memory:');
-    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '009_account_avatar']) {
+    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '009_account_avatar', '010_dismissed_matches']) {
         sqlite.exec(readFileSync(new URL(`../database/migrations/${name}.sql`, import.meta.url), 'utf8'));
     }
     db = new DatabaseService(sqlite);
@@ -39,6 +39,52 @@ beforeEach(() => {
     app.route('/telegram', telegramRoutes);
     app.route('/api', apiRoutes);
     app.route('/', pageRoutes);
+});
+
+describe('matched post deletion', () => {
+    const headers = () => ({ Authorization: `Bearer ${sessionId}` });
+    const seed = (id: number, status = 3) => db.createPost({ post_id: id, title: 'VMISS 补货', memo: 'Original content', category: 'trade', creator: 'alice', pub_date: new Date().toISOString(), push_status: status, push_date: status === 3 ? new Date().toISOString() : undefined });
+    const remove = (id: number | string, requestHeaders = headers()) => app.request(`/api/matched-posts/${id}`, { method: 'DELETE', headers: requestHeaders });
+
+    it('rejects missing, forged and expired sessions without changing any post', async () => {
+        seed(101);
+        expect((await remove(101, {})).status).toBe(401);
+        expect((await remove(101, { Authorization: 'Bearer forged' })).status).toBe(401);
+        db.db.query('UPDATE sessions SET expires_at = ?').run(new Date(Date.now() - 1000).toISOString());
+        expect((await remove(101)).status).toBe(401);
+        expect(db.getPostByPostId(101)?.match_dismissed).toBe(0);
+    });
+
+    it('removes both queued and sent matches from private results while retaining public originals and history', async () => {
+        const sub = db.createKeywordSub({ keyword1: 'vmiss' });
+        seed(101, 1); seed(102, 3); seed(103, 2);
+        db.updatePostPushStatus(101, 1, sub.id);
+        const original = db.getPostByPostId(102);
+        expect((await (await app.request('/api/stats/overview', { headers: headers() })).json()).data.visible_matched_posts).toBe(2);
+        for (const id of [101, 102]) {
+            expect((await remove(id)).status).toBe(200);
+            expect((await remove(id)).status).toBe(200);
+        }
+        for (const query of ['pushStatusIn=1,3', 'pushStatus=3', `subId=${sub.id}`, 'pushStatusIn=1,3&search=vmsis&searchMode=fuzzy&limit=1']) {
+            const data = (await (await app.request('/api/posts?' + query, { headers: headers() })).json()).data;
+            expect(data).toMatchObject({ total: 0, totalPages: 0, posts: [] });
+        }
+        const overview = (await (await app.request('/api/stats/overview', { headers: headers() })).json()).data;
+        expect(overview).toMatchObject({ total_posts: 3, visible_matched_posts: 0, pushed_posts: 1, matched_not_pushed: 1 });
+        const publicData = (await (await app.request('/api/posts')).json()).data;
+        expect(publicData.total).toBe(3);
+        expect(publicData.posts.find((item: any) => item.post_id === 102)?.memo).toBe('Original content');
+        expect(JSON.stringify(publicData)).not.toContain('match_dismissed');
+        expect(db.getPostByPostId(102)).toEqual({ ...original, match_dismissed: 1 });
+    });
+
+    it('validates identifiers and cannot dismiss an unmatched or nonexistent post', async () => {
+        seed(101, 0); seed(102, 2);
+        for (const id of [101, 102, 999]) expect((await remove(id)).status).toBe(404);
+        for (const id of ['abc', 0, -1, '1.5']) expect((await remove(id)).status).toBe(400);
+        expect(db.getPostsCount()).toBe(2);
+        expect(db.getPostByPostId(101)?.match_dismissed).toBe(0);
+    });
 });
 
 describe('account avatar', () => {

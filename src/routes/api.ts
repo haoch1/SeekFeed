@@ -211,6 +211,14 @@ apiRoutes.get('/stats/keywords', createQueryValidationMiddleware(keywordAnalytic
 // 应用Session中间件到所有后续API路由
 apiRoutes.use('*', requireSession);
 
+apiRoutes.delete('/matched-posts/:id', createParamValidationMiddleware(idParamSchema), c => {
+    const { id } = c.get('validatedParams');
+    if (!c.get('dbService').dismissMatchedPost(id)) {
+        return c.json(createErrorResponse('命中帖子不存在'), 404);
+    }
+    return c.json(createSuccessResponse({ postId: id }, '已从命中订阅删除'));
+});
+
 apiRoutes.post('/hot/refresh', async c => {
     if (process.env.HOT_COLLECT_ENABLED !== 'true') return c.json(createErrorResponse('热榜采集未启用'), 409);
     const service = c.get('dbService').getHotService();

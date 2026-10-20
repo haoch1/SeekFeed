@@ -27,6 +27,10 @@ export class TelegramPushService extends TelegramBaseService {
         return false;
       }
 
+      if (post.match_dismissed === 1 || this.dbService.getPostByPostId(post.post_id)?.match_dismissed === 1) {
+        return false;
+      }
+
       const text = postMessage(post, matchedSub, this.getCategoryName(post.category));
       const success = await this.sendMessage(config.chat_id, text, true);
 

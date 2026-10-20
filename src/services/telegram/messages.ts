@@ -35,6 +35,10 @@ export function telegramRow(label: string, contentHtml: string, metadata: string
     return `<${labelTag}>${escapeTelegramHtml(label)}</${labelTag}>  ${contentHtml}\n${escapeTelegramHtml(metadata)}\n\n`;
 }
 
+export function telegramPostRow(index: number, postId: number, title: string, metadata: string): string {
+    return telegramRow(String(index + 1).padStart(2, '0'), telegramPostLink(postId, title), metadata, true);
+}
+
 // Split only between complete rows, retaining a heading on every message.
 export function telegramListMessages(title: string, rows: string[], footer = ''): string[] {
     const messages: string[] = [];
@@ -109,5 +113,5 @@ export function displayTelegramTitle(title: string): string {
 
 export function recentPostRow(post: Post, index: number, category = post.category): string {
     const metadata = [telegramText(post.creator), telegramText(category), telegramTimestamp(post.pub_date)].filter(Boolean).join(' · ');
-    return telegramRow(String(index + 1).padStart(2, '0'), telegramPostLink(post.post_id, post.title), metadata);
+    return telegramPostRow(index, post.post_id, post.title, metadata);
 }

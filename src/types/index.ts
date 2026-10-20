@@ -29,6 +29,7 @@ export interface Post {
   category: string;
   creator: string;
   push_status: number; // 0=待处理, 1=已匹配但未推送, 2=未匹配, 3=已匹配且已推送成功
+  match_dismissed?: number; // 1=已从命中订阅移除，不再自动推送
   sub_id?: number;
   pub_date: string;
   push_date?: string;

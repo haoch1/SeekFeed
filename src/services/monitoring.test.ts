@@ -18,7 +18,7 @@ const post = (id = 1, changes: Partial<Post> = {}): Post => ({
 });
 beforeEach(() => {
     const sqlite = new Database(':memory:');
-    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences']) {
+    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '010_dismissed_matches']) {
         sqlite.exec(readFileSync(new URL(`../database/migrations/${name}.sql`, import.meta.url), 'utf8'));
     }
     db = new DatabaseService(sqlite);
@@ -102,6 +102,36 @@ describe('multi-category monitoring and search', () => {
 });
 
 describe('notification queue', () => {
+    it('excludes dismissed matches from retries and rejects a stale queued copy before sending', async () => {
+        const sub = db.createKeywordSub({ keyword1: 'DMIT' });
+        db.batchCreatePosts([post(1, { push_status: 1, sub_id: sub.id }), post(2)]);
+        const stale = db.getPostByPostId(1)!;
+        expect(db.dismissMatchedPost(1)).toBe(true);
+        expect(db.getUnpushedPosts().map(item => item.post_id)).toEqual([2]);
+        const telegram = new TelegramPushService(db, '123456:TEST_ONLY');
+        const send = spyOn(telegram, 'sendMessage').mockResolvedValue(true);
+        try {
+            expect(await telegram.pushPost(stale, sub)).toBe(false);
+            expect(send).not.toHaveBeenCalled();
+            expect((await new MatcherService(db, telegram).processUnpushedPosts()).pushed).toBe(1);
+            expect(send).toHaveBeenCalledTimes(1);
+            expect(db.getPostByPostId(1)).toMatchObject({ push_status: 1, match_dismissed: 1 });
+            expect(db.getPostByPostId(2)?.push_status).toBe(3);
+        } finally { send.mockRestore(); }
+    });
+
+    it('retains a dismissal across repeated ingestion, rematching, and changed subscriptions', () => {
+        const sub = db.createKeywordSub({ keyword1: 'DMIT' });
+        db.createPost(post(1, { push_status: 1, sub_id: sub.id }));
+        expect(db.dismissMatchedPost(1)).toBe(true);
+        expect(db.batchCreatePosts([post(1)])).toBe(0);
+        db.updateKeywordSub(sub.id!, { keyword1: '补货' });
+        db.updatePostPushStatus(1, 1, sub.id);
+        expect(db.getPostsWithPagination(1, 10, { pushStatusIn: [1, 3] }).total).toBe(0);
+        expect(db.getUnpushedPosts()).toHaveLength(0);
+        expect(db.getPostsWithPagination(1, 10).total).toBe(1);
+    });
+
     it('rotates retry batches so permanent failures do not block later posts', async () => {
         db.createKeywordSub({ keyword1: 'DMIT' });
         db.batchCreatePosts(Array.from({ length: 12 }, (_, i) => post(i + 1)));
@@ -158,6 +188,18 @@ describe('notification queue', () => {
 });
 
 describe('database writes and filters', () => {
+    it('migrates existing posts without modifying recorded matches or delivery history', () => {
+        const sqlite = new Database(':memory:');
+        try {
+            sqlite.exec(readFileSync(new URL('../database/migrations/001_initial.sql', import.meta.url), 'utf8'));
+            sqlite.query("INSERT INTO posts(post_id, title, memo, category, creator, pub_date, push_status, push_date) VALUES (?, ?, '', 'info', 'alice', ?, ?, ?)").run(1, 'Existing post', '2026-10-20T00:00:00Z', 3, '2026-10-20T00:01:00Z');
+            const original = sqlite.query('SELECT * FROM posts').get() as object;
+            sqlite.exec(readFileSync(new URL('../database/migrations/010_dismissed_matches.sql', import.meta.url), 'utf8'));
+            expect(sqlite.query('SELECT *, match_dismissed FROM posts').get()).toEqual({ ...original, match_dismissed: 0 });
+            expect(() => sqlite.exec('UPDATE posts SET match_dismissed = 2')).toThrow();
+        } finally { sqlite.close(); }
+    });
+
     it('rolls back a failed batch without partially importing posts', () => {
         expect(() => db.batchCreatePosts([post(), post(2, { title: null as unknown as string })])).toThrow();
         expect(db.getPostsCount()).toBe(0);

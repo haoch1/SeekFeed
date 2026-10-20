@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { hotEntryKeyboard, hotRankingKeyboard, hotRankingMessage, hotRankingPreview } from './hot';
 import { TelegramWebhookService } from './webhook';
-import { telegramCommands } from './messages';
+import { recentPostRow, telegramCommands } from './messages';
 
 function ranking(period = 'live', overrides = {}) {
     return { period, posts: Array.from({ length: 10 }, (_, i) => ({
@@ -48,6 +48,10 @@ describe('Telegram hot ranking', () => {
         expect(text.match(/<a href="https:\/\/www\.nodeseek\.com\/post-\d+-1"><b>标题 \d+<\/b><\/a>/g)).toHaveLength(10);
         for (const period of ['live', 'day', 'week']) {
             const message = hotRankingMessage(ranking(period));
+            for (const [index, post] of ranking(period).posts.entries()) {
+                const recent = recentPostRow({ post_id: post.postId, title: post.title } as any, index);
+                expect(message).toContain(recent.split('\n')[0]);
+            }
             expect(message).toContain('浏览量 1,000 · 回复量 45 · 技术');
             expect(message).not.toMatch(/新增浏览|新增回复/);
         }
