@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { TelegramWebhookService } from '../services/telegram/webhook';
+import { telegramNotice, telegramTimestamp } from '../services/telegram/messages';
 import { createValidationMiddleware } from '../utils/validation';
 import { createSuccessResponse, createErrorResponse } from '../utils/helpers';
 import type { ContextVariables } from '../types';
@@ -322,9 +323,9 @@ telegramWebhookRoutes.post('/send-admin-message', async (c) => {
     }
     
     const telegramService = new TelegramWebhookService(dbService, config.bot_token);
-    const adminMessage = `📣 SeekFeed · 管理通知\n\n${message}\n\n时间  ${new Date().toLocaleString('zh-CN')}`;
+    const adminMessage = telegramNotice('管理通知', message, `时间 ${telegramTimestamp()}`);
     
-    const success = await telegramService.sendMessage(targetChatId, adminMessage);
+    const success = await telegramService.sendMessage(targetChatId, adminMessage, true);
     
     if (success) {
       return c.json(createSuccessResponse({ sent: true }, '管理员消息发送成功'));

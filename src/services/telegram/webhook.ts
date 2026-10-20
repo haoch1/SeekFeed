@@ -1,4 +1,4 @@
-import { escapeTelegramHtml as h, telegramHelp, welcomeMessage, telegramCommands, recentPostRow } from './messages';
+import { escapeTelegramHtml as h, telegramHelp, welcomeMessage, telegramCommands, recentPostRow, telegramMessage, telegramNotice, telegramListMessages, subscriptionRow, telegramText } from './messages';
 import { Context } from 'grammy';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { TelegramBaseService } from './base';
@@ -20,9 +20,9 @@ export class TelegramWebhookService extends TelegramBaseService {
   /**
    * 发送消息到 Telegram（基础版本，用于测试连接等）
    */
-  async sendMessage(chatId: string | number, text: string): Promise<boolean> {
+  async sendMessage(chatId: string | number, text: string, html = false): Promise<boolean> {
     try {
-      await this.bot.api.sendMessage(chatId, text);
+      await this.bot.api.sendMessage(chatId, text, { ...(html ? { parse_mode: 'HTML' as const } : {}), link_preview_options: { is_disabled: false, prefer_small_media: true } });
       return true;
     } catch (error) {
       logger.error('发送 Telegram 消息时出错:', error);
@@ -66,7 +66,7 @@ export class TelegramWebhookService extends TelegramBaseService {
     // 处理 /stop 命令
     this.bot.command('stop', async (ctx) => {
       if (!this.checkUserPermission(ctx)) {
-        await ctx.reply('⚠️ 您没有权限使用此功能。请先发送 /start 进行绑定。');
+        await this.replyNotice(ctx, '尚未绑定', '您没有权限使用此功能。', '/start  绑定账号');
         return;
       }
       await this.handleStopCommand(ctx);
@@ -75,7 +75,7 @@ export class TelegramWebhookService extends TelegramBaseService {
     // 处理 /resume 命令
     this.bot.command('resume', async (ctx) => {
       if (!this.checkUserPermission(ctx)) {
-        await ctx.reply('⚠️ 您没有权限使用此功能。请先发送 /start 进行绑定。');
+        await this.replyNotice(ctx, '尚未绑定', '您没有权限使用此功能。', '/start  绑定账号');
         return;
       }
       await this.handleResumeCommand(ctx);
@@ -84,7 +84,7 @@ export class TelegramWebhookService extends TelegramBaseService {
     // 处理 /list 命令
     this.bot.command('list', async (ctx) => {
       if (!this.checkUserPermission(ctx)) {
-        await ctx.reply('⚠️ 您没有权限使用此功能。请先发送 /start 进行绑定。');
+        await this.replyNotice(ctx, '尚未绑定', '您没有权限使用此功能。', '/start  绑定账号');
         return;
       }
       await this.handleListCommand(ctx);
@@ -93,7 +93,7 @@ export class TelegramWebhookService extends TelegramBaseService {
     // 处理 /add 命令
     this.bot.command('add', async (ctx) => {
       if (!this.checkUserPermission(ctx)) {
-        await ctx.reply('⚠️ 您没有权限使用此功能。请先发送 /start 进行绑定。');
+        await this.replyNotice(ctx, '尚未绑定', '您没有权限使用此功能。', '/start  绑定账号');
         return;
       }
       await this.handleAddCommand(ctx);
@@ -102,7 +102,7 @@ export class TelegramWebhookService extends TelegramBaseService {
     // 处理 /del 命令
     this.bot.command('del', async (ctx) => {
       if (!this.checkUserPermission(ctx)) {
-        await ctx.reply('⚠️ 您没有权限使用此功能。请先发送 /start 进行绑定。');
+        await this.replyNotice(ctx, '尚未绑定', '您没有权限使用此功能。', '/start  绑定账号');
         return;
       }
       await this.handleDeleteCommand(ctx);
@@ -111,7 +111,7 @@ export class TelegramWebhookService extends TelegramBaseService {
     // 处理 /post 命令
     this.bot.command('post', async (ctx) => {
       if (!this.checkUserPermission(ctx)) {
-        await ctx.reply('⚠️ 您没有权限使用此功能。请先发送 /start 进行绑定。');
+        await this.replyNotice(ctx, '尚未绑定', '您没有权限使用此功能。', '/start  绑定账号');
         return;
       }
       await this.handlePostCommand(ctx);
@@ -120,12 +120,12 @@ export class TelegramWebhookService extends TelegramBaseService {
     // 处理 /hot 命令
     this.bot.command('hot', async ctx => {
       if (!this.checkUserPermission(ctx)) {
-        await ctx.reply('⚠️ 您没有权限使用此功能。请先发送 /start 进行绑定。');
+        await this.replyNotice(ctx, '尚未绑定', '您没有权限使用此功能。', '/start  绑定账号');
         return;
       }
       const period = ctx.match.trim() || 'live';
       if (!['live', 'day', 'week'].includes(period)) {
-        await ctx.reply('💡 /hot 实时热榜 · /hot day 24 小时 · /hot week 7 天', { reply_markup: hotEntryKeyboard });
+        await ctx.reply(telegramNotice('论坛热榜', '/hot  实时热榜\n/hot day  日榜\n/hot week  周榜'), { parse_mode: 'HTML', reply_markup: hotEntryKeyboard });
         return;
       }
       await this.handleHotCommand(ctx, period as HotPeriod);
@@ -146,7 +146,7 @@ export class TelegramWebhookService extends TelegramBaseService {
     // 处理 /unbind 命令
     this.bot.command('unbind', async (ctx) => {
       if (!this.checkUserPermission(ctx)) {
-        await ctx.reply('⚠️ 您没有权限使用此功能。请先发送 /start 进行绑定。');
+        await this.replyNotice(ctx, '尚未绑定', '您没有权限使用此功能。', '/start  绑定账号');
         return;
       }
       await this.handleUnbindCommand(ctx);
@@ -156,10 +156,10 @@ export class TelegramWebhookService extends TelegramBaseService {
     this.bot.on('message:text', async (ctx) => {
       if (!ctx.message.text.startsWith('/')) {
         if (!this.checkUserPermission(ctx)) {
-          await ctx.reply('⚠️ 您没有权限使用此功能。请先发送 /start 进行绑定。\n\n发送 /help 查看可用命令。');
+          await this.replyNotice(ctx, '尚未绑定', '您没有权限使用此功能。', '/start  绑定账号\n/help  查看可用命令');
           return;
         }
-        await ctx.reply('请使用命令与我交互。发送 /help 查看可用命令。');
+        await this.replyNotice(ctx, '使用说明', '请使用命令与我交互。', '/help  查看可用命令');
       }
     });
   }
@@ -417,11 +417,11 @@ export class TelegramWebhookService extends TelegramBaseService {
   private async handleStartCommand(ctx: Context): Promise<void> {
     const config = this.dbService.getBaseConfig();
     const id = ctx.chat?.id;
-    if (!config || !id) { await ctx.reply('⚠️ 请先在网页端完成系统初始化。'); return; }
+    if (!config || !id) { await this.replyNotice(ctx, '尚未初始化', '请先在网页端完成系统初始化。'); return; }
     const name = [ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(' ');
     const username = ctx.from?.username || '';
     if (config.chat_id && config.chat_id !== String(id)) {
-      await ctx.reply('⚠️ 此系统已绑定到其他账号。请由已绑定的账号发送 /unbind，或在网页端更改 Chat ID。'); return;
+      await this.replyNotice(ctx, '账号已绑定', '此系统已绑定到其他账号。', '请由已绑定的账号发送 /unbind，或在网页端更改 Chat ID。'); return;
     }
     const returning = config.chat_id === String(id);
     if (!returning) this.dbService.updateBaseConfig({ chat_id: String(id), bound_user_name: name, bound_user_username: username });
@@ -430,59 +430,52 @@ export class TelegramWebhookService extends TelegramBaseService {
 
   private async handleStopCommand(ctx: Context): Promise<void> {
     this.dbService.updateBaseConfig({ stop_push: 1 });
-    await ctx.reply('✅ 推送已暂停。\n\n💡 发送 /resume 恢复通知。');
+    await this.replyNotice(ctx, '推送已暂停', '订阅和配置已保留。', '/resume  恢复通知');
   }
 
   private async handleResumeCommand(ctx: Context): Promise<void> {
     this.dbService.updateBaseConfig({ stop_push: 0 });
-    await ctx.reply('✅ 推送已恢复。');
+    await this.replyNotice(ctx, '推送已恢复', '将继续接收订阅通知。');
   }
 
   private async handleListCommand(ctx: Context): Promise<void> {
     const subs = this.dbService.getAllKeywordSubs();
-    if (!subs.length) { await ctx.reply('📋 暂无订阅\n\n💡 使用 /add 关键词 添加订阅。'); return; }
-    // Chunk at complete subscription boundaries to stay below Telegram's message limit.
-    let text = '<b>📋 SeekFeed · 订阅列表</b>\n\n';
-    for (const sub of subs) {
-      const words = [sub.keyword1, sub.keyword2, sub.keyword3].filter(Boolean).join(' + ');
-      const row = `<b>#${sub.id}</b>  ${sub.enabled === 0 ? '⏸️ 已暂停' : '✅ 监控中'}\n${h(words || '按作者 / 分类匹配')}${sub.creator ? `\n作者  ${h(sub.creator)}` : ''}${sub.category ? `\n分类  ${h(this.getCategoryName(sub.category))}` : ''}${sub.exclude_keywords ? `\n屏蔽  ${h(sub.exclude_keywords)}` : ''}\n\n`;
-      if (text.length + row.length > 3500) { await ctx.reply(text.trim(), { parse_mode: 'HTML' }); text = ''; }
-      text += row;
+    if (!subs.length) { await this.replyNotice(ctx, '订阅列表', '暂无订阅。', '/add 关键词  添加订阅'); return; }
+    const rows = subs.map(sub => subscriptionRow(sub, sub.category ? this.getCategoryName(sub.category) : ''));
+    for (const text of telegramListMessages('订阅列表', rows, '/del 订阅ID  删除订阅')) {
+      await ctx.reply(text, { parse_mode: 'HTML' });
     }
-    await ctx.reply(`${text}💡 /del 订阅ID 删除订阅`, { parse_mode: 'HTML' });
   }
 
   private async handleAddCommand(ctx: Context): Promise<void> {
     const words = ctx.message?.text?.trim().split(/\s+/).slice(1) || [];
     if (!words.length || words.length > 3 || words.some(word => word.length > 100)) {
-      await ctx.reply('⚠️ 请填写 1–3 个关键词，每个不超过 100 字。\n\n💡 /add 关键词1 关键词2 关键词3'); return;
+      await this.replyNotice(ctx, '添加订阅', '请填写 1–3 个关键词，每个不超过 100 字。', '/add 关键词1 关键词2 关键词3'); return;
     }
     try {
       const sub = this.dbService.createKeywordSub({ keyword1: words[0], keyword2: words[1], keyword3: words[2] });
-      await ctx.reply(`<b>✅ 订阅已添加</b>\n\n<b>ID</b>  <code>${sub.id}</code>\n<b>关键词</b>  ${h(words.join(' + '))}\n\n💡 /list 查看所有订阅`, { parse_mode: 'HTML' });
-    } catch { await ctx.reply('⚠️ 添加失败，请稍后重试。'); }
+      await ctx.reply(telegramMessage('订阅已添加', subscriptionRow(sub, '') + '/list  查看所有订阅'), { parse_mode: 'HTML' });
+    } catch { await this.replyNotice(ctx, '添加失败', '请稍后重试。'); }
   }
 
   private async handleDeleteCommand(ctx: Context): Promise<void> {
     const args = ctx.message?.text?.trim().split(/\s+/).slice(1) || [];
     if (args.length !== 1 || !/^[1-9]\d*$/.test(args[0]) || !Number.isSafeInteger(Number(args[0]))) {
-      await ctx.reply('⚠️ 请提供有效的订阅 ID。\n\n💡 /del 订阅ID'); return;
+      await this.replyNotice(ctx, '删除订阅', '请提供有效的订阅 ID。', '/del 订阅ID'); return;
     }
     const id = Number(args[0]);
-    try { await ctx.reply(this.dbService.deleteKeywordSub(id) ? `✅ 订阅 #${id} 已删除。` : `⚠️ 订阅 #${id} 不存在。`); }
-    catch { await ctx.reply('⚠️ 删除失败，请稍后重试。'); }
+    try { await this.replyNotice(ctx, '删除订阅', this.dbService.deleteKeywordSub(id) ? `订阅 #${id} 已删除。` : `订阅 #${id} 不存在。`); }
+    catch { await this.replyNotice(ctx, '删除失败', '请稍后重试。'); }
   }
 
   private async handlePostCommand(ctx: Context): Promise<void> {
     const posts = this.dbService.getRecentPosts(10);
-    if (!posts.length) { await ctx.reply('📰 暂无帖子，等待下一次 RSS 同步。'); return; }
-    let text = '<b>📰 SeekFeed · 最近帖子</b>\n\n';
-    for (const [i, post] of posts.entries()) {
-      const row = recentPostRow(post, i);
-      if (text.length + row.length > 3500) { await ctx.reply(text.trim(), { parse_mode: 'HTML', link_preview_options: { is_disabled: false, prefer_small_media: true } }); text = ''; }
-      text += row;
+    if (!posts.length) { await this.replyNotice(ctx, '最近帖子', '暂无帖子，等待下一次 RSS 同步。'); return; }
+    const rows = posts.map((post, index) => recentPostRow(post, index, this.getCategoryName(post.category || '')));
+    const messages = telegramListMessages('最近帖子', rows);
+    for (const [index, text] of messages.entries()) {
+      await ctx.reply(text, { parse_mode: 'HTML', link_preview_options: { is_disabled: false, prefer_small_media: true }, ...(index === messages.length - 1 ? { reply_markup: hotEntryKeyboard } : {}) });
     }
-    await ctx.reply(text.trim(), { parse_mode: 'HTML', link_preview_options: { is_disabled: false, prefer_small_media: true }, reply_markup: hotEntryKeyboard });
   }
 
   private async handleHotCommand(ctx: Context, period: HotPeriod = 'live'): Promise<void> {
@@ -516,12 +509,17 @@ export class TelegramWebhookService extends TelegramBaseService {
     const config = this.dbService.getBaseConfig();
     const own = config?.chat_id === ctx.chat?.id?.toString();
     const name = [ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(' ') || '未命名用户';
-    await ctx.reply(`<b>👤 SeekFeed · 账号状态</b>\n\n<b>👤 账号</b>  ${h(name)}\n\n<b>🆔 Chat ID</b>  <code>${ctx.chat?.id}</code>\n\n${own ? '✅ 已绑定当前账号' : config?.chat_id ? '⚠️ 已绑定其他账号' : '💡 发送 /start 绑定账号'}\n\n💡 /help 查看命令帮助`, { parse_mode: 'HTML' });
+    const status = own ? '已绑定当前账号' : config?.chat_id ? '已绑定其他账号' : '未绑定，发送 /start 绑定账号';
+    await ctx.reply(telegramMessage('账号状态', `账号 ${h(telegramText(name))}\nChat ID <code>${ctx.chat?.id}</code> · ${status}\n\n/help  查看命令帮助`), { parse_mode: 'HTML' });
   }
 
   private async handleUnbindCommand(ctx: Context): Promise<void> {
-    if (!this.checkUserPermission(ctx)) { await ctx.reply('⚠️ 当前账号未绑定。'); return; }
+    if (!this.checkUserPermission(ctx)) { await this.replyNotice(ctx, '解除绑定', '当前账号未绑定。'); return; }
     this.dbService.updateBaseConfig({ chat_id: '', bound_user_name: '', bound_user_username: '' });
-    await ctx.reply('✅ 绑定已解除，将停止向此账号推送。\n\n💡 发送 /start 可以重新绑定。');
+    await this.replyNotice(ctx, '绑定已解除', '将停止向此账号推送。', '/start  重新绑定');
+  }
+
+  private async replyNotice(ctx: Context, title: string, message: string, hint?: string): Promise<void> {
+    await ctx.reply(telegramNotice(title, message, hint), { parse_mode: 'HTML' });
   }
 }

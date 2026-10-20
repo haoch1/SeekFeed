@@ -94,9 +94,7 @@ telegramPushRoutes.post('/test-send', async (c) => {
     }
     
     const telegramService = new TelegramPushService(dbService, config.bot_token);
-    const testMessage = message || `✈️ SeekFeed · 推送测试\n\n✅ 通知通道工作正常。\n\n时间  ${new Date().toLocaleString('zh-CN')}`;
-    
-    const success = await telegramService.testSendMessage(config.chat_id, testMessage);
+    const success = await telegramService.testSendMessage(config.chat_id, message);
     
     if (success) {
       return c.json(createSuccessResponse({ sent: true }, '测试消息发送成功'));

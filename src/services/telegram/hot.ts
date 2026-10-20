@@ -1,5 +1,5 @@
 import type { HotPeriod, HotService } from '../hot';
-import { displayTelegramTitle, escapeTelegramHtml as h } from './messages';
+import { telegramMessage, telegramPostLink, telegramRow, telegramText, telegramTimestamp } from './messages';
 
 export const hotEntryKeyboard = { inline_keyboard: [[{ text: '论坛热榜', callback_data: 'hot:open' }]] };
 
@@ -14,18 +14,16 @@ export function hotRankingKeyboard(period: HotPeriod) {
 
 export function hotRankingMessage(data: ReturnType<HotService['ranking']>): string {
     const title = { live: '实时热榜', day: '日榜', week: '周榜' }[data.period];
-    let text = `<b>SeekFeed · ${title}</b>\n\n`;
+    let text = '';
     for (const [index, post] of data.posts.slice(0, 10).entries()) {
-        const chars = Array.from(displayTelegramTitle(post.title).replace(/\s+/g, ' '));
-        const name = chars.slice(0, 80).join('') + (chars.length > 80 ? '…' : '');
         const rank = String(index + 1).padStart(2, '0');
-        const row = `<code>${rank}</code>  <a href="https://www.nodeseek.com/post-${post.postId}-1">${h(name)}</a>\n浏览量 ${post.views.toLocaleString('zh-CN')} · 回复 ${post.replies.toLocaleString('zh-CN')} · ${h(post.categoryLabel)}\n\n`;
+        const row = telegramRow(rank, telegramPostLink(post.postId, post.title), `浏览量 ${post.views.toLocaleString('zh-CN')} · 回复 ${post.replies.toLocaleString('zh-CN')} · ${telegramText(post.categoryLabel)}`);
         if (text.length + row.length > 3400) break;
         text += row;
     }
     if (!data.posts.length) text += data.updatedAt ? '暂无符合时间范围的帖子。\n\n' : '榜单准备中，采集完成后可再次查看。\n\n';
     if (data.error || (data.stale && data.updatedAt)) text += '采集延迟，当前为上次保存的榜单。\n';
     if (data.warmingUp) text += '正在积累增量样本，暂按发帖时间与累计热度排序。\n';
-    if (data.updatedAt) text += `更新于 ${new Date(data.updatedAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })}（UTC+8）\n`;
-    return text + '每 5 分钟采集 · 仅覆盖已采集的公开帖子';
+    if (data.updatedAt) text += `更新于 ${telegramTimestamp(data.updatedAt)}\n`;
+    return telegramMessage(title, text + '每 5 分钟采集 · 仅覆盖已采集的公开帖子');
 }

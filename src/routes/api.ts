@@ -6,6 +6,7 @@ import { AuthService } from '../services/auth';
 import { RSSService } from '../services/rss';
 import { TelegramWebhookService } from '../services/telegram/webhook';
 import { TelegramPushService } from '../services/telegram/push';
+import { telegramTestMessage } from '../services/telegram/messages';
 import { MatcherService } from '../services/matcher';
 import { createValidationMiddleware, createQueryValidationMiddleware, createParamValidationMiddleware } from '../utils/validation';
 import { createSuccessResponse, createErrorResponse } from '../utils/helpers';
@@ -549,8 +550,7 @@ apiRoutes.post('/telegram/test', async (c) => {
 
         // 如果有绑定的 chat_id，发送测试消息
         if (config.chat_id) {
-            const testMessage = `◇ SeekFeed · 连接测试\n\n✓ Bot 连接正常。\n\n时间  ${new Date().toLocaleString('zh-CN')}`;
-            const sendResult = await telegramService.sendMessage(config.chat_id, testMessage);
+            const sendResult = await telegramService.sendMessage(config.chat_id, telegramTestMessage('连接测试', 'Bot 连接正常。'), true);
             
             return c.json(createSuccessResponse({
                 bot_info: botInfo,
@@ -607,8 +607,7 @@ apiRoutes.post('/telegram/send-test', createValidationMiddleware(z.object({
 
         const telegramService = new TelegramPushService(dbService, config.bot_token);
         
-        const testMessage = message || `✈️ SeekFeed · 推送测试\n\n✅ 通知通道工作正常。\n\n时间  ${new Date().toLocaleString('zh-CN')}`;
-        const result = await telegramService.sendMessage(config.chat_id, testMessage);
+        const result = await telegramService.testSendMessage(config.chat_id, message);
 
         if (result) {
             return c.json(createSuccessResponse(null, '测试消息发送成功'));

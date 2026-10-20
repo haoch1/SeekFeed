@@ -662,7 +662,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (chatId) {
         const testResult = await apiRequest("/api/push/test-send", {
           method: "POST",
-          body: JSON.stringify({ message: "✈️ SeekFeed · 推送测试\n\n✅ 连接正常，测试通知已送达。" }),
+          body: JSON.stringify({}),
         });
         if (testResult?.success) {
           Toast.success("连接测试成功，测试消息已发送");

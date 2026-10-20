@@ -1,4 +1,4 @@
-import { postMessage } from './messages';
+import { postMessage, telegramTestMessage } from './messages';
 import { TelegramBaseService } from './base';
 import type { Post, KeywordSub } from '../../types';
 import { logger } from '../../utils/logger';
@@ -52,7 +52,6 @@ export class TelegramPushService extends TelegramBaseService {
    * 测试发送消息（简化版，仅用于测试连通性）
    */
   async testSendMessage(chatId: string | number, message?: string): Promise<boolean> {
-    const testMessage = message || '✈️ SeekFeed · 推送测试\n\n✅ 通知通道工作正常。';
-    return await this.sendMessage(chatId, testMessage);
+    return await this.sendMessage(chatId, message || telegramTestMessage(), !message);
   }
 }
