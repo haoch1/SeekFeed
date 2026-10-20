@@ -39,7 +39,10 @@ export const DashboardSurface: FC<PropsWithChildren<{ path?: string }>> = ({ chi
         <div class="workspace-main">
             <header class="workspace-topbar">
                 <div class="breadcrumb"><button id="sidebarToggle" class="icon-btn mobile-menu" aria-label="打开导航" aria-expanded="false" aria-controls="workspaceSidebar"><Icon name="menu" /></button><span id="breadcrumbSection">{path.startsWith('/settings') ? '设置' : '社区动态'}</span><span class="breadcrumb-divider">/</span><strong id="breadcrumbCurrent">{({ "/": "热榜", "/posts": "最新帖子", "/hot": "热榜", "/matched": "命中订阅", "/subscriptions": "订阅管理", "/statistics": "统计信息", "/settings/account": "账号与安全", "/settings/rss": "RSS 配置", "/settings/telegram": "Telegram" } as Record<string, string>)[path]}</strong></div>
-                <div class="header-actions"><button id="themeToggleBtn" class="icon-btn" title="切换主题" aria-label="切换主题"><Icon name="sun" /></button></div>
+                <div class="header-actions">
+                    <a href="https://github.com/haoch1/SeekFeed" target="_blank" rel="noopener noreferrer" class="icon-btn github-link" aria-label="查看 GitHub 源码（新窗口打开）" aria-describedby="githubLinkHint"><Icon name="github" /><span id="githubLinkHint" class="github-link-hint" role="tooltip">查看源码</span></a>
+                    <button id="themeToggleBtn" class="icon-btn" title="切换主题" aria-label="切换主题"><Icon name="sun" /></button>
+                </div>
             </header>
             <main class="workspace-content" id="mainContent"><section id="feedPage" class="route-page" hidden={path !== "/posts" && path !== "/matched"}>
                 <div class="workspace-heading"><div><h1 id="pageTitle"><Icon name={path === "/matched" ? "bell" : "posts"} /><span>{path === "/matched" ? "命中订阅" : "最新帖子"}</span></h1></div><div class="heading-actions" data-auth-only><a href="/subscriptions" data-route class="btn btn-secondary manage-subscriptions" aria-label="管理订阅" title="管理订阅"><Icon name="list" /><span>管理订阅</span></a><button id="syncNowBtn" class="btn btn-primary"><Icon name="sync" /><span>立即刷新</span></button></div></div>
