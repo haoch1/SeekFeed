@@ -6,8 +6,30 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
     const percent = (n, total) => total ? (n / total * 100).toFixed(1).replace(/\.0$/, '') + '%' : '—';
     let data, selected = 0, hours = 1, request = 0, lastLoad = 0, busy = false, controller, config, chartIndex = 0;
     const selectedTerm = () => data.series[selected];
-    function breakdown(id, rows, key, total, name = value => value) {
-        el(id).innerHTML = rows.length ? rows.map((row, index) => `<div class="keyword-rank-row"><span class="keyword-rank">${String(index + 1).padStart(2, '0')}</span><div><span title="${esc(name(row[key]))}">${esc(name(row[key]))}</span><div class="analytics-bar"><i style="width:${row.count / Math.max(...rows.map(r => r.count), 1) * 100}%;--bar-color:var(--primary)"></i></div></div><span><strong>${number(row.count)}</strong><small>${percent(row.count, total)}</small></span></div>`).join('') : '<p class="keyword-no-data">暂无记录</p>';
+    function renderAuthors(series) {
+        el('keywordAuthors').innerHTML = series.topAuthors.length ? series.topAuthors.map((row, index) => `<div class="keyword-rank-row"><span class="keyword-rank">${String(index + 1).padStart(2, '0')}</span><span class="keyword-author-name" title="${esc(row.creator)}">${esc(row.creator)}</span><span><strong>${number(row.count)}<small>篇</small></strong><small>${percent(row.count, series.total)}</small></span></div>`).join('') : '<p class="keyword-no-data">暂无作者记录</p>';
+    }
+    function renderCategoryChart(series) {
+        const rows = series.categories.length > 5 ? [...series.categories.slice(0, 4), { category: '其他分类', count: series.categories.slice(4).reduce((sum, row) => sum + row.count, 0) }] : series.categories;
+        let cursor = 0;
+        const segments = rows.map((row, index) => {
+            const start = cursor;
+            cursor += row.count / series.total * 100;
+            return `var(--analytics-color-${index}) ${start}% ${cursor}%`;
+        });
+        el('keywordCategories').innerHTML = !rows.length ? '<p class="keyword-no-data">暂无分类记录</p>' : `<div class="keyword-category-ring" role="img" aria-label="${esc(rows.map(row => `${getCategoryName(row.category)} ${number(row.count)} 篇，占 ${percent(row.count, series.total)}`).join('；'))}" style="background:conic-gradient(${segments.join(',')})"><div><strong>${number(series.total)}</strong><span>篇帖子</span></div></div><div class="keyword-category-legend">${rows.map((row, index) => `<div><i style="background:var(--analytics-color-${index})"></i><span title="${esc(getCategoryName(row.category))}">${esc(getCategoryName(row.category))}</span><strong>${number(row.count)}</strong><small>${percent(row.count, series.total)}</small></div>`).join('')}</div>`;
+    }
+    function renderDailyChart() {
+        const box = el('keywordDailyChart');
+        if (!data || !box.clientWidth) return;
+        const rows = selectedTerm().daily, max = Math.max(...rows.map(row => row.count), 1);
+        const width = Math.max(box.clientWidth, rows.length * Math.max(26, number(max).length * 6 + 8) + 12), height = 178;
+        const inset = width < 336 ? 6 : 24;
+        const left = inset, right = width - inset, top = 26, bottom = 160, step = (right - left) / rows.length;
+        const ceiling = Math.max(4, Math.ceil(max / 4) * 4);
+        const x = index => left + (index + .5) * step, y = value => bottom - value / ceiling * (bottom - top);
+        const points = rows.map((row, index) => `${x(index)},${y(row.count)}`).join(' ');
+        box.innerHTML = `<div class="keyword-line-scroll"><div class="keyword-line-canvas" style="width:${width}px"><svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(rows.map(row => `${row.date} ${number(row.count)} 篇`).join('；'))}">${[0, .5, 1].map(ratio => `<line x1="${left}" x2="${right}" y1="${y(ceiling * ratio)}" y2="${y(ceiling * ratio)}" class="analytics-grid-line"/>`).join('')}<polygon class="keyword-line-area" points="${x(0)},${bottom} ${points} ${x(rows.length - 1)},${bottom}"/><polyline class="keyword-trend-line" points="${points}"/>${rows.map((row, index) => `<g class="keyword-trend-point${row.date === data.date ? ' is-selected' : ''}" data-daily-count="${row.count}"><circle cx="${x(index)}" cy="${y(row.count)}" r="4"/><text x="${x(index)}" y="${y(row.count) - 13}" text-anchor="middle">${number(row.count)}</text></g>`).join('')}</svg><div class="keyword-day-tabs" style="padding-inline:${left}px">${rows.map(row => `<button type="button" class="keyword-day${row.date === data.date ? ' is-selected' : ''}" data-analysis-date="${row.date}" aria-pressed="${row.date === data.date}" aria-label="查看 ${row.date}，${number(row.count)} 篇">${row.date.slice(5).replace('-', '/')}</button>`).join('')}</div></div></div><p class="keyword-daily-note">${data.partial ? '末日截至 ' + new Date(Date.parse(data.to) + offset * 60000).toISOString().slice(11, 16) : '各日按全天统计'}</p>`;
     }
     function renderChart() {
         if (!data || !el('keywordHourChart').clientWidth) return;
@@ -53,11 +75,9 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
         el('keywordMetrics').innerHTML=[['活跃作者',number(series.authors),'位'],['覆盖分类',number(series.categoryCount),'类'],['高峰时段',series.peak?String(series.peak.hour).padStart(2,'0')+':00':'—',series.peak?number(series.peak.count)+' 篇':'暂无记录'],['较上一日',previousCovered?(difference>0?'+':'')+number(difference):'—',comparison]].map(([label,value,unit])=>`<div><span>${label}</span><strong>${value}</strong><small>${unit}</small></div>`).join('');
         el('keywordOverlap').hidden=!data.overlaps?.length;
         el('keywordOverlap').innerHTML=(data.overlaps||[]).map(row=>`<span>${row.terms.map(esc).join(' ∩ ')}<strong>${number(row.count)} 篇共同命中</strong></span>`).join('');
-        const categoryRows=series.categories.length>5?[...series.categories.slice(0,4),{category:'其他分类',count:series.categories.slice(4).reduce((sum,row)=>sum+row.count,0)}]:series.categories;
-        breakdown('keywordCategories',categoryRows,'category',total,getCategoryName);
-        breakdown('keywordAuthors',series.topAuthors,'creator',total);
-        const max=Math.max(...series.daily.map(row=>row.count),1);
-        el('keywordDailyChart').innerHTML=series.daily.map((row,index)=>`<button type="button" class="keyword-day${row.date===data.date?' is-selected':''}" data-analysis-date="${row.date}" title="查看 ${row.date} · ${number(row.count)} 篇"><strong>${number(row.count)}</strong><span class="keyword-day-track"><i style="height:${row.count/max*100}%"></i></span><span>${row.date.slice(5).replace('-','/')}</span>${index===6&&data.partial?'<small>截至目前</small>':'<small>&nbsp;</small>'}</button>`).join('');
+        renderCategoryChart(series);
+        renderAuthors(series);
+        renderDailyChart();
         el('keywordAnalysisStatus').textContent=`${data.date} · ${data.scope==='title'?'标题包含':'标题或 RSS 摘要包含'} · 每篇每词计 1 次${data.coverageFrom&&Date.parse(data.coverageFrom)>Date.parse(data.from)-6*86400000?' · 历史记录未覆盖完整 7 天':''}`;
         chartIndex=0;renderChart();
     }
@@ -89,6 +109,7 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
             el('keywordDailyChart').addEventListener('click',e=>{const button=e.target.closest('[data-analysis-date]');if(button){el('analysisDate').value=button.dataset.analysisDate;submit();}});
             el('keywordSuggestions').addEventListener('click',e=>{const button=e.target.closest('[data-keyword]');if(button){el('analysisKeyword').value=button.dataset.keyword;submit();}});
             let width=0;new ResizeObserver(entries=>{const next=Math.round(entries[0].contentRect.width);if(next&&next!==width){width=next;renderChart();}}).observe(el('keywordHourChart'));
+            let dailyWidth=0;new ResizeObserver(entries=>{const next=Math.round(entries[0].contentRect.width);if(next&&next!==dailyWidth){dailyWidth=next;renderDailyChart();}}).observe(el('keywordDailyChart'));
         },
         suggestions(terms) {
             const next=JSON.stringify(terms.slice(0,6).map(row=>row.term));if(el('keywordSuggestions').dataset.terms===next)return;

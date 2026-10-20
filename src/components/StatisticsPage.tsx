@@ -60,13 +60,25 @@ export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
                     <div id="keywordComparison" class="keyword-comparison" role="group" aria-label="选择查看的关键词"></div>
                     <div id="keywordMetrics" class="keyword-metrics"></div>
                     <div id="keywordOverlap" class="keyword-overlap" hidden></div>
-                    <div class="keyword-chart-heading"><h3>时段分布</h3><div id="keywordBucketSelector" class="analytics-period" role="group" aria-label="关键词时间粒度">{[1, 3, 6].map(hours => <button type="button" class={`chart-range-btn${hours === 1 ? ' active' : ''}`} data-hours={hours} aria-pressed={hours === 1 ? 'true' : 'false'}>{hours} 小时</button>)}</div></div>
-                    <div id="keywordChartReadout" class="analytics-caption" aria-live="polite"></div>
-                    <div id="keywordHourChart" class="keyword-hour-chart" tabindex="0" role="group" aria-label="关键词时段柱形图，方向键查看数据"></div>
-                    <div class="keyword-dimensions">
-                        <section><h3>近 7 天</h3><div id="keywordDailyChart" class="keyword-daily-chart"></div></section>
-                        <section><h3>分类分布</h3><div id="keywordCategories" class="keyword-ranked"></div></section>
-                        <section><h3>活跃作者</h3><div id="keywordAuthors" class="keyword-ranked"></div></section>
+                    <div class="keyword-panels">
+                        <section class="keyword-panel">
+                            <div class="keyword-chart-heading"><h3>时段分布</h3><div id="keywordBucketSelector" class="analytics-period" role="group" aria-label="关键词时间粒度">{[1, 3, 6].map(hours => <button type="button" class={`chart-range-btn${hours === 1 ? ' active' : ''}`} data-hours={hours} aria-pressed={hours === 1 ? 'true' : 'false'}>{hours} 小时</button>)}</div></div>
+                            <div id="keywordChartReadout" class="analytics-caption keyword-panel-readout" aria-live="polite"></div>
+                            <div id="keywordHourChart" class="keyword-hour-chart" tabindex="0" role="group" aria-label="关键词时段柱形图，方向键查看数据"></div>
+                        </section>
+                        <section class="keyword-panel">
+                            <div class="keyword-chart-heading"><h3>近 7 天趋势</h3><span class="analytics-caption">篇 / 天</span></div>
+                            <div class="analytics-caption keyword-panel-readout">点击日期查看当天</div>
+                            <div id="keywordDailyChart" class="keyword-daily-chart"></div>
+                        </section>
+                        <section class="keyword-panel">
+                            <div class="keyword-chart-heading"><h3>分类分布</h3><span class="analytics-caption">帖子占比</span></div>
+                            <div id="keywordCategories" class="keyword-category-chart"></div>
+                        </section>
+                        <section class="keyword-panel">
+                            <div class="keyword-chart-heading"><h3>活跃作者</h3><span class="analytics-caption">TOP 5</span></div>
+                            <div id="keywordAuthors" class="keyword-ranked"></div>
+                        </section>
                     </div>
                 </div>
             </article>
