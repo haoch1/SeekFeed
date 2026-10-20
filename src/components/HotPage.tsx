@@ -10,13 +10,13 @@ export const HotPage: FC<{ active: boolean }> = ({ active }) => <section id="hot
             </div>
             <div class="hot-filters">
                 <select id="hotCategory" class="filter-select" aria-label="热榜分类" data-1p-ignore="true" data-op-ignore="true"><option value="">全部分类</option></select>
-                <select id="hotSort" class="filter-select" aria-label="热榜排序" data-1p-ignore="true" data-op-ignore="true"><option value="heat">综合热度</option><option value="views">新增浏览最多</option><option value="replies">新增回复最多</option></select>
+                <select id="hotSort" class="filter-select" aria-label="热榜排序" data-1p-ignore="true" data-op-ignore="true"><option value="heat">综合热度</option><option value="views">浏览量最多</option><option value="replies">回复量最多</option></select>
                 <select id="hotLimit" class="filter-select" aria-label="热榜条数" data-1p-ignore="true" data-op-ignore="true"><option value="30">前 30 条</option><option value="50">前 50 条</option><option value="100">前 100 条</option></select>
             </div>
         </div>
         <div class="hot-statusbar"><span id="hotFreshness" role="status">正在读取榜单…</span><span id="hotError" role="status" hidden></span></div>
         <div id="hotResults" role="tabpanel" aria-labelledby="hotTab-live" aria-busy="true">
-            <div class="hot-table-heading" aria-hidden="true"><span>排名</span><span>帖子</span><span><Icon name="eye" /><span id="hotViewsLabel">新增浏览</span></span><span><Icon name="message" /><span id="hotRepliesLabel">新增回复</span></span><span><Icon name="flame" />热度</span></div>
+            <div class="hot-table-heading" aria-hidden="true"><span>排名</span><span>帖子</span><span><Icon name="eye" /><span id="hotViewsLabel">浏览量</span></span><span><Icon name="message" /><span id="hotRepliesLabel">回复量</span></span><span><Icon name="flame" />热度</span></div>
             <ol id="hotList" class="hot-list">{[1, 2, 3, 4, 5, 6].map(() => <li class="hot-skeleton"><span class="skeleton skeleton-line"></span><span class="skeleton skeleton-title"></span></li>)}</ol>
             <div id="hotEmpty" class="empty-state" hidden><Icon name="flame" /><div class="empty-title">榜单准备中</div><div class="empty-desc">首次采集完成后会自动显示。</div></div>
         </div>

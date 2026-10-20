@@ -158,9 +158,7 @@ export class HotService {
                 sampleMinutes: growth?.sampleMinutes ?? 0,
                 heat: heatScore(live ? growth!.growthViews : r.views, live ? growth!.growthReplies : r.replies),
             }];
-        }).sort((a, b) => (sort === 'heat' ? b.heat - a.heat : live
-            ? sort === 'views' ? b.growthViews - a.growthViews : b.growthReplies - a.growthReplies
-            : b[sort] - a[sort]) || b.postId - a.postId);
+        }).sort((a, b) => (sort === 'heat' ? b.heat - a.heat : b[sort] - a[sort]) || b.postId - a.postId);
         const warmingUp = live && eligible.length > 0 && ranked.length === 0;
         return { posts: ranked.slice(0, limit), total: ranked.length, categories, period, sort, limit,
             updatedAt: state.last_success_at, stale: !state.last_success_at || now.getTime() - Date.parse(state.last_success_at) > 15 * MINUTE,

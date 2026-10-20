@@ -133,8 +133,8 @@ describe('independent hot ranking', () => {
         expect(live.map(p => p.postId)).toEqual([2, 1, 3]);
         expect(live[0].heat).toBe(live[1].heat);
         expect(live[2].heat).toBe(heatScore(40, 2));
-        expect(service.ranking('live', '', 'views', now).posts.map(p => p.postId)).toEqual([2, 1, 3]);
-        expect(service.ranking('live', '', 'replies', now).posts.map(p => p.postId)).toEqual([2, 1, 3]);
+        expect(service.ranking('live', '', 'views', now).posts.map(p => p.postId)).toEqual([1, 2, 3]);
+        expect(service.ranking('live', '', 'replies', now).posts.map(p => p.postId)).toEqual([1, 2, 3]);
     });
     it('interpolates the one-hour boundary without counting the older portion or projecting short observations', () => {
         const service = new HotService(db);

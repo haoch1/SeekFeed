@@ -6,7 +6,6 @@ window.SeekFeedHot = (() => {
   const icon = name => window.SeekFeedControls.icon(name);
   const number = value => new Intl.NumberFormat('zh-CN').format(value);
   function render(data, background) {
-    const live = data.period === 'live';
     const list = el('hotList');
     const existing = new Map([...list.querySelectorAll('.hot-row')].map(row => [row.dataset.postId, row]));
     const anchor = background && scrollY > 160 ? [...existing.values()].find(row => row.getBoundingClientRect().bottom > 80 && data.posts.some(p => String(p.postId) === row.dataset.postId)) : null;
@@ -25,12 +24,10 @@ window.SeekFeedHot = (() => {
       row.querySelector('.hot-rank').classList.toggle('top-rank', index < 3);
       row.querySelector('.hot-rank').setAttribute('aria-label', `第 ${index + 1} 名`);
       text('a', post.title); text('.hot-category', post.categoryLabel); text('.hot-author', post.author);
-      const views = live ? post.growthViews : post.views, replies = live ? post.growthReplies : post.replies;
+      const views = post.views, replies = post.replies;
       text('.hot-views span', number(views)); text('.hot-replies span', number(replies)); text('.hot-heat', post.heat.toFixed(1));
-      row.querySelector('.hot-views').setAttribute('aria-label', `${live ? '近一小时新增' : ''}${views} 次浏览`);
-      row.querySelector('.hot-replies').setAttribute('aria-label', `${live ? '近一小时新增' : ''}${replies} 条回复`);
-      row.querySelector('.hot-views').title = live ? `近一小时，已观察 ${post.sampleMinutes} 分钟；累计浏览 ${number(post.views)}` : '';
-      row.querySelector('.hot-replies').title = live ? `近一小时，已观察 ${post.sampleMinutes} 分钟；累计回复 ${number(post.replies)}` : '';
+      row.querySelector('.hot-views').setAttribute('aria-label', `浏览量 ${number(views)}`);
+      row.querySelector('.hot-replies').setAttribute('aria-label', `回复量 ${number(replies)}`);
       row.querySelector('.hot-heat').setAttribute('aria-label', `热度 ${post.heat.toFixed(1)}`);
       keep.add(row);
       if (list.children[index] !== row) list.insertBefore(row, list.children[index] || null);
@@ -45,12 +42,11 @@ window.SeekFeedHot = (() => {
     }
   }
   function status(data) {
-    const live = data.period === 'live';
-    el('hotViewsLabel').textContent = live ? '新增浏览' : '浏览';
-    el('hotRepliesLabel').textContent = live ? '新增回复' : '回复';
+    el('hotViewsLabel').textContent = '浏览量';
+    el('hotRepliesLabel').textContent = '回复量';
     const sort = el('hotSort');
-    sort.options[1].textContent = live ? '新增浏览最多' : '浏览最多';
-    sort.options[2].textContent = live ? '新增回复最多' : '回复最多';
+    sort.options[1].textContent = '浏览量最多';
+    sort.options[2].textContent = '回复量最多';
     window.SeekFeedControls.refreshSelects();
     const freshness = data.updatedAt ? `更新于 ${new Date(data.updatedAt).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'})}` : '等待首次采集';
     if (el('hotFreshness').textContent !== freshness) el('hotFreshness').textContent = freshness;
