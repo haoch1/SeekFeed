@@ -55,6 +55,12 @@ The feed polls current results every 10 seconds while visible and refreshes on r
 
 The topbar stays at the top while content scrolls. Route changes capture the outgoing and incoming content with View Transitions (200ms out, 300ms in, at most 8px motion), keeping the sidebar and topbar stable. Unsupported browsers use a short sequential fade. Rapid navigation, history and reduced-motion preferences must remain correct.
 
+Every pointer or keyboard activation has a shared 90ms press and 360ms release/tint feedback, independent of network latency. Labels and layout remain stable, including while a button is disabled for a request. Reduced-motion preferences suppress movement.
+
 Buttons share one progress lifecycle: wait 280ms before showing progress, then keep it visible for at least 420ms and fade it out over 160ms. Fast operations do not show a spinner. Existing labels, icons and hit targets are restored after success or failure. Loading never fades an entire populated list. Background updates never animate or replace unchanged rows.
 
 Remove generic page introductions and collection diagnostics from the primary surface. Keep timestamps, time ranges, chart units, validation, security consequences and actionable error messages.
+
+Trend charts use compact start-time ticks (00:00 or month/day), complete time ranges in tooltips, and a visible value above every bar. Dense charts scroll within the card so numeric labels never overlap or shrink illegibly.
+
+Post lists share synchronized pagination: compact previous/current/next controls in the toolbar and direct page numbers below. Filters reset to page one; failed requests retain the last successful page and rows. Rapid paging commits only the latest request. Manual page changes gently reveal the new rows and return to the toolbar below the fixed header; background updates never animate or move the reader to another page. Both pagers expose disabled boundaries and the current page to assistive technology.

@@ -3,6 +3,70 @@
     const paths = JSON.parse(document.getElementById('seekfeedIcons')?.textContent || '{}');
     const icon = name => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths[name] || paths.info || ''}</svg>`;
     const selects = new Map();
+    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+    const pressAnimations = new Map();
+    const controlSelector = 'button, a.btn, a.icon-btn, a.nav-item, a.workspace-brand, summary, label.mode-option';
+    let pressed;
+    function controlFor(target) {
+        const control = target instanceof Element && target.closest(controlSelector);
+        return control && !control.matches(':disabled, [aria-disabled="true"]') && !control.closest('[inert]') ? control : null;
+    }
+    function feedback(control, hold = false) {
+        if (!control || reducedMotion.matches || !control.animate) return;
+        const current = getComputedStyle(control);
+        const previous = pressAnimations.get(control);
+        const baseShadow = previous?.baseShadow ?? current.boxShadow;
+        const scale = current.scale === 'none' ? '1' : current.scale;
+        const shadow = current.boxShadow;
+        previous?.animation.cancel();
+        const shade = current.getPropertyValue('--control-press-shade').trim();
+        const pressedShadow = `${baseShadow === 'none' ? '' : baseShadow + ', '}inset 0 0 0 999px ${shade}`;
+        // A quick click still completes a visible press and release, independent of request time.
+        const animation = control.animate(hold ? [
+            { scale, boxShadow: shadow }, { scale: '.97', boxShadow: pressedShadow },
+        ] : [
+            { scale, boxShadow: shadow },
+            { scale: '.97', boxShadow: pressedShadow, offset: .22 },
+            { scale: '1', boxShadow: baseShadow },
+        ], { duration: hold ? 90 : 360, easing: 'cubic-bezier(.2,.7,.2,1)', fill: hold ? 'forwards' : 'none' });
+        animation.id = hold ? 'control-press' : 'control-release';
+        const state = { animation, baseShadow };
+        pressAnimations.set(control, state);
+        animation.finished.then(() => {
+            if (!hold && pressAnimations.get(control) === state) pressAnimations.delete(control);
+        }, () => {});
+    }
+    document.addEventListener('pointerdown', event => {
+        if (event.button !== 0) return;
+        pressed = controlFor(event.target);
+        feedback(pressed, true);
+    }, true);
+    document.addEventListener('pointerup', () => {
+        feedback(pressed);
+        pressed = null;
+    }, true);
+    function cancelPress() {
+        if (pressed) feedback(pressed);
+        pressed = null;
+    }
+    document.addEventListener('pointercancel', cancelPress, true);
+    addEventListener('blur', cancelPress);
+    document.addEventListener('click', event => {
+        const control = controlFor(event.target);
+        // Pointer release already starts feedback. Keyboard/assistive clicks take this path.
+        if (control && (event.detail === 0 || !pressAnimations.has(control))) feedback(control);
+    }, true);
+    document.addEventListener('keydown', event => {
+        if (event.repeat || !['Enter', ' '].includes(event.key)) return;
+        const control = controlFor(event.target);
+        if (control && control.matches('button, summary, label.mode-option')) feedback(control);
+    }, true);
+    reducedMotion.addEventListener('change', () => {
+        if (!reducedMotion.matches) return;
+        pressAnimations.forEach(state => state.animation.cancel());
+        pressAnimations.clear();
+        pressed = null;
+    });
     let active;
     const close = () => {
         if (!active) return;
@@ -61,6 +125,7 @@
             } else { select.selectedIndex = index; refresh(); close(); }
             select.dispatchEvent(new Event('change', { bubbles: true }));
             button.focus({ preventScroll: true });
+            feedback(button);
         };
         const open = () => {
             close();
@@ -134,7 +199,9 @@
     function beginPending(button, label = '处理中') {
         if (!button || button.disabled) return null;
         const original = { width: button.style.width, height: button.style.height, position: button.style.position, label: button.getAttribute('aria-label') };
-        const bounds = button.getBoundingClientRect();
+        // Layout dimensions must not capture the temporary press scale.
+        const style = getComputedStyle(button);
+        const width = style.width, height = style.height;
         const content = document.createElement('span');
         content.className = 'button-content';
         content.append(...button.childNodes);
@@ -142,17 +209,19 @@
         progress.className = 'button-progress';
         progress.setAttribute('aria-hidden', 'true');
         progress.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9" opacity=".2"/><path d="M21 12a9 9 0 0 0-9-9"/></svg>';
-        if (bounds.width && bounds.height) {
-            button.style.width = `${bounds.width}px`;
-            button.style.height = `${bounds.height}px`;
+        if (button.offsetWidth && button.offsetHeight) {
+            button.style.width = width;
+            button.style.height = height;
         }
         if (getComputedStyle(button).position === 'static') button.style.position = 'relative';
         button.append(content, progress);
         const leadingIcon = content.querySelector('svg');
         if (leadingIcon) {
+            const bounds = button.getBoundingClientRect();
             const iconBounds = leadingIcon.getBoundingClientRect();
-            progress.style.left = `${iconBounds.left - bounds.left - button.clientLeft}px`;
-            progress.style.width = `${iconBounds.width}px`;
+            const scale = bounds.width / button.offsetWidth;
+            progress.style.left = `${(iconBounds.left - bounds.left) / scale - button.clientLeft}px`;
+            progress.style.width = getComputedStyle(leadingIcon).width;
             progress.dataset.kind = 'icon';
         } else {
             progress.dataset.kind = 'line';

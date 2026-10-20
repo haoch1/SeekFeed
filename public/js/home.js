@@ -244,6 +244,8 @@ document.addEventListener("DOMContentLoaded", function () {
   // 帖子列表管理
   // ============================================
   let currentPage = 1;
+  let requestedPage = 1;
+  let pageCount = 1;
   let currentFilters = {};
   let postsController;
   let postsRequest = 0;
@@ -254,7 +256,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   async function loadPosts(page = currentPage, filters = currentFilters, quiet = false) {
     const list = el("postsList");
-    if (quiet && (list.getAttribute('aria-busy') === 'true' || list.contains(document.activeElement) || el('pagination').contains(document.activeElement))) return;
+    if (quiet && (list.getAttribute('aria-busy') === 'true' || list.contains(document.activeElement) || document.activeElement?.closest('[data-feed-pagination]'))) return;
     const anchor = quiet && window.scrollY > 0 ? [...list.querySelectorAll('.post-card')].find(item => item.getBoundingClientRect().bottom > 0) : null;
     const anchorId = anchor?.dataset.postId;
     const anchorTop = anchor?.getBoundingClientRect().top;
@@ -268,14 +270,20 @@ document.addEventListener("DOMContentLoaded", function () {
     postsController?.abort();
     postsController = new AbortController();
     const request = ++postsRequest;
+    requestedPage = page;
     currentFilters = { ...filters };
-    if (!quiet) el("postsList").setAttribute("aria-busy", "true");
+    if (!quiet) {
+      el("postsList").setAttribute("aria-busy", "true");
+      document.querySelectorAll('[data-feed-pagination]').forEach(pager => pager.setAttribute('aria-busy', 'true'));
+    }
     const params = new URLSearchParams({ page: String(page), limit: "10",
       ...Object.fromEntries(Object.entries(currentFilters).filter(([, value]) => value !== "" && value !== undefined)) });
     const result = await apiRequest(`/api/posts?${params}`, { signal: postsController.signal, silent: quiet });
     if (request !== postsRequest) return;
     el("postsList").setAttribute("aria-busy", "false");
+    document.querySelectorAll('[data-feed-pagination]').forEach(pager => pager.removeAttribute('aria-busy'));
     if (!result?.success) {
+      requestedPage = currentPage;
       if (list.querySelector('.post-card')) {
         if (!quiet) el('feedError').hidden = false;
         return;
@@ -285,10 +293,14 @@ document.addEventListener("DOMContentLoaded", function () {
       el("emptyState").querySelector(".empty-title").textContent = "加载失败";
       el("emptyState").querySelector(".empty-desc").textContent = "请检查网络连接，然后点击刷新重试。";
       el("pagination").style.display = "none";
+      el("paginationTop").style.display = "none";
       return;
     }
-    const { posts, total, page: selected, totalPages } = result.data;
+    const { posts, total, totalPages } = result.data;
+    const selected = totalPages ? result.data.page : 1;
     currentPage = selected;
+    requestedPage = selected;
+    pageCount = Math.max(1, totalPages);
     renderedFilters = JSON.stringify(currentFilters);
     if (totalPages <= 1) list.style.minHeight = '';
     el('feedError').hidden = true;
@@ -322,6 +334,7 @@ document.addEventListener("DOMContentLoaded", function () {
     el("emptyState").querySelector(".empty-desc").textContent = Object.values(currentFilters).some(Boolean) ? "没有符合条件的帖子，试试清除筛选。" : "同步 RSS 后，最新帖子会显示在这里。";
     updatePagination(selected, totalPages, total);
     if (!isLoggedIn && !Object.values(currentFilters).some(Boolean)) el("overviewTotal").textContent = total.toLocaleString();
+    return true;
   }
 
   async function refreshFeed() {
@@ -364,14 +377,18 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function updatePagination(page, pages, total) {
     el("pagination").style.display = total ? "flex" : "none";
+    el("paginationTop").style.display = pages > 1 ? "flex" : "none";
+    const position = el('paginationTop').querySelector('[data-page-position]');
+    position.textContent = `${page} / ${Math.max(pages, 1)}`;
+    position.setAttribute('aria-label', `第 ${page} 页，共 ${Math.max(pages, 1)} 页`);
     el("paginationInfo").textContent = `共 ${total} 篇 · 第 ${page} / ${Math.max(pages, 1)} 页`;
-    el("prevPageBtn").disabled = page <= 1;
-    el("nextPageBtn").disabled = page >= pages;
+    document.querySelectorAll('[data-page-step]').forEach(button => { button.disabled = Number(button.dataset.pageStep) < 0 ? page <= 1 : page >= pages; });
     const key = JSON.stringify([page, pages]);
     if (el('pageNumbers').dataset.signature === key) return;
     el('pageNumbers').dataset.signature = key;
-    const focusPage = el("pageNumbers").contains(document.activeElement) ? Number(document.activeElement.textContent) : null;
-    el("pageNumbers").replaceChildren();
+    const focused = el('pageNumbers').contains(document.activeElement);
+    const existing = new Map([...el('pageNumbers').children].map(button => [button.dataset.pageKey, button]));
+    const next = [];
     let numbers;
     if (pages <= 7) numbers = Array.from({ length: pages }, (_, i) => i + 1);
     else if (page <= 4) numbers = [1, 2, 3, 4, 5, 'ellipsis-start', pages];
@@ -379,21 +396,44 @@ document.addEventListener("DOMContentLoaded", function () {
     else numbers = [1, 'ellipsis-start', page - 1, page, page + 1, 'ellipsis-end', pages];
     for (const i of numbers) {
       if (typeof i !== 'number') {
-        const gap = document.createElement('span');
+        const gap = existing.get(i) || document.createElement('span');
+        gap.dataset.pageKey = i;
         gap.className = 'page-ellipsis';
         gap.textContent = '…';
         gap.setAttribute('aria-hidden', 'true');
-        el('pageNumbers').append(gap);
+        next.push(gap);
         continue;
       }
-      const button = document.createElement("button");
+      const button = existing.get(String(i)) || document.createElement("button");
+      button.type = 'button';
+      button.dataset.pageKey = String(i);
+      button.dataset.page = String(i);
       button.className = `page-number ${i === page ? "active" : ""}`;
       button.textContent = i;
       button.setAttribute("aria-label", `第 ${i} 页`);
       if (i === page) button.setAttribute("aria-current", "page");
-      button.addEventListener("click", () => loadPosts(i));
-      el("pageNumbers").append(button);
-      if (i === focusPage) button.focus({ preventScroll: true });
+      else button.removeAttribute('aria-current');
+      next.push(button);
+    }
+    next.forEach((item, index) => { if (el('pageNumbers').children[index] !== item) el('pageNumbers').insertBefore(item, el('pageNumbers').children[index] || null); });
+    [...el('pageNumbers').children].filter(item => !next.includes(item)).forEach(item => item.remove());
+    if (focused) el('pageNumbers').querySelector('[aria-current="page"]')?.focus({ preventScroll: true });
+  }
+  async function changePage(page, source) {
+    const target = Math.max(1, Math.min(pageCount, page));
+    if (target === requestedPage) return;
+    const changed = await loadPosts(target);
+    if (!changed || el('feedPage').hidden) return;
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!reduced) el('postsList').animate([{ opacity: .82, transform: 'translateY(4px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 240, easing: 'cubic-bezier(.2,.7,.2,1)' });
+    const toolbar = document.querySelector('.feed-toolbar');
+    const top = toolbar.getBoundingClientRect().top;
+    const inset = document.querySelector('.workspace-topbar').getBoundingClientRect().height + 12;
+    if (top < inset || top > innerHeight - 100) window.scrollTo({ top: Math.max(0, scrollY + top - inset), behavior: reduced ? 'instant' : 'smooth' });
+    if (source?.closest('[data-feed-pagination="bottom"]')) {
+      const step = source.dataset.pageStep;
+      const focus = step ? el('paginationTop').querySelector(`[data-page-step="${step}"]:not(:disabled)`) : null;
+      (focus || el('paginationTop').querySelector('[data-page-position]')).focus({ preventScroll: true });
     }
   }
   function setMatched(active) {
@@ -442,8 +482,12 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     el("subscribedOnlyChip").addEventListener("click", () => { setMatched(!currentFilters.pushStatusIn); loadPosts(1); });
     el("refreshBtn").addEventListener("click", pendingClick(() => Promise.all([loadPosts(), updateStats(), updateMonitor()])));
-    el("prevPageBtn").addEventListener("click", () => loadPosts(Math.max(1, currentPage - 1)));
-    el("nextPageBtn").addEventListener("click", () => loadPosts(currentPage + 1));
+    document.querySelectorAll('[data-feed-pagination]').forEach(pager => pager.addEventListener('click', event => {
+      const button = event.target.closest('button');
+      if (!button || button.disabled) return;
+      if (button.dataset.page) changePage(Number(button.dataset.page), button);
+      else if (button.dataset.pageStep) changePage(requestedPage + Number(button.dataset.pageStep), button);
+    }));
     ["syncNowBtn", "fetchRssBtn"].forEach(id => el(id).addEventListener("click", syncNow));
   }
   let syncing = false;

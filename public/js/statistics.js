@@ -18,8 +18,7 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
         const end = Math.max(start, Math.min(nominalEnd, new Date(p.to).getTime()));
         const partial = end < nominalEnd;
         if (axis) {
-            if (p.hourly) return `${String(shortTime(start).getUTCHours()).padStart(2, '0')}–${String(shortTime(nominalEnd).getUTCHours() || 24).padStart(2, '0')}时`;
-            return p.stepDays > 1 ? `${dateOnly(start)}–${dateOnly(Math.max(start, end - 1))}` : dateOnly(start);
+            return p.hourly ? label(start, true) : dateOnly(start);
         }
         const endTime = label(end, true);
         return `${dateTime(start)} — ${p.hourly ? endTime : dateTime(end)}${partial ? '（截至目前）' : ''}`;
@@ -42,8 +41,9 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             box.onpointermove = box.onpointerleave = box.onfocus = box.onblur = box.onkeydown = null;
             return;
         }
-        const width = box.clientWidth, height = 220, left = 33, right = width - 12, top = 14, bottom = 190;
         const max = Math.max(...data.map(row => row.count), 1);
+        const slot = Math.max(32, number(max).length * 7 + 12);
+        const width = Math.max(box.clientWidth, 45 + data.length * slot), height = 228, left = 33, right = width - 12, top = 26, bottom = 196;
         const ceiling = Math.max(4, Math.ceil(max / 4) * 4);
         const step = (right - left) / data.length, barWidth = Math.min(34, step * .64);
         const x = index => left + step * (index + .5);
@@ -52,22 +52,25 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             const start = x(index) - barWidth / 2, end = start + barWidth, barTop = y(row.count);
             const radius = Math.min(4, barWidth / 2, bottom - barTop);
             const path = `M${start},${bottom} V${barTop + radius} Q${start},${barTop} ${start + radius},${barTop} H${end - radius} Q${end},${barTop} ${end},${barTop + radius} V${bottom} Z`;
-            return `<path class="analytics-post-bar" data-bar-index="${index}" data-count="${row.count}" d="${path}"/>`;
+            return `<path class="analytics-post-bar" data-bar-index="${index}" data-count="${row.count}" d="${path}"/><text class="analytics-bar-value" x="${x(index)}" y="${barTop - 8}" text-anchor="middle">${number(row.count)}</text>`;
         }).join('');
         const grid = Array.from({ length: 5 }, (_, index) => {
             const value = ceiling * index / 4;
             return `<line x1="${left}" x2="${right}" y1="${y(value)}" y2="${y(value)}" class="analytics-grid-line"/><text x="${left - 8}" y="${y(value) + 4}" text-anchor="end">${number(value)}</text>`;
         }).join('');
-        const tickCount = Math.min(width < 300 ? 2 : width < 600 ? 3 : 6, data.length);
-        const ticks = [...new Set(Array.from({ length: tickCount }, (_, index) => Math.round(index * (data.length - 1) / Math.max(1, tickCount - 1))))];
-        box.innerHTML = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true">${grid}
+        const capacity = Math.max(2, Math.floor((right - left) / 60));
+        const minimumStride = Math.ceil(data.length / capacity);
+        const strides = currentData.period.hourly ? [1, 2, 3, 4, 6, 12, 24] : [1, 2, 5, 7, 14, 30, 60];
+        const stride = strides.find(value => value >= minimumStride) || minimumStride;
+        const ticks = data.map((_, index) => index).filter(index => index % stride === 0);
+        box.innerHTML = `<div class="analytics-plot-scroll"><div class="analytics-plot-canvas" style="width:${width}px"><svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true">${grid}
             <rect id="analyticsCursor" y="${top}" width="${step}" height="${bottom - top}" class="analytics-bar-cursor" visibility="hidden" rx="4"/>${bars}
-            ${ticks.map(index => `<text x="${x(index)}" y="214" text-anchor="${index === 0 && data.length > 1 ? 'start' : index === data.length - 1 && data.length > 1 ? 'end' : 'middle'}">${bucketText(data[index], true)}</text>`).join('')}
-            </svg><div class="analytics-chart-tooltip" id="analyticsTrendTooltip" aria-hidden="true" hidden><span></span><div><i></i>收录帖子<strong></strong></div></div>`;
+            ${ticks.map(index => `<text class="analytics-time-tick" x="${x(index)}" y="220" text-anchor="middle">${bucketText(data[index], true)}</text>`).join('')}
+            </svg><div class="analytics-chart-tooltip" id="analyticsTrendTooltip" aria-hidden="true" hidden><span></span><div><i></i>收录帖子<strong></strong></div></div></div></div>`;
         box.setAttribute('role', 'group');
         box.setAttribute('tabindex', '0');
         box.setAttribute('aria-label', `发帖趋势柱形图，${data.length} 个时间段。使用左右方向键查看数据。`);
-        const columns = [...box.querySelectorAll('.analytics-post-bar')], tooltip = el('analyticsTrendTooltip');
+        const columns = [...box.querySelectorAll('.analytics-post-bar')], tooltip = el('analyticsTrendTooltip'), scroller = box.querySelector('.analytics-plot-scroll');
         let selected = -1;
         function select(index) {
             focusIndex = Math.max(0, Math.min(data.length - 1, index));
@@ -81,7 +84,11 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             tooltip.firstElementChild.textContent = bucketText(data[focusIndex]);
             tooltip.querySelector('strong').textContent = number(data[focusIndex].count) + ' 篇';
             tooltip.hidden = false;
-            tooltip.style.left = `${Math.max(8, Math.min(width - tooltip.offsetWidth - 8, x(focusIndex) - tooltip.offsetWidth / 2))}px`;
+            if (document.activeElement === box) {
+                if (x(focusIndex) < scroller.scrollLeft + left) scroller.scrollLeft = x(focusIndex) - left;
+                else if (x(focusIndex) > scroller.scrollLeft + box.clientWidth - 20) scroller.scrollLeft = x(focusIndex) - box.clientWidth + 20;
+            }
+            tooltip.style.left = `${Math.max(scroller.scrollLeft + 8, Math.min(scroller.scrollLeft + box.clientWidth - tooltip.offsetWidth - 8, x(focusIndex) - tooltip.offsetWidth / 2))}px`;
             tooltip.style.top = `${Math.max(0, y(data[focusIndex].count) - tooltip.offsetHeight - 10)}px`;
             box.setAttribute('aria-label', el('analyticsTrendReadout').textContent + '。左右方向键查看相邻时间段。');
         }
@@ -90,7 +97,7 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             if (selected >= 0) columns[selected].removeAttribute('data-active');
             selected = -1; showReadout();
         }
-        box.onpointermove = event => select(Math.floor((event.clientX - box.getBoundingClientRect().left - left) / step));
+        box.onpointermove = event => select(Math.floor((event.clientX - box.getBoundingClientRect().left + scroller.scrollLeft - left) / step));
         box.onpointerleave = () => { if (document.activeElement !== box) clearSelection(); };
         box.onfocus = () => select(focusIndex < 0 ? data.length - 1 : focusIndex);
         box.onblur = clearSelection;
@@ -195,7 +202,7 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
         el('analyticsPostsDetail').textContent = `峰值 ${number(Math.max(...data.trend.map(row => row.count), 0))} 篇 / ${p.hourly ? '小时' : p.stepDays > 1 ? `${p.stepDays} 天` : '天'}`;
         el('analyticsCategoryDetail').textContent = data.categories.length ? `${getCategoryName(data.categories[0].category)}占 ${percent(data.categories[0].count, t.posts)}` : '暂无分类记录';
         el('analyticsAuthorsDetail').textContent = t.authors ? `人均 ${(data.authorDistribution.reduce((sum, row) => sum + row.posts, 0) / t.authors).toFixed(1)} 篇` : '暂无发帖记录';
-        el('analyticsTrendUnit').textContent = `${rangeText(p)} · 每柱 ${p.hourly ? '1 小时' : p.stepDays + ' 天'}`;
+        el('analyticsTrendUnit').textContent = `${p.hourly ? '每小时' : p.stepDays > 1 ? `每 ${p.stepDays} 天` : '每天'} · ${timezone}`;
         const nextKey = JSON.stringify([data.trend, p.days]);
         if (chartKey !== nextKey || !el('analyticsTrend').firstElementChild) { chartKey = nextKey; focusIndex = -1; renderTrend(); showReadout(); }
         renderCategories(data);

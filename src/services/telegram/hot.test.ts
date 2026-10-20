@@ -5,7 +5,7 @@ import { telegramCommands } from './messages';
 
 function ranking(period = 'live', overrides = {}) {
     return { period, posts: Array.from({ length: 10 }, (_, i) => ({
-        postId: i + 1, title: `标题 ${i + 1}`, views: 1000, replies: 0, categoryLabel: '技术',
+        postId: i + 1, title: `标题 ${i + 1}`, views: 1000, replies: 0, growthViews: 100, growthReplies: 0, categoryLabel: '技术',
     })), updatedAt: '2026-10-20T02:00:00Z', stale: false, error: null, ...overrides } as any;
 }
 
@@ -43,13 +43,15 @@ describe('Telegram hot ranking', () => {
         const text = hotRankingMessage(ranking());
         expect(text).toContain('<code>01</code>  <a');
         expect(text).toContain('<code>10</code>  <a');
-        expect(text).toContain('浏览量 1,000 · 回复 0 · 技术');
+        expect(text).toContain('新增浏览 100 · 新增回复 0 · 技术');
+        expect(hotRankingMessage(ranking('day'))).toContain('浏览量 1,000 · 回复 0 · 技术');
+        expect(hotRankingMessage(ranking('week'))).toContain('浏览量 1,000 · 回复 0 · 技术');
         expect(text).toEndWith('更新于 2026/10/20 10:00:00（UTC+8）');
         expect(text).not.toContain('每 5 分钟采集');
         expect(text).not.toContain('仅覆盖');
         expect(text).not.toMatch(/\p{Extended_Pictographic}|\u20e3/u);
         const long = hotRankingMessage(ranking('live', { posts: Array.from({ length: 50 }, () => ({
-            postId: 42, title: '<script>&😀'.repeat(300), views: 0, replies: 0, categoryLabel: '<&',
+            postId: 42, title: '<script>&😀'.repeat(300), views: 0, replies: 0, growthViews: 0, growthReplies: 0, categoryLabel: '<&',
         })) }));
         expect(long.length).toBeLessThan(4096);
         expect(long).toContain('&lt;script&gt;&amp;');

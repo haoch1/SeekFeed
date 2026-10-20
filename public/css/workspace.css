@@ -424,6 +424,14 @@ button:disabled { pointer-events: none; }
 .page-ellipsis { color: var(--text-secondary); }
 .pagination-controls, .page-numbers { gap: 4px; }
 .pagination-controls { flex-shrink: 0; }
+.feed-pagination-compact { flex-shrink: 0; align-items: center; gap: 2px; padding-left: 10px; border-left: 1px solid var(--border-color); }
+.pagination-position { min-width: 54px; padding: 0 6px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text-primary); }
+.pagination-position:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 3px; }
+.feed-pagination-compact .pagination-btn { border-color: transparent; background: transparent; }
+.feed-pagination-compact .pagination-btn:hover:not(:disabled) { background: var(--bg-hover); }
+@media (max-width: 760px) {
+    .feed-pagination-compact { flex-basis: 100%; justify-content: flex-end; border-left: 0; padding: 8px 0 0; border-top: 1px solid var(--border-color); }
+}
 .select-native { display: none !important; }
 .select-trigger { display: inline-flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; cursor: pointer; }
 .select-trigger > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -546,7 +554,7 @@ button:disabled { pointer-events: none; }
 }
 @media (prefers-reduced-motion: no-preference) {
     .nav-item { transition: background-color .22s ease, border-color .22s ease, color .22s ease; }
-    .match-rule-details[open] > div, .analytics-definitions[open] > p, .hot-method[open] > div { animation: content-reveal .18s ease-out; }
+    .match-rule-details[open] > div, .analytics-definitions[open] > p { animation: content-reveal .18s ease-out; }
     @keyframes content-reveal { from { opacity: .45; } to { opacity: 1; } }
 }
 /* Shared feedback keeps labels, hit targets and layout stable. */
@@ -557,8 +565,9 @@ button:disabled { pointer-events: none; }
 .button-progress[data-kind="line"] { inset: auto 9px 3px; height: 2px; display: block; overflow: hidden; border-radius: 2px; }
 .button-progress[data-kind="line"]::after { content: ''; display: block; height: 100%; width: 36%; border-radius: inherit; background: currentColor; animation: button-progress-rail 1.8s ease-in-out infinite; }
 @keyframes button-progress-rail { 0% { transform: translateX(-110%); } 100% { transform: translateX(380%); } }
-.btn:active:not(:disabled), .icon-btn:active:not(:disabled), .pagination-btn:active:not(:disabled), .select-trigger:active:not(:disabled) { box-shadow: inset 0 0 0 999px #1018280a; }
-[data-theme="dark"] .btn:active:not(:disabled), [data-theme="dark"] .icon-btn:active:not(:disabled), [data-theme="dark"] .select-trigger:active:not(:disabled) { box-shadow: inset 0 0 0 999px #ffffff0b; }
+:root { --control-press-shade: rgb(16 24 40 / 14%); }
+[data-theme="dark"] { --control-press-shade: rgb(255 255 255 / 14%); }
+:where(button, a.btn, a.icon-btn, a.nav-item, a.workspace-brand, summary, label.mode-option) { transform-origin: center; }
 @media (prefers-reduced-motion: no-preference) {
     .select-menu, .confirm-dialog[open], #loginModal.drawer-open { animation: content-reveal .16s ease-out; }
     .select-option { transition: background-color .12s ease, color .12s ease; }

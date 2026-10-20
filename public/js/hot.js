@@ -6,6 +6,7 @@ window.SeekFeedHot = (() => {
   const icon = name => window.SeekFeedControls.icon(name);
   const number = value => new Intl.NumberFormat('zh-CN').format(value);
   function render(data, background) {
+    const live = data.period === 'live';
     const list = el('hotList');
     const existing = new Map([...list.querySelectorAll('.hot-row')].map(row => [row.dataset.postId, row]));
     const anchor = background && scrollY > 160 ? [...existing.values()].find(row => row.getBoundingClientRect().bottom > 80 && data.posts.some(p => String(p.postId) === row.dataset.postId)) : null;
@@ -24,9 +25,12 @@ window.SeekFeedHot = (() => {
       row.querySelector('.hot-rank').classList.toggle('top-rank', index < 3);
       row.querySelector('.hot-rank').setAttribute('aria-label', `第 ${index + 1} 名`);
       text('a', post.title); text('.hot-category', post.categoryLabel); text('.hot-author', post.author);
-      text('.hot-views span', number(post.views)); text('.hot-replies span', number(post.replies)); text('.hot-heat', post.heat.toFixed(1));
-      row.querySelector('.hot-views').setAttribute('aria-label', `${post.views} 次浏览`);
-      row.querySelector('.hot-replies').setAttribute('aria-label', `${post.replies} 条回复`);
+      const views = live ? post.growthViews : post.views, replies = live ? post.growthReplies : post.replies;
+      text('.hot-views span', number(views)); text('.hot-replies span', number(replies)); text('.hot-heat', post.heat.toFixed(1));
+      row.querySelector('.hot-views').setAttribute('aria-label', `${live ? '近一小时新增' : ''}${views} 次浏览`);
+      row.querySelector('.hot-replies').setAttribute('aria-label', `${live ? '近一小时新增' : ''}${replies} 条回复`);
+      row.querySelector('.hot-views').title = live ? `近一小时，已观察 ${post.sampleMinutes} 分钟；累计浏览 ${number(post.views)}` : '';
+      row.querySelector('.hot-replies').title = live ? `近一小时，已观察 ${post.sampleMinutes} 分钟；累计回复 ${number(post.replies)}` : '';
       row.querySelector('.hot-heat').setAttribute('aria-label', `热度 ${post.heat.toFixed(1)}`);
       keep.add(row);
       if (list.children[index] !== row) list.insertBefore(row, list.children[index] || null);
@@ -36,13 +40,19 @@ window.SeekFeedHot = (() => {
     list.hidden = !data.posts.length;
     el('hotEmpty').hidden = Boolean(data.posts.length);
     if (!data.posts.length) {
-      el('hotEmpty').querySelector('.empty-title').textContent = data.updatedAt ? '暂无符合条件的帖子' : '榜单准备中';
-      el('hotEmpty').querySelector('.empty-desc').textContent = data.updatedAt ? '试试其他分类或时间范围。' : data.enabled ? '首次采集完成后会自动显示。' : '服务器尚未启用热榜采集。';
+      el('hotEmpty').querySelector('.empty-title').textContent = data.warmingUp ? '正在积累增量样本' : data.updatedAt ? '暂无符合条件的帖子' : '榜单准备中';
+      el('hotEmpty').querySelector('.empty-desc').textContent = data.warmingUp ? '下一轮采集后自动更新。' : data.updatedAt ? '试试其他分类或时间范围。' : data.enabled ? '首次采集完成后会自动显示。' : '服务器尚未启用热榜采集。';
     }
-    el('hotCount').textContent = data.posts.length ? `展示 ${data.posts.length} / ${data.total} 条` : `最多展示 ${el('hotLimit').value} 条`;
   }
   function status(data) {
-    const freshness = data.updatedAt ? `更新于 ${new Date(data.updatedAt).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'})} · ${data.warmingUp ? '正在积累增量样本' : '每 5 分钟采集'}` : '等待首次采集';
+    const live = data.period === 'live';
+    el('hotViewsLabel').textContent = live ? '新增浏览' : '浏览';
+    el('hotRepliesLabel').textContent = live ? '新增回复' : '回复';
+    const sort = el('hotSort');
+    sort.options[1].textContent = live ? '新增浏览最多' : '浏览最多';
+    sort.options[2].textContent = live ? '新增回复最多' : '回复最多';
+    window.SeekFeedControls.refreshSelects();
+    const freshness = data.updatedAt ? `更新于 ${new Date(data.updatedAt).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'})}` : '等待首次采集';
     if (el('hotFreshness').textContent !== freshness) el('hotFreshness').textContent = freshness;
     el('hotError').hidden = !data.error && (!data.stale || !data.updatedAt);
     el('hotError').textContent = data.error || '采集延迟，当前显示上次保存的榜单。';
