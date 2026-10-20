@@ -5,7 +5,7 @@ import { TelegramBaseService } from './base';
 import type { Post } from '../../types';
 import { logger } from '../../utils/logger';
 import type { HotPeriod } from '../hot';
-import { hotEntryKeyboard, hotRankingKeyboard, hotRankingMessage } from './hot';
+import { hotEntryKeyboard, hotRankingKeyboard, hotRankingMessage, hotRankingPreview } from './hot';
 
 export class TelegramWebhookService extends TelegramBaseService {
   private isPolling: boolean = false;
@@ -480,7 +480,7 @@ export class TelegramWebhookService extends TelegramBaseService {
 
   private async handleHotCommand(ctx: Context, period: HotPeriod = 'live'): Promise<void> {
     const data = this.dbService.getHotService().ranking(period);
-    await ctx.reply(hotRankingMessage(data), { parse_mode: 'HTML', reply_markup: hotRankingKeyboard(period), link_preview_options: { is_disabled: false, prefer_small_media: true } });
+    await ctx.reply(hotRankingMessage(data), { parse_mode: 'HTML', reply_markup: hotRankingKeyboard(period), link_preview_options: hotRankingPreview(data) });
   }
 
   private async handleHotCallback(ctx: Context): Promise<void> {
@@ -495,7 +495,7 @@ export class TelegramWebhookService extends TelegramBaseService {
     const period = action as HotPeriod;
     const data = this.dbService.getHotService().ranking(period);
     try {
-      await ctx.editMessageText(hotRankingMessage(data), { parse_mode: 'HTML', reply_markup: hotRankingKeyboard(period), link_preview_options: { is_disabled: false, prefer_small_media: true } });
+      await ctx.editMessageText(hotRankingMessage(data), { parse_mode: 'HTML', reply_markup: hotRankingKeyboard(period), link_preview_options: hotRankingPreview(data) });
     } catch (error: any) {
       if (!String(error?.description || '').includes('message is not modified')) throw error;
     }

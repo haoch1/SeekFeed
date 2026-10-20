@@ -12,6 +12,16 @@ export function hotRankingKeyboard(period: HotPeriod) {
     ] };
 }
 
+export function hotRankingPreview(data: ReturnType<HotService['ranking']>) {
+    const first = data.posts[0];
+    return first ? {
+        is_disabled: false,
+        url: `https://www.nodeseek.com/post-${first.postId}-1`,
+        prefer_small_media: true,
+        show_above_text: false,
+    } : { is_disabled: true };
+}
+
 export function hotRankingMessage(data: ReturnType<HotService['ranking']>): string {
     const title = { live: '实时热榜', day: '日榜', week: '周榜' }[data.period];
     let text = '';

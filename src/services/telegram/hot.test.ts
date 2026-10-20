@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { hotEntryKeyboard, hotRankingKeyboard, hotRankingMessage } from './hot';
+import { hotEntryKeyboard, hotRankingKeyboard, hotRankingMessage, hotRankingPreview } from './hot';
 import { TelegramWebhookService } from './webhook';
 import { telegramCommands } from './messages';
 
@@ -57,6 +57,15 @@ describe('Telegram hot ranking', () => {
         expect(long.match(/<a /g)!.length).toBeLessThanOrEqual(10);
     });
 
+    it('explicitly previews the current first post for every period and disables previews on an empty board', () => {
+        for (const period of ['live', 'day', 'week']) {
+            const data = ranking(period);
+            data.posts[0].postId = 42;
+            expect(hotRankingPreview(data)).toEqual({ is_disabled: false, url: 'https://www.nodeseek.com/post-42-1', prefer_small_media: true, show_above_text: false });
+        }
+        expect(hotRankingPreview(ranking('live', { posts: [] }))).toEqual({ is_disabled: true });
+    });
+
     it('describes missing and stale data and exposes short native and inline commands', () => {
         expect(hotRankingMessage(ranking('day', { posts: [] }))).toContain('暂无符合时间范围');
         expect(hotRankingMessage(ranking('week', { posts: [], updatedAt: null }))).toContain('榜单准备中');
@@ -85,6 +94,9 @@ describe('Telegram hot ranking', () => {
             'answerCallbackQuery', 'editMessageText']);
         expect(test.calls[0].payload.reply_markup).toEqual(hotRankingKeyboard('live'));
         expect(test.calls[0].payload.link_preview_options.is_disabled).toBe(false);
+        for (const call of test.calls.filter(c => c.method === 'sendMessage' || c.method === 'editMessageText')) {
+            expect(call.payload.link_preview_options).toEqual(hotRankingPreview(ranking()));
+        }
         expect(test.calls[5].payload.text).toContain('日榜');
     });
 
