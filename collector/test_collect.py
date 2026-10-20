@@ -30,5 +30,9 @@ class ParserTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 parse(html)
 
+    def test_pinned_icon_without_title_attribute(self):
+        html = row().replace('</a></div>', '</a><svg class="iconpark-icon pined"></svg></div>')
+        self.assertTrue(parse(html)[0]['pinned'])
+
 if __name__ == '__main__':
     unittest.main()

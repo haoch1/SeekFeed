@@ -28,9 +28,10 @@
         select.setAttribute('aria-hidden', 'true');
         const state = { select, button, menu: null, index: 0 };
         const refresh = () => {
-            button.innerHTML = `<span></span>${icon('chevron-down')}`;
+            if (!button.firstElementChild) button.innerHTML = `<span></span>${icon('chevron-down')}`;
             const chosen = [...select.selectedOptions].filter(option => option.value);
-            button.firstElementChild.textContent = select.multiple ? (chosen.length === 0 ? select.options[0].textContent : chosen.length === 1 ? chosen[0].textContent : `已选 ${chosen.length} 个分类`) : select.selectedOptions[0]?.textContent || '请选择';
+            const label = select.multiple ? (chosen.length === 0 ? select.options[0].textContent : chosen.length === 1 ? chosen[0].textContent : `已选 ${chosen.length} 个分类`) : select.selectedOptions[0]?.textContent || '请选择';
+            if (button.firstElementChild.textContent !== label) button.firstElementChild.textContent = label;
             button.dataset.selected = String(select.multiple && chosen.length > 0);
             button.title = select.multiple && chosen.length ? chosen.map(option => option.textContent).join('、') : '';
             if (state.menu) [...state.menu.querySelectorAll('[role="option"]')].forEach((row, index) => {
@@ -146,11 +147,21 @@
         }
         if (getComputedStyle(button).position === 'static') button.style.position = 'relative';
         button.append(content, progress);
+        const leadingIcon = content.querySelector('svg');
+        if (leadingIcon) {
+            const iconBounds = leadingIcon.getBoundingClientRect();
+            progress.style.left = `${iconBounds.left - bounds.left - button.clientLeft}px`;
+            progress.style.width = `${iconBounds.width}px`;
+            progress.dataset.kind = 'icon';
+        } else {
+            progress.dataset.kind = 'line';
+            progress.replaceChildren();
+        }
         button.disabled = true;
         button.setAttribute('aria-busy', 'true');
         button.setAttribute('aria-label', `${content.textContent.trim() || original.label || ''}，${label}`);
         button.classList.add('is-pending');
-        // Fast requests retain their original appearance; slow ones use a quiet spinner.
+        // Keep the label visible; only an existing icon or the quiet bottom rail indicates progress.
         const delay = setTimeout(() => button.classList.add('is-progress-visible'), 240);
         return () => {
             clearTimeout(delay);

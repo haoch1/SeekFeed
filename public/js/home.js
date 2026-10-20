@@ -146,20 +146,38 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     const themeButton = document.getElementById("themeToggleBtn");
+    if (themeButton) themeButton.innerHTML = `<span class="theme-toggle-icon theme-icon-sun">${renderIcon('sun')}</span><span class="theme-toggle-icon theme-icon-moon">${renderIcon('moon')}</span>`;
     const updateThemeIcon = () => {
       if (!themeButton) return;
       const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-      themeButton.innerHTML = renderIcon(isDark ? "sun" : "moon");
       themeButton.setAttribute("aria-label", isDark ? "切换到浅色模式" : "切换到暗色模式");
       themeButton.title = themeButton.getAttribute("aria-label");
     };
     updateThemeIcon();
+    let themeTimer;
+    let themeTransition;
     themeButton?.addEventListener("click", () => {
       const currentTheme = document.documentElement.getAttribute("data-theme");
       const newTheme = currentTheme === "dark" ? "light" : "dark";
-      document.documentElement.setAttribute("data-theme", newTheme);
-      localStorage.setItem("theme", newTheme);
-      updateThemeIcon();
+      const root = document.documentElement;
+      const apply = () => {
+        root.setAttribute("data-theme", newTheme);
+        localStorage.setItem("theme", newTheme);
+        updateThemeIcon();
+      };
+      if (document.startViewTransition && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        themeTransition?.skipTransition();
+        themeTransition = document.startViewTransition(apply);
+        return;
+      }
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        clearTimeout(themeTimer);
+        root.classList.add('theme-transition');
+        // Resolve transition styles before changing the shared color tokens.
+        getComputedStyle(document.body).backgroundColor;
+        themeTimer = setTimeout(() => root.classList.remove('theme-transition'), 360);
+      }
+      apply();
 
     });
   }
@@ -257,7 +275,7 @@ document.addEventListener("DOMContentLoaded", function () {
     el("postsList").setAttribute("aria-busy", "false");
     if (!result?.success) {
       if (list.querySelector('.post-card')) {
-        el('feedError').hidden = false;
+        if (!quiet) el('feedError').hidden = false;
         return;
       }
       el("postsList").replaceChildren();
@@ -278,7 +296,16 @@ document.addEventListener("DOMContentLoaded", function () {
     posts.forEach((post, index) => {
       const key = String(post.post_id);
       const previous = existing.get(key);
-      const item = previous?.dataset.signature === JSON.stringify(post) ? previous : createPostElement(post);
+      let item = previous;
+      if (!item) item = createPostElement(post);
+      else if (item.dataset.signature !== JSON.stringify(post)) {
+        const updated = createPostElement(post);
+        for (const selector of ['.post-header', '.post-memo', '.post-meta', '.delivery-status']) {
+          const old = item.querySelector(selector), next = updated.querySelector(selector);
+          if (old.outerHTML !== next.outerHTML) old.replaceWith(next);
+        }
+        item.dataset.signature = updated.dataset.signature;
+      }
       keep.add(item);
       if (list.children[index] !== item) list.insertBefore(item, list.children[index] || null);
     });
@@ -338,6 +365,9 @@ document.addEventListener("DOMContentLoaded", function () {
     el("paginationInfo").textContent = `共 ${total} 篇 · 第 ${page} / ${Math.max(pages, 1)} 页`;
     el("prevPageBtn").disabled = page <= 1;
     el("nextPageBtn").disabled = page >= pages;
+    const key = JSON.stringify([page, pages]);
+    if (el('pageNumbers').dataset.signature === key) return;
+    el('pageNumbers').dataset.signature = key;
     const focusPage = el("pageNumbers").contains(document.activeElement) ? Number(document.activeElement.textContent) : null;
     el("pageNumbers").replaceChildren();
     let numbers;
@@ -783,7 +813,7 @@ document.addEventListener("DOMContentLoaded", function () {
         item.querySelector('.subscription-state').textContent = enabled === 0 ? '已暂停' : '监控中';
         btn.dataset.enabled = String(enabled === 0 ? 1 : 0);
         btn.innerHTML = `${renderIcon(enabled === 0 ? 'play' : 'pause')}${enabled === 0 ? '恢复' : '暂停'}`;
-        Toast.success(enabled === 0 ? '订阅已暂停' : '订阅已恢复'); loadFilterSubscriptions();
+        Toast.success(enabled === 0 ? '订阅已暂停' : '订阅已恢复'); loadFilterSubscriptions(); analytics.loadNotifications();
       } else Toast.error(result?.message || "修改失败");
     }));
     container.querySelectorAll(".delete-sub").forEach(btn => btn.addEventListener("click", async () => {
@@ -802,7 +832,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (result?.success) {
         item.remove();
         if (!container.querySelector('.subscription-item')) loadSubscriptions();
-        Toast.success("订阅已删除"); loadFilterSubscriptions(); updateStats();
+        Toast.success("订阅已删除"); loadFilterSubscriptions(); updateStats(); analytics.loadNotifications();
       } else Toast.error(result?.message || "删除失败");
     }));
   }
@@ -821,16 +851,17 @@ document.addEventListener("DOMContentLoaded", function () {
       if (![data.keyword1, data.keyword2, data.keyword3, data.creator, data.category].some(Boolean)) return Toast.warning("请至少填写一个订阅条件");
       const result = await apiRequest("/api/subscriptions", { method: "POST", body: JSON.stringify(data) });
       if (!result?.success) return Toast.error(result?.message || "添加失败");
-      Toast.success("订阅已添加"); el("addSubForm").reset(); loadSubscriptions(); loadFilterSubscriptions(); updateStats();
+      Toast.success("订阅已添加"); el("addSubForm").reset(); loadSubscriptions(); loadFilterSubscriptions(); updateStats(); analytics.loadNotifications();
     }));
   }
   const routeMap = {
-    '/': ['feed', '最新帖子'], '/matched': ['feed', '命中订阅'],
+    '/': ['hot', '热榜'], '/posts': ['feed', '最新帖子'], '/matched': ['feed', '命中订阅'],
     '/hot': ['hot', '热榜'],
     '/subscriptions': ['subscriptions', '订阅管理'], '/statistics': ['stats', '统计信息'],
     '/settings/account': ['account', '账号与安全'], '/settings/rss': ['rss', 'RSS 配置'], '/settings/telegram': ['telegram', 'Telegram'],
   };
   let activePath = null;
+  let routeAnimation;
   const routeScroll = new Map();
   function navigate(path, push = true) {
     if (path === '/settings') path = '/settings/account';
@@ -840,6 +871,10 @@ document.addEventListener("DOMContentLoaded", function () {
     if (push && location.pathname !== path) history.pushState({}, '', path);
     window.SeekFeedControls.closeSelect();
     document.querySelectorAll('.route-page').forEach(page => page.hidden = page.id !== `${name}Page`);
+    if (activePath && activePath !== path && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      routeAnimation?.cancel();
+      routeAnimation = el(`${name}Page`).animate([{ opacity: .45 }, { opacity: 1 }], { duration: 180, easing: 'cubic-bezier(.2,.7,.2,1)' });
+    }
     document.querySelectorAll('.workspace-nav [data-route]').forEach(link => {
       const selected = link.pathname === path;
       link.classList.toggle('selected', selected);
@@ -848,7 +883,7 @@ document.addEventListener("DOMContentLoaded", function () {
     el('breadcrumbCurrent').textContent = title;
     document.title = `${title} · SeekFeed`;
     if (name === 'feed') { setMatched(path === '/matched'); loadPosts(currentPage); }
-    if (name === 'subscriptions') { loadSubscriptions(); loadMatchingScope(); }
+    if (name === 'subscriptions') { loadSubscriptions(); loadMatchingScope(); analytics.loadNotifications(); }
     if (name === 'rss') loadRssConfig();
     if (name === 'telegram') loadTelegramConfig();
     if (name === 'stats') analytics.load();
@@ -871,7 +906,7 @@ document.addEventListener("DOMContentLoaded", function () {
     document.querySelectorAll('[data-route]').forEach(link => link.addEventListener('click', e => {
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
       e.preventDefault(); closeSidebar();
-      if (link.pathname !== activePath && ['/', '/matched'].includes(link.pathname)) currentPage = 1;
+      if (link.pathname !== activePath && ['/posts', '/matched'].includes(link.pathname)) currentPage = 1;
       navigate(link.pathname);
     }));
     document.querySelectorAll('.route-page h1').forEach(h => h.tabIndex = -1);

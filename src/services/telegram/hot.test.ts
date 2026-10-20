@@ -41,11 +41,10 @@ function botFixture() {
 describe('Telegram hot ranking', () => {
     it('renders aligned numbers, safe titles, actual zero counts and a bounded message', () => {
         const text = hotRankingMessage(ranking());
-        expect(text).toContain('1️⃣\u2002<a');
-        expect(text).toContain('🔟\u2002<a');
-        expect(text).toContain('📊 浏览量 1,000  ·  💬 回复 0');
-        expect(text).not.toMatch(/👁|📖/);
-        expect(text).not.toContain('🧪');
+        expect(text).toContain('<code>01</code>  <a');
+        expect(text).toContain('<code>10</code>  <a');
+        expect(text).toContain('浏览量 1,000 · 回复 0 · 技术');
+        expect(text).not.toMatch(/\p{Extended_Pictographic}|\u20e3/u);
         const long = hotRankingMessage(ranking('live', { posts: Array.from({ length: 50 }, () => ({
             postId: 42, title: '<script>&😀'.repeat(300), views: 0, replies: 0, categoryLabel: '<&',
         })) }));
@@ -62,7 +61,8 @@ describe('Telegram hot ranking', () => {
         expect(telegramCommands.some(c => c.command === 'hot')).toBe(true);
         expect(hotEntryKeyboard.inline_keyboard[0][0].callback_data).toBe('hot:open');
         const keyboard = hotRankingKeyboard('day').inline_keyboard;
-        expect(keyboard[0].map(b => b.text)).toEqual(['🔥 实时', '🕒 24 小时', '📅 7 天']);
+        expect(keyboard[0].map(b => b.text)).toEqual(['实时', '日榜', '周榜']);
+        expect(keyboard.flat().every(b => !/\p{Extended_Pictographic}/u.test(b.text))).toBe(true);
         expect(keyboard[0].map(b => b.style)).toEqual([undefined, 'primary', undefined]);
         expect(hotRankingKeyboard('week').inline_keyboard[0].map(b => b.style)).toEqual([undefined, undefined, 'primary']);
         expect(keyboard[1][0].callback_data).toBe('hot:day');
@@ -82,7 +82,7 @@ describe('Telegram hot ranking', () => {
             'answerCallbackQuery', 'editMessageText']);
         expect(test.calls[0].payload.reply_markup).toEqual(hotRankingKeyboard('live'));
         expect(test.calls[0].payload.link_preview_options.is_disabled).toBe(false);
-        expect(test.calls[5].payload.text).toContain('24 小时热榜');
+        expect(test.calls[5].payload.text).toContain('日榜');
     });
 
     it('rejects unbound chats and invalid periods before reading ranking data', async () => {

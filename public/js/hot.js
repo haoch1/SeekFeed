@@ -1,13 +1,38 @@
 /* Public ranking view. Shared controls supply icons, selects and stable pending states. */
 window.SeekFeedHot = (() => {
-  let period = 'live', request = 0, lastLoaded = 0, signature = '', queued = null, queuedSignature = '', controller;
+  let period = 'live', request = 0, lastLoaded = 0, signature = '', controller, loading = false;
   const el = id => document.getElementById(id);
   const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const icon = name => window.SeekFeedControls.icon(name);
   const number = value => new Intl.NumberFormat('zh-CN').format(value);
-  function render(data) {
+  function render(data, background) {
     const list = el('hotList');
-    list.innerHTML = data.posts.map((post, index) => `<li class="hot-row"><span class="hot-rank ${index < 3 ? 'top-rank' : ''}" aria-label="第 ${index + 1} 名">${String(index + 1).padStart(2, '0')}</span><div class="hot-post"><a href="https://www.nodeseek.com/post-${post.postId}-1" target="_blank" rel="noopener noreferrer">${escape(post.title)}</a><div class="hot-post-meta"><span class="hot-category">${escape(post.categoryLabel)}</span><span>${escape(post.author)}</span></div></div><span class="hot-number hot-views" aria-label="${post.views} 次浏览" title="采集于 ${escape(new Date(post.observedAt).toLocaleString('zh-CN'))}">${icon('eye')}${number(post.views)}</span><span class="hot-number hot-replies" aria-label="${post.replies} 条回复">${icon('message')}${number(post.replies)}</span><span class="hot-number hot-heat" aria-label="热度 ${post.heat.toFixed(1)}">${post.heat.toFixed(1)}</span></li>`).join('');
+    const existing = new Map([...list.querySelectorAll('.hot-row')].map(row => [row.dataset.postId, row]));
+    const anchor = background && scrollY > 160 ? [...existing.values()].find(row => row.getBoundingClientRect().bottom > 80 && data.posts.some(p => String(p.postId) === row.dataset.postId)) : null;
+    const anchorTop = anchor?.getBoundingClientRect().top;
+    const keep = new Set();
+    for (const [index, post] of data.posts.entries()) {
+      const key = String(post.postId);
+      let row = existing.get(key);
+      if (!row) {
+        row = document.createElement('li'); row.className = 'hot-row'; row.dataset.postId = key;
+        row.innerHTML = `<span class="hot-rank"></span><div class="hot-post"><a target="_blank" rel="noopener noreferrer"></a><div class="hot-post-meta"><span class="hot-category"></span><span class="hot-author"></span></div></div><span class="hot-number hot-views">${icon('eye')}<span></span></span><span class="hot-number hot-replies">${icon('message')}<span></span></span><span class="hot-number hot-heat"></span>`;
+        row.querySelector('a').href = `https://www.nodeseek.com/post-${Number(post.postId)}-1`;
+      }
+      const text = (selector, value) => { const node = row.querySelector(selector); if (node.textContent !== value) node.textContent = value; };
+      text('.hot-rank', String(index + 1).padStart(2, '0'));
+      row.querySelector('.hot-rank').classList.toggle('top-rank', index < 3);
+      row.querySelector('.hot-rank').setAttribute('aria-label', `第 ${index + 1} 名`);
+      text('a', post.title); text('.hot-category', post.categoryLabel); text('.hot-author', post.author);
+      text('.hot-views span', number(post.views)); text('.hot-replies span', number(post.replies)); text('.hot-heat', post.heat.toFixed(1));
+      row.querySelector('.hot-views').setAttribute('aria-label', `${post.views} 次浏览`);
+      row.querySelector('.hot-replies').setAttribute('aria-label', `${post.replies} 条回复`);
+      row.querySelector('.hot-heat').setAttribute('aria-label', `热度 ${post.heat.toFixed(1)}`);
+      keep.add(row);
+      if (list.children[index] !== row) list.insertBefore(row, list.children[index] || null);
+    }
+    [...list.children].filter(row => !keep.has(row)).forEach(row => row.remove());
+    if (anchor?.isConnected) window.scrollBy({top:anchor.getBoundingClientRect().top - anchorTop, behavior:'instant'});
     list.hidden = !data.posts.length;
     el('hotEmpty').hidden = Boolean(data.posts.length);
     if (!data.posts.length) {
@@ -15,15 +40,14 @@ window.SeekFeedHot = (() => {
       el('hotEmpty').querySelector('.empty-desc').textContent = data.updatedAt ? '试试其他分类或时间范围。' : data.enabled ? '首次采集完成后会自动显示。' : '服务器尚未启用热榜采集。';
     }
     el('hotCount').textContent = data.posts.length ? `展示 ${data.posts.length} / ${data.total} 条` : '最多展示 50 条';
-    queued = null;
-    el('hotNewData').hidden = true;
-    el('hotFreshness').parentElement.classList.remove('has-update');
   }
   function status(data) {
-    el('hotFreshness').textContent = data.updatedAt ? `更新于 ${new Date(data.updatedAt).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'})} · 每 5 分钟采集` : '等待首次采集';
+    const freshness = data.updatedAt ? `更新于 ${new Date(data.updatedAt).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'})} · ${data.warmingUp ? '正在积累增量样本' : '每 5 分钟采集'}` : '等待首次采集';
+    if (el('hotFreshness').textContent !== freshness) el('hotFreshness').textContent = freshness;
     el('hotCoverage').textContent = data.updatedAt ? `本轮采集 ${data.coverage} 篇 · ${data.pages} 页` : '';
     el('hotError').hidden = !data.error && (!data.stale || !data.updatedAt);
     el('hotError').textContent = data.error || '采集延迟，当前显示上次保存的榜单。';
+    el('hotFreshness').parentElement.classList.toggle('has-error', !el('hotError').hidden);
     const select = el('hotCategory');
     const values = JSON.stringify(data.categories);
     if (select.dataset.categories !== values) {
@@ -37,13 +61,15 @@ window.SeekFeedHot = (() => {
   }
   async function load({background = false} = {}) {
     if (!el('hotPage') || el('hotPage').hidden || document.hidden) return;
+    if (background && loading) return;
     controller?.abort();
     controller = new AbortController();
     const activeController = controller;
     const timeout = setTimeout(() => activeController.abort('timeout'), 15000);
     const id = ++request;
+    loading = true;
     const query = new URLSearchParams({period, category:el('hotCategory').value, sort:el('hotSort').value});
-    el('hotResults').setAttribute('aria-busy', 'true');
+    if (!background) el('hotResults').setAttribute('aria-busy', 'true');
     try {
       const response = await fetch('/api/hot?' + query, {signal:controller.signal, cache:'no-store'});
       const result = await response.json();
@@ -51,19 +77,18 @@ window.SeekFeedHot = (() => {
       if (id !== request) return;
       const data = result.data;
       status(data);
-      // Decay is server-side; only new observations or changed filters replace rows.
-      const next = JSON.stringify([data.updatedAt, query.toString(), data.posts.map(p => [p.postId, p.views, p.replies])]);
+      const next = JSON.stringify([query.toString(), data.posts]);
       if (next !== signature) {
-        if (background && scrollY > 160 && signature) { queued = data; queuedSignature = next; el('hotNewData').hidden = false; el('hotFreshness').parentElement.classList.add('has-update'); }
-        else { render(data); signature = next; }
+        render(data, background); signature = next;
       }
       lastLoaded = Date.now();
     } catch (error) {
       if ((activeController.signal.aborted && activeController.signal.reason !== 'timeout') || id !== request) return;
       el('hotError').hidden = false;
       el('hotError').textContent = '榜单读取失败，已保留当前内容。请点击刷新重试。';
+      el('hotFreshness').parentElement.classList.add('has-error');
       if (!signature) { el('hotList').hidden = true; el('hotEmpty').hidden = false; el('hotEmpty').querySelector('.empty-desc').textContent = '连接恢复后会自动重试。'; }
-    } finally { clearTimeout(timeout); if (id === request) el('hotResults').setAttribute('aria-busy', 'false'); }
+    } finally { clearTimeout(timeout); if (id === request) { loading = false; el('hotResults').setAttribute('aria-busy', 'false'); } }
   }
   function init() {
     el('hotRefresh').addEventListener('click', event => window.SeekFeedControls.pending(event.currentTarget, () => load()));
@@ -81,7 +106,6 @@ window.SeekFeedHot = (() => {
         if (target !== null) { event.preventDefault(); tabs[target].focus(); tabs[target].click(); }
       });
     }
-    el('hotNewData').addEventListener('click', () => { if (queued) { render(queued); signature = queuedSignature; } });
     const tick = () => { if (Date.now() - lastLoaded > 30000) load({background:true}); };
     setInterval(tick, 30000);
     document.addEventListener('visibilitychange', tick);

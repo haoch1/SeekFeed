@@ -17,15 +17,15 @@ const categories = [
     ['dev', 'Dev'], ['photo-share', '贴图'], ['expose', '曝光'], ['inside', '内版'], ['sandbox', '沙盒'],
 ];
 
-export const DashboardSurface: FC<PropsWithChildren<{ path?: string }>> = ({ children, path = "/" }) => (
+export const DashboardSurface: FC<PropsWithChildren<{ path?: string }>> = ({ children, path = "/hot" }) => (
     <div class="workspace-shell">
         <button id="sidebarBackdrop" class="sidebar-backdrop" aria-label="关闭导航" hidden></button>
         <aside class="workspace-sidebar" id="workspaceSidebar" aria-label="主导航">
-            <a href="/" class="workspace-brand"><span class="brand-icon"><BrandMark /></span><span><strong>SeekFeed</strong></span></a>
+            <a href="/hot" data-route class="workspace-brand"><span class="brand-icon"><BrandMark /></span><span><strong>SeekFeed</strong></span></a>
             <nav class="workspace-nav">
                 <p class="nav-section-label">工作空间</p>
                 <a href="/hot" class="nav-item" data-route><Icon name="flame" />热榜</a>
-                <a href="/" id="navLatest" class="nav-item" data-route><Icon name="posts" />最新帖子</a>
+                <a href="/posts" id="navLatest" class="nav-item" data-route><Icon name="posts" />最新帖子</a>
                 <a href="/matched" id="navMatched" class="nav-item" data-route><Icon name="bell" />命中订阅</a>
                 <a href="/subscriptions" class="nav-item" data-route><Icon name="list" />订阅管理</a>
                 <a href="/statistics" class="nav-item" data-route><Icon name="chart" />统计信息</a>
@@ -38,10 +38,10 @@ export const DashboardSurface: FC<PropsWithChildren<{ path?: string }>> = ({ chi
         </aside>
         <div class="workspace-main">
             <header class="workspace-topbar">
-                <div class="breadcrumb"><button id="sidebarToggle" class="icon-btn mobile-menu" aria-label="打开导航" aria-expanded="false"><Icon name="menu" /></button><span>工作空间</span><span class="breadcrumb-divider">/</span><strong id="breadcrumbCurrent">{({ "/": "最新帖子", "/hot": "热榜", "/matched": "命中订阅", "/subscriptions": "订阅管理", "/statistics": "统计信息", "/settings/account": "账号与安全", "/settings/rss": "RSS 配置", "/settings/telegram": "Telegram" } as Record<string, string>)[path]}</strong></div>
+                <div class="breadcrumb"><button id="sidebarToggle" class="icon-btn mobile-menu" aria-label="打开导航" aria-expanded="false"><Icon name="menu" /></button><span>工作空间</span><span class="breadcrumb-divider">/</span><strong id="breadcrumbCurrent">{({ "/": "热榜", "/posts": "最新帖子", "/hot": "热榜", "/matched": "命中订阅", "/subscriptions": "订阅管理", "/statistics": "统计信息", "/settings/account": "账号与安全", "/settings/rss": "RSS 配置", "/settings/telegram": "Telegram" } as Record<string, string>)[path]}</strong></div>
                 <div class="header-actions"><button id="themeToggleBtn" class="icon-btn" title="切换主题" aria-label="切换主题"><Icon name="sun" /></button></div>
             </header>
-            <main class="workspace-content" id="mainContent"><section id="feedPage" class="route-page" hidden={path !== "/" && path !== "/matched"}>
+            <main class="workspace-content" id="mainContent"><section id="feedPage" class="route-page" hidden={path !== "/posts" && path !== "/matched"}>
                 <div class="workspace-heading"><div><h1 id="pageTitle">{path === "/matched" ? "命中订阅" : "最新帖子"}</h1><p>追踪社区动态，让有价值的信息主动找到你。</p></div><div class="heading-actions"><a href="/subscriptions" data-route class="btn btn-secondary"><Icon name="list" />管理订阅</a><button id="syncNowBtn" class="btn btn-primary"><Icon name="sync" /><span>立即同步</span></button></div></div>
                 <section class="metric-strip" aria-label="监控统计">
                     <div class="metric"><Icon name="posts" /><div><span>已收录帖子</span><strong id="overviewTotal">—</strong></div></div>

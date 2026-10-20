@@ -8,10 +8,27 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
     const shortTime = date => new Date(new Date(date).getTime() + offset * 60000);
     const label = (date, hourly) => new Intl.DateTimeFormat('zh-CN', { timeZone: 'UTC', ...(hourly ? { hour: '2-digit', minute: '2-digit', hour12: false } : { month: 'numeric', day: 'numeric' }) }).format(shortTime(date));
 
+    const timezone = `UTC${offset >= 0 ? '+' : '−'}${String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0')}:${String(Math.abs(offset) % 60).padStart(2, '0')}`;
+    const dateTime = date => new Intl.DateTimeFormat('zh-CN', { timeZone: 'UTC', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(shortTime(date));
+    const dateOnly = date => label(date, false);
+    const rangeText = period => `${dateTime(period.from)} — ${dateTime(period.to)} · ${timezone}`;
+    function bucketText(point, axis = false) {
+        const p = currentData.period, start = new Date(point.time).getTime();
+        const nominalEnd = start + (p.hourly ? 3600000 : p.stepDays * 86400000);
+        const end = Math.max(start, Math.min(nominalEnd, new Date(p.to).getTime()));
+        const partial = end < nominalEnd;
+        if (axis) {
+            if (p.hourly) return `${String(shortTime(start).getUTCHours()).padStart(2, '0')}–${String(shortTime(nominalEnd).getUTCHours() || 24).padStart(2, '0')}时`;
+            return p.stepDays > 1 ? `${dateOnly(start)}–${dateOnly(Math.max(start, end - 1))}` : dateOnly(start);
+        }
+        const endTime = label(end, true);
+        return `${dateTime(start)} — ${p.hourly ? endTime : dateTime(end)}${partial ? '（截至目前）' : ''}`;
+    }
+
     function showReadout(point) {
         const total = currentData.totals;
         el('analyticsTrendReadout').textContent = point
-            ? `${label(point.time, currentData.period.hourly)} · 收录 ${number(point.count)} 篇`
+            ? `${bucketText(point)} · 收录 ${number(point.count)} 篇`
             : `共收录 ${number(total.posts)} 篇`;
     }
 
@@ -41,11 +58,11 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             const value = ceiling * index / 4;
             return `<line x1="${left}" x2="${right}" y1="${y(value)}" y2="${y(value)}" class="analytics-grid-line"/><text x="${left - 8}" y="${y(value) + 4}" text-anchor="end">${number(value)}</text>`;
         }).join('');
-        const tickCount = Math.min(width < 400 ? 3 : 6, data.length);
+        const tickCount = Math.min(width < 300 ? 2 : width < 600 ? 3 : 6, data.length);
         const ticks = [...new Set(Array.from({ length: tickCount }, (_, index) => Math.round(index * (data.length - 1) / Math.max(1, tickCount - 1))))];
         box.innerHTML = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true">${grid}
             <rect id="analyticsCursor" y="${top}" width="${step}" height="${bottom - top}" class="analytics-bar-cursor" visibility="hidden" rx="4"/>${bars}
-            ${ticks.map(index => `<text x="${x(index)}" y="214" text-anchor="${index === 0 && data.length > 1 ? 'start' : index === data.length - 1 && data.length > 1 ? 'end' : 'middle'}">${label(data[index].time, currentData.period.hourly)}</text>`).join('')}
+            ${ticks.map(index => `<text x="${x(index)}" y="214" text-anchor="${index === 0 && data.length > 1 ? 'start' : index === data.length - 1 && data.length > 1 ? 'end' : 'middle'}">${bucketText(data[index], true)}</text>`).join('')}
             </svg><div class="analytics-chart-tooltip" id="analyticsTrendTooltip" aria-hidden="true" hidden><span></span><div><i></i>收录帖子<strong></strong></div></div>`;
         box.setAttribute('role', 'group');
         box.setAttribute('tabindex', '0');
@@ -61,7 +78,7 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             columns[focusIndex].setAttribute('data-active', 'true');
             selected = focusIndex;
             showReadout(data[focusIndex]);
-            tooltip.firstElementChild.textContent = label(data[focusIndex].time, currentData.period.hourly);
+            tooltip.firstElementChild.textContent = bucketText(data[focusIndex]);
             tooltip.querySelector('strong').textContent = number(data[focusIndex].count) + ' 篇';
             tooltip.hidden = false;
             tooltip.style.left = `${Math.max(8, Math.min(width - tooltip.offsetWidth - 8, x(focusIndex) - tooltip.offsetWidth / 2))}px`;
@@ -124,59 +141,68 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
     }
     function renderActivity(data) {
         const names = ['一', '二', '三', '四', '五', '六', '日'];
-        const values = Array(168).fill(0);
+        const values = Array(168).fill(0), dates = new Map();
+        const p = data.period;
+        if (p.calendarDays <= 7) {
+            for (let time = new Date(p.from).getTime(); time <= new Date(p.to).getTime(); time += 86400000) {
+                dates.set((shortTime(time).getUTCDay() + 6) % 7, dateOnly(time));
+            }
+        }
+        el('analyticsActivityScope').textContent = `${rangeText(p)}${p.calendarDays > 7 ? ' · 同一星期、时段合计' : ''}`;
         for (const row of data.activity) values[((row.weekday + 6) % 7) * 24 + row.hour] = row.count;
-        const max = Math.max(...values, 0);
-        const box = el('analyticsActivity');
+        const rowDays = p.calendarDays <= 7 ? [...dates.keys()] : names.map((_, index) => index);
+        const visibleIndices = rowDays.flatMap(day => Array.from({length:24}, (_, hour) => day * 24 + hour));
+        const max = Math.max(...values, 0), box = el('analyticsActivity');
         let selected = document.activeElement === box && box.dataset.selected !== undefined ? Number(box.dataset.selected) : values.indexOf(max);
-        box.innerHTML = '<span></span>' + Array.from({ length: 24 }, (_, hour) => `<span class="analytics-heatmap-hour">${hour % 3 === 0 ? String(hour).padStart(2, '0') : ''}</span>`).join('') + names.map((name, day) => `<span class="analytics-heatmap-day">周${name}</span>` + Array.from({ length: 24 }, (_, hour) => {
+        if (!visibleIndices.includes(selected)) selected = visibleIndices[0];
+        const text = index => {
+            const day = Math.floor(index / 24), hour = index % 24;
+            return `${dates.has(day) ? dates.get(day) + ' ' : ''}周${names[day]} ${String(hour).padStart(2, '0')}:00–${String(hour + 1).padStart(2, '0')}:00${p.calendarDays > 7 ? '（各周合计）' : ''} · ${number(values[index])} 篇`;
+        };
+        box.innerHTML = '<span></span>' + Array.from({ length: 8 }, (_, index) => `<span class="analytics-heatmap-hour" style="grid-column:span 3">${String(index * 3).padStart(2, '0')}:00</span>`).join('') + rowDays.map(day => `<span class="analytics-heatmap-day">${dates.has(day) ? dates.get(day) + ' ' : ''}周${names[day]}</span>` + Array.from({ length: 24 }, (_, hour) => {
             const index = day * 24 + hour, count = values[index];
-            return `<i data-index="${index}" data-level="${count ? Math.max(1, Math.ceil(count / max * 4)) : 0}" title="周${name} ${hour}:00 · ${number(count)} 篇"></i>`;
+            return `<i data-index="${index}" data-level="${count ? Math.max(1, Math.ceil(count / max * 4)) : 0}" title="${text(index)}"></i>`;
         }).join('')).join('');
-        const text = index => `周${names[Math.floor(index / 24)]} ${String(index % 24).padStart(2, '0')}:00 · ${number(values[index])} 篇`;
-        el('analyticsPeak').textContent = max ? `最活跃：${text(selected)}` : '所选时段暂无发帖记录';
+        el('analyticsPeak').textContent = max ? `最活跃：${text(values.indexOf(max))}` : '所选时段暂无发帖记录';
         const select = index => {
-            selected = Math.max(0, Math.min(167, index));
+            selected = visibleIndices.includes(index) ? index : visibleIndices[0];
             box.dataset.selected = String(selected);
             box.querySelector('.heatmap-selected')?.classList.remove('heatmap-selected');
             box.querySelector(`[data-index="${selected}"]`).classList.add('heatmap-selected');
             el('analyticsActivityReadout').textContent = text(selected);
             box.setAttribute('aria-label', text(selected) + '。方向键查看相邻时段。');
         };
-        el('analyticsActivityReadout').textContent = '每格代表一小时';
+        el('analyticsActivityReadout').textContent = '每格 1 小时';
         box.onpointermove = event => { const cell = event.target.closest('[data-index]'); if (cell) select(Number(cell.dataset.index)); };
         box.onfocus = () => select(selected);
-        box.onpointerleave = box.onblur = () => { if (document.activeElement !== box) { box.querySelector('.heatmap-selected')?.classList.remove('heatmap-selected'); el('analyticsActivityReadout').textContent = '每格代表一小时'; } };
+        box.onpointerleave = box.onblur = () => { if (document.activeElement !== box) { box.querySelector('.heatmap-selected')?.classList.remove('heatmap-selected'); el('analyticsActivityReadout').textContent = '每格 1 小时'; } };
         box.onkeydown = event => {
             const delta = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -24, ArrowDown: 24 }[event.key];
             if (delta === undefined) return;
-            event.preventDefault(); select(selected + delta);
+            event.preventDefault(); select(visibleIndices[Math.max(0, Math.min(visibleIndices.length - 1, visibleIndices.indexOf(selected) + delta))]);
         };
         if (document.activeElement === box) select(selected);
     }
     function render(data) {
         currentData = data;
         const { totals: t, period: p } = data;
-        const rangeDate = date => new Intl.DateTimeFormat('zh-CN', { timeZone: 'UTC', year: 'numeric', month: 'numeric', day: 'numeric' }).format(shortTime(date));
-        const range = `${rangeDate(p.from)} — ${rangeDate(p.to)}`;
+        const range = rangeText(p);
         el('analyticsPeriodLabel').textContent = `${days === -1 ? '今日' : days === 0 ? '全部记录' : `近 ${days} 天`} · ${range}`;
-        el('analyticsTimezone').textContent = `UTC${offset >= 0 ? '+' : '−'}${String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0')}:${String(Math.abs(offset) % 60).padStart(2, '0')}`;
+        el('analyticsTimezone').textContent = '按发帖时间';
         for (const [id, value] of Object.entries({ analyticsPosts: t.posts, analyticsAuthors: t.authors, analyticsCategoriesTotal: data.categories.length })) el(id).textContent = number(value);
         el('analyticsDailyAverage').textContent = (t.posts / p.calendarDays).toLocaleString('zh-CN', { maximumFractionDigits: 1 });
         el('analyticsDailyDetail').textContent = `覆盖 ${number(p.calendarDays)} 个自然日`;
         el('analyticsPostsDetail').textContent = `峰值 ${number(Math.max(...data.trend.map(row => row.count), 0))} 篇 / ${p.hourly ? '小时' : p.stepDays > 1 ? `${p.stepDays} 天` : '天'}`;
         el('analyticsCategoryDetail').textContent = data.categories.length ? `${getCategoryName(data.categories[0].category)}占 ${percent(data.categories[0].count, t.posts)}` : '暂无分类记录';
         el('analyticsAuthorsDetail').textContent = t.authors ? `人均 ${(data.authorDistribution.reduce((sum, row) => sum + row.posts, 0) / t.authors).toFixed(1)} 篇` : '暂无发帖记录';
-        el('analyticsTrendUnit').textContent = p.hourly ? '按小时' : p.stepDays > 1 ? `每 ${p.stepDays} 天` : '按天';
+        el('analyticsTrendUnit').textContent = `${rangeText(p)} · 每柱 ${p.hourly ? '1 小时' : p.stepDays + ' 天'}`;
         const nextKey = JSON.stringify([data.trend, p.days]);
         if (chartKey !== nextKey || !el('analyticsTrend').firstElementChild) { chartKey = nextKey; focusIndex = -1; renderTrend(); showReadout(); }
         renderCategories(data);
         renderCategoryOverview(data);
         renderAuthorDistribution(data);
         el('analyticsAuthorList').innerHTML = data.authors.length ? data.authors.map((row, index) => `<div class="analytics-author-row"><span class="analytics-rank">${index + 1}</span><span class="analytics-avatar">${esc(Array.from(row.creator)[0])}</span><span class="analytics-author-name" title="${esc(row.creator)}">${esc(row.creator)}</span><strong>${number(row.count)}<small>篇</small></strong></div>`).join('') : empty('所选时段暂无作者');
-        el('analyticsSubscriptionsCount').textContent = `${number(data.subscriptions.active)} 条监控中 · ${number(data.subscriptions.total)} 条订阅`;
         renderActivity(data);
-        renderDelivery(data);
         el('analyticsTopicSample').textContent = `${data.topics.limited ? '最近 ' : ''}${number(data.topics.sample)} 篇标题`;
         el('analyticsTopics').innerHTML = data.topics.terms.length ? data.topics.terms.map((row, index) => `<div class="analytics-topic-row"><span class="analytics-rank">${String(index + 1).padStart(2, '0')}</span><span class="analytics-topic-name" title="${esc(row.term)}">${esc(row.term)}</span><span class="analytics-topic-meter"><i style="width:${row.count / data.topics.terms[0].count * 100}%"></i></span><strong>${number(row.count)}</strong></div>`).join('') : empty('暂无重复出现的标题词');
     }
@@ -193,27 +219,51 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
         inflight = true; lastLoad = Date.now();
         const query = `days=${days}&offset=${offset}`;
         if (!silent) el('analyticsContent').setAttribute('aria-busy', 'true');
-        const [result, ranking] = await Promise.all([
-            apiRequest(`/api/stats/analytics?${query}`, { silent: true }),
-            isLoggedIn ? apiRequest(`/api/stats/subscription-ranking?${query}`, { silent: true }) : null,
-        ]);
+        const result = await apiRequest(`/api/stats/analytics?${query}`, { silent: true });
         if (request !== requestId) return;
         inflight = false;
         el('analyticsContent').setAttribute('aria-busy', 'false');
         el('analyticsError').hidden = !!result?.success;
         if (!result?.success) { el('analyticsPeriodLabel').textContent = currentData ? '更新失败，显示上次数据' : '暂时无法读取统计'; return; }
         render(result.data);
-        if (!isLoggedIn) el('analyticsSubscriptionList').innerHTML = empty('登录后查看订阅表现');
-        else if (ranking?.success) {
-            renderRanking(ranking.data.ranking);
-            const rules = ranking.data.ruleStats;
-            el('analyticsRuleSummary').innerHTML = [['监控中', rules.active], ['本时段有命中', rules.withHits], ['本时段无命中', rules.active - rules.withHits]].map(([name, count]) => `<div><span>${name}</span><strong>${number(count)}</strong></div>`).join('');
-        } else { el('analyticsRuleSummary').textContent = ''; el('analyticsSubscriptionList').innerHTML = empty('订阅表现暂时不可用，请重试'); }
+    }
+
+    let notificationDays = 7, notificationLoad = 0, notificationBusy = false, notificationRequest = 0;
+    async function loadNotifications() {
+        if (!isLoggedIn) return;
+        const request = ++notificationRequest;
+        notificationBusy = true; notificationLoad = Date.now();
+        const query = `days=${notificationDays}&offset=${offset}`;
+        const [result, ranking] = await Promise.all([
+            apiRequest(`/api/stats/analytics?${query}`, { silent: true }),
+            apiRequest(`/api/stats/subscription-ranking?${query}`, { silent: true }),
+        ]);
+        if (request !== notificationRequest) return;
+        notificationBusy = false;
+        if (!result?.success || !ranking?.success) {
+            el('subscriptionAnalyticsScope').textContent = '统计更新失败，稍后自动重试';
+            return;
+        }
+        const data = result.data;
+        el('subscriptionAnalyticsScope').textContent = rangeText(data.period);
+        el('analyticsSubscriptionsCount').textContent = `${number(data.subscriptions.active)} 条监控中 · ${number(data.subscriptions.total)} 条订阅`;
+        renderDelivery(data);
+        renderRanking(ranking.data.ranking);
+        const rules = ranking.data.ruleStats;
+        el('analyticsRuleSummary').innerHTML = [['监控中', rules.active], ['本时段有命中', rules.withHits], ['本时段无命中', rules.active - rules.withHits]].map(([name, count]) => `<div><span>${name}</span><strong>${number(count)}</strong></div>`).join('');
     }
 
     return {
         load,
+        loadNotifications,
         init() {
+            el('notificationRangeSelector').querySelectorAll('button').forEach(button => button.addEventListener('click', () => {
+                const next = Number(button.dataset.days);
+                if (notificationDays === next) return;
+                notificationDays = next;
+                el('notificationRangeSelector').querySelectorAll('button').forEach(item => { item.classList.toggle('active', item === button); item.setAttribute('aria-pressed', String(item === button)); });
+                loadNotifications();
+            }));
             el('chartRangeSelector').querySelectorAll('button').forEach(button => button.addEventListener('click', () => {
                 const next = Number(button.dataset.days);
                 if (days === next) return;
@@ -233,6 +283,9 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             let width = 0;
             new ResizeObserver(entries => { const next = Math.round(entries[0].contentRect.width); if (next > 0 && next !== width) { width = next; renderTrend(); } }).observe(el('analyticsTrend'));
         },
-        tick() { if (!el('statsPage').hidden && !inflight && Date.now() - lastLoad >= 30000) load(true); },
+        tick() {
+            if (!el('statsPage').hidden && !inflight && Date.now() - lastLoad >= 30000) load(true);
+            if (!el('subscriptionsPage').hidden && !notificationBusy && Date.now() - notificationLoad >= 30000) loadNotifications();
+        },
     };
 };

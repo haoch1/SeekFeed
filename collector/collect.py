@@ -63,7 +63,7 @@ def parse(html):
                       'author': author.get_text(' ', strip=True)[:100], 'category': slug[1],
                       'categoryLabel': category.get_text(' ', strip=True)[:50],
                       'views': views, 'replies': replies, 'lastActiveAt': date.isoformat(),
-                      'pinned': bool(row.select('.post-title [title="置顶"]'))})
+                      'pinned': bool(row.select('.post-title [title="置顶"], .iconpark-icon.pined'))})
     # A changed page or partial parser failure must not replace the last good batch.
     if len(posts) < max(1, len(rows) * 0.8):
         raise ValueError('unexpected_markup')

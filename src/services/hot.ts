@@ -18,7 +18,7 @@ const HOUR = 60 * MINUTE;
 
 export function heatScore(views: number, replies: number, ageHours: number, live: boolean): number {
     const engagement = Math.log1p(Math.max(0, views)) + 3 * Math.log1p(Math.max(0, replies));
-    return engagement / (live ? (1 + Math.max(0, ageHours) / 6) ** 0.6 : 1);
+    return engagement / (live ? (1 + Math.max(0, ageHours) / 6) ** 1.5 : 1);
 }
 
 export class HotService {
@@ -78,6 +78,11 @@ export class HotService {
                 last_active_at=excluded.last_active_at,observed_at=excluded.observed_at,pinned=excluded.pinned`);
             for (const row of batch.posts) insert.run(row.postId, row.title, row.author, row.category, row.categoryLabel,
                 row.views, row.replies, row.lastActiveAt, observedAt, Number(row.pinned));
+            const sample = this.db.query(`INSERT INTO hot_samples VALUES(?,?,?,?)
+                ON CONFLICT(post_id,observed_at) DO UPDATE SET views=excluded.views,replies=excluded.replies`);
+            for (const row of batch.posts) sample.run(row.postId, observedAt, row.views, row.replies);
+            this.db.query('DELETE FROM hot_samples WHERE julianday(observed_at) < julianday(?) - 2.0/24').run(observedAt);
+            this.db.query('DELETE FROM hot_samples WHERE post_id IN (SELECT post_id FROM hot_posts WHERE julianday(observed_at) < julianday(?) - 30)').run(observedAt);
             this.db.query("DELETE FROM hot_posts WHERE julianday(observed_at) < julianday(?) - 30").run(observedAt);
             this.db.query('UPDATE hot_collector_state SET last_success_at=?, last_error=NULL,failures=0,pages=?,batch_size=? WHERE id=1')
                 .run(observedAt, batch.pages, new Set(batch.posts.map(p => p.postId)).size);
@@ -85,27 +90,53 @@ export class HotService {
     }
     ranking(period: HotPeriod = 'live', category = '', sort: HotSort = 'heat', now = new Date()) {
         const state = this.state();
+        // Scores stay fixed between successful collections, including while serving stale data.
+        const reference = Math.min(now.getTime(), Date.parse(state.last_success_at || now.toISOString()));
         const rows = this.db.query(`SELECT h.*, (SELECT MIN(pub_date) FROM posts p WHERE p.post_id=h.post_id) AS published_at
             FROM hot_posts h WHERE julianday(h.observed_at) <= julianday(?) AND julianday(h.observed_at) >= julianday(?) - 7`)
             .all(now.toISOString(), now.toISOString()) as any[];
         const categories = Array.from(new Map(rows.map(r => [r.category, r.category_label])).entries())
             .map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'));
         const duration = period === 'day' ? 24 * HOUR : 7 * 24 * HOUR;
+        const samples = this.db.query(`SELECT * FROM hot_samples WHERE julianday(observed_at) BETWEEN julianday(?) - 75.0/1440 AND julianday(?) ORDER BY observed_at`)
+            .all(new Date(reference).toISOString(), new Date(reference - 4 * MINUTE).toISOString()) as {post_id: number; observed_at: string; views: number; replies: number}[];
+        const histories = new Map<number, typeof samples>();
+        for (const sample of samples) {
+            const history = histories.get(sample.post_id) || [];
+            history.push(sample); histories.set(sample.post_id, history);
+        }
+        const warmingUp = period === 'live' && !samples.length;
         const eligible = rows.filter(row => {
             if (category && row.category !== category) return false;
-            if (period === 'live') return !row.pinned && Date.parse(state.last_success_at || now.toISOString()) - Date.parse(row.observed_at) <= HOUR;
+            if (row.pinned) return false;
             const published = Date.parse(row.published_at || '');
-            return Number.isFinite(published) && published <= now.getTime() && published >= now.getTime() - duration;
+            const inCohort = Number.isFinite(published) && published <= now.getTime() && published >= now.getTime() - (period === 'live' ? 24 * HOUR : duration);
+            return inCohort && (period !== 'live' || reference - Date.parse(row.observed_at) <= 15 * MINUTE);
         });
-        const ranked = eligible.map(r => ({
-            postId: r.post_id, title: r.title, author: r.author, category: r.category, categoryLabel: r.category_label,
-            views: r.views, replies: r.replies, observedAt: r.observed_at, publishedAt: r.published_at,
-            heat: heatScore(r.views, r.replies, (now.getTime() - Date.parse(r.last_active_at)) / HOUR, period === 'live'),
-        })).sort((a, b) => (sort === 'heat' ? b.heat - a.heat : b[sort] - a[sort]) || b.postId - a.postId);
+        const ranked = eligible.flatMap(r => {
+            const published = Date.parse(r.published_at);
+            const history = (histories.get(r.post_id) || []).filter(s => Date.parse(s.observed_at) <= Date.parse(r.observed_at) - 4 * MINUTE);
+            // Nearest observation at/before one hour ago, or earliest available inside the hour.
+            const baseline = history.filter(s => Date.parse(s.observed_at) <= reference - HOUR).at(-1) || history[0];
+            const sincePublication = !baseline && published >= reference - HOUR;
+            if (period === 'live' && !warmingUp && !baseline && !sincePublication) return [];
+            const growthViews = baseline ? Math.max(0, r.views - baseline.views) : sincePublication ? r.views : 0;
+            const growthReplies = baseline ? Math.max(0, r.replies - baseline.replies) : sincePublication ? r.replies : 0;
+            const elapsed = Math.max(5 * MINUTE, Date.parse(r.observed_at) - (baseline ? Date.parse(baseline.observed_at) : published));
+            const rate = HOUR / elapsed;
+            const live = period === 'live';
+            return [{
+                postId: r.post_id, title: r.title, author: r.author, category: r.category, categoryLabel: r.category_label,
+                views: r.views, replies: r.replies, observedAt: r.observed_at, publishedAt: r.published_at,
+                growthViews, growthReplies,
+                heat: heatScore(live && !warmingUp ? growthViews * rate : r.views, live && !warmingUp ? growthReplies * rate : r.replies,
+                    (reference - published) / HOUR, live),
+            }];
+        }).sort((a, b) => (sort === 'heat' ? b.heat - a.heat : b[sort] - a[sort]) || b.postId - a.postId);
         return { posts: ranked.slice(0, 50), total: ranked.length, categories, period, sort,
             updatedAt: state.last_success_at, stale: !state.last_success_at || now.getTime() - Date.parse(state.last_success_at) > 15 * MINUTE,
             error: state.last_error, busy: Boolean(this.inFlight), enabled: process.env.HOT_COLLECT_ENABLED === 'true',
-            coverage: state.batch_size, pages: state.pages, intervalSeconds: 300 };
+            coverage: state.batch_size, pages: state.pages, intervalSeconds: 300, warmingUp };
     }
 }
 

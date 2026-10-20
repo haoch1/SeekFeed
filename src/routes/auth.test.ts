@@ -9,6 +9,7 @@ import { DatabaseService } from '../services/database';
 import { SessionService } from '../services/session';
 import * as bcrypt from 'bcryptjs';
 import { apiRoutes } from './api';
+import { pageRoutes } from './pages';
 
 let app: Hono;
 let db: DatabaseService;
@@ -17,7 +18,7 @@ let sessionId: string;
 
 beforeEach(() => {
     const sqlite = new Database(':memory:');
-    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking']) {
+    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples']) {
         sqlite.exec(readFileSync(new URL(`../database/migrations/${name}.sql`, import.meta.url), 'utf8'));
     }
     db = new DatabaseService(sqlite);
@@ -33,10 +34,25 @@ beforeEach(() => {
     app.route('/auth', authRoutes);
     app.route('/telegram', telegramRoutes);
     app.route('/api', apiRoutes);
+    app.route('/', pageRoutes);
 });
 
 describe('account settings and session expiry', () => {
     const headers = () => ({ Authorization: `Bearer ${sessionId}`, 'Content-Type': 'application/json' });
+
+    it('opens the hot ranking as home while preserving first-time initialization', async () => {
+        const home = await app.request('/');
+        expect(home.status).toBe(302);
+        expect(home.headers.get('Location')).toBe('/hot');
+        expect((await app.request('/posts')).status).toBe(200);
+        const fresh = new Hono();
+        fresh.use('*', async (c: any, next) => {
+            c.set('authService', { checkInitialization: () => ({ initialized: false }) });
+            await next();
+        });
+        fresh.route('/', pageRoutes);
+        expect((await fresh.request('/')).headers.get('Location')).toBe('/init');
+    });
 
     it('publishes safe hot ranking data while protecting collection and rejecting invalid filters', async () => {
         expect((await app.request('/api/hot')).status).toBe(200);

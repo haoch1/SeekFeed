@@ -1,5 +1,6 @@
 import { AccountSettings } from './AccountSettings';
 import { TelegramSettings } from './TelegramSettings';
+import { SubscriptionAnalytics } from './SubscriptionAnalytics';
 import { StatisticsPage } from './StatisticsPage';
 import { HotPage } from './HotPage';
 import { FieldInput } from './Controls';
@@ -7,7 +8,8 @@ import type { FC } from "hono/jsx";
 import { Layout } from "./Layout";
 import { DashboardSurface, Icon } from "./DashboardSurface";
 
-export const HomePage: FC<{ path?: string }> = ({ path = "/" }) => {
+export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
+  if (path === '/') path = '/hot';
   return (
     <Layout
       title="SeekFeed"
@@ -74,6 +76,7 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/" }) => {
             </div>
           </div>
         </div>
+        <SubscriptionAnalytics />
       </section>
 
       {/* RSS 配置页面 */}

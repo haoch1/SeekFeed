@@ -49,19 +49,12 @@ export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
                 <article class="analytics-card"><div class="analytics-card-heading"><h2>活跃作者</h2><span class="analytics-caption">TOP 6</span></div><div id="analyticsAuthorList" class="analytics-ranked-list"></div></article>
             </div>
             <article class="analytics-card analytics-activity">
-                <div class="analytics-card-heading"><div><h2>发帖时段</h2><span class="analytics-caption">按星期与小时汇总</span></div><span id="analyticsActivityReadout" class="analytics-caption">—</span></div>
+                <div class="analytics-card-heading"><div><h2>发帖时段</h2><span id="analyticsActivityScope" class="analytics-caption">按星期与小时汇总</span></div><span id="analyticsActivityReadout" class="analytics-caption">—</span></div>
                 <div id="analyticsActivity" class="analytics-heatmap" tabindex="0" role="group" aria-label="发帖时段热力图，使用方向键查看数据"></div>
                 <div class="analytics-heatmap-footer"><span id="analyticsPeak">—</span><span class="analytics-heatmap-scale">少<i data-level="0"></i><i data-level="1"></i><i data-level="2"></i><i data-level="3"></i><i data-level="4"></i>多</span></div>
             </article>
             <article class="analytics-card"><div class="analytics-card-heading"><h2>热门标题词</h2><span id="analyticsTopicSample" class="analytics-caption">—</span></div><div id="analyticsTopics" class="analytics-topics"></div></article>
-            <details class="analytics-card analytics-notifications">
-                <summary><span><Icon name="bell" />订阅与通知</span><Icon name="chevron-down" /></summary>
-                <div class="analytics-notification-content">
-                    <section class="analytics-notification-section"><div class="analytics-card-heading"><div><h2>通知时效</h2><span class="analytics-caption">发帖至推送的时间</span></div><span id="analyticsDeliverySample" class="analytics-caption">—</span></div><div id="analyticsDelivery"></div></section>
-                    <section class="analytics-subscriptions"><div class="analytics-card-heading"><div><h2>订阅表现</h2><span class="analytics-caption" id="analyticsSubscriptionsCount">—</span></div><a class="btn btn-secondary btn-xs" href="/subscriptions" data-route>管理订阅<Icon name="chevron-right" /></a></div><div id="analyticsRuleSummary" class="analytics-rule-summary"></div><div id="analyticsSubscriptionList"></div></section>
-                </div>
-            </details>
-            <details class="analytics-definitions"><summary>统计口径<Icon name="chevron-down" /></summary><p>所有图表按所选时区的发帖时间统计，日均值按所选自然日计算；分类列表包含所选时段内所有实际出现的分类。作者贡献按每位作者的发帖量分组。标题词按包含该词的帖子计数，至少出现 2 篇，仅分析最近 5,000 篇标题。订阅排行展示前 8 条，按每帖记录的首个命中订阅归属；保留已删除订阅的历史数据。通知时效包含 RSS 抓取等待，仅统计推送时间有效的已推送帖子；P90 表示 90% 的样本延迟不超过该值。</p></details>
+            <details class="analytics-definitions"><summary>统计口径<Icon name="chevron-down" /></summary><p>所有图表按所选时区的发帖时间统计，日均值按所选自然日计算；分类列表包含所选时段内所有实际出现的分类。作者贡献按每位作者的发帖量分组。标题词按包含该词的帖子计数，至少出现 2 篇，仅分析最近 5,000 篇标题。</p></details>
         </div>
     </section>
 );
