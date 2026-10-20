@@ -218,6 +218,8 @@ document.addEventListener("DOMContentLoaded", function () {
   // ============================================
   // 抽屉系统
   // ============================================
+  let closeMobileSidebar = () => {};
+  const mobileViewport = matchMedia('(max-width: 760px), (max-width: 1000px) and (pointer: coarse)');
   const Drawer = {
     overlay: document.getElementById("drawerOverlay"),
     activeDrawer: null,
@@ -247,6 +249,7 @@ document.addEventListener("DOMContentLoaded", function () {
     open(name) {
       const drawer = this.element(name);
       if (!drawer) return;
+      closeMobileSidebar();
       if (this.activeDrawer) this.closeAll(false);
       this.opener = document.activeElement;
       this.activeDrawer = name;
@@ -254,7 +257,7 @@ document.addEventListener("DOMContentLoaded", function () {
       drawer.style.display = "flex";
       this.overlay.style.display = "block";
       requestAnimationFrame(() => { drawer.classList.add("drawer-open"); this.overlay.classList.add("overlay-visible"); });
-      document.body.style.overflow = "hidden";
+      window.SeekFeedControls.lockScroll('drawer');
       drawer.querySelector(".drawer-close")?.focus({ preventScroll: true });
     },
     closeAll(restore = true) {
@@ -264,7 +267,7 @@ document.addEventListener("DOMContentLoaded", function () {
       drawer.style.display = "none";
       this.overlay.style.display = "none";
       this.overlay.classList.remove("overlay-visible");
-      document.body.style.overflow = "";
+      window.SeekFeedControls.unlockScroll('drawer');
       document.querySelector(".workspace-shell").inert = false;
       this.activeDrawer = null;
       if (restore) this.opener?.focus({ preventScroll: true });
@@ -277,6 +280,7 @@ document.addEventListener("DOMContentLoaded", function () {
   let currentPage = 1;
   let requestedPage = 1;
   let pageCount = 1;
+  let paginationTotal = 0;
   let currentFilters = {};
   let postsController;
   let postsRequest = 0;
@@ -443,6 +447,7 @@ document.addEventListener("DOMContentLoaded", function () {
   function getCategoryName(key) { return key ? key.split(",").map(k => categoryMap[k.trim()] || k.trim()).join("、") : "未分类"; }
 
   function updatePagination(page, pages, total) {
+    paginationTotal = total;
     el("pagination").style.display = total ? "flex" : "none";
     el("paginationTop").style.display = pages > 1 ? "flex" : "none";
     const position = el('paginationTop').querySelector('[data-page-position]');
@@ -450,14 +455,17 @@ document.addEventListener("DOMContentLoaded", function () {
     position.setAttribute('aria-label', `第 ${page} 页，共 ${Math.max(pages, 1)} 页`);
     el("paginationInfo").textContent = `共 ${total} 篇 · 第 ${page} / ${Math.max(pages, 1)} 页`;
     document.querySelectorAll('[data-page-step]').forEach(button => { button.disabled = Number(button.dataset.pageStep) < 0 ? page <= 1 : page >= pages; });
-    const key = JSON.stringify([page, pages]);
+    const key = JSON.stringify([page, pages, mobileViewport.matches]);
     if (el('pageNumbers').dataset.signature === key) return;
     el('pageNumbers').dataset.signature = key;
     const focused = el('pageNumbers').contains(document.activeElement);
     const existing = new Map([...el('pageNumbers').children].map(button => [button.dataset.pageKey, button]));
     const next = [];
     let numbers;
-    if (pages <= 7) numbers = Array.from({ length: pages }, (_, i) => i + 1);
+    if (mobileViewport.matches) {
+      const start = Math.max(1, Math.min(page - 1, pages - 2));
+      numbers = Array.from({ length: Math.min(3, pages) }, (_, i) => start + i);
+    } else if (pages <= 7) numbers = Array.from({ length: pages }, (_, i) => i + 1);
     else if (page <= 4) numbers = [1, 2, 3, 4, 5, 'ellipsis-start', pages];
     else if (page >= pages - 3) numbers = [1, 'ellipsis-end', pages - 4, pages - 3, pages - 2, pages - 1, pages];
     else numbers = [1, 'ellipsis-start', page - 1, page, page + 1, 'ellipsis-end', pages];
@@ -1104,13 +1112,47 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
   function initSettingsDropdown() {
-    const closeSidebar = () => { el('workspaceSidebar').classList.remove('open'); el('sidebarBackdrop').hidden = true; el('sidebarToggle').setAttribute('aria-expanded', 'false'); };
+    const sidebar = el('workspaceSidebar'), main = document.querySelector('.workspace-main');
+    const closeSidebar = (restoreFocus = true) => {
+      const wasOpen = sidebar.classList.contains('open');
+      sidebar.classList.remove('open');
+      el('sidebarBackdrop').hidden = true;
+      el('sidebarToggle').setAttribute('aria-expanded', 'false');
+      sidebar.removeAttribute('role'); sidebar.removeAttribute('aria-modal');
+      sidebar.inert = mobileViewport.matches;
+      main.inert = false;
+      window.SeekFeedControls.unlockScroll('navigation');
+      if (wasOpen && restoreFocus && mobileViewport.matches) el('sidebarToggle').focus({ preventScroll: true });
+    };
+    closeMobileSidebar = closeSidebar;
+    closeSidebar(false);
     el('sidebarToggle').addEventListener('click', () => {
-      const open = el('workspaceSidebar').classList.toggle('open');
-      el('sidebarBackdrop').hidden = !open; el('sidebarToggle').setAttribute('aria-expanded', String(open));
+      if (sidebar.classList.contains('open')) return closeSidebar();
+      window.SeekFeedControls.closeSelect();
+      window.SeekFeedControls.dismissCharts();
+      window.SeekFeedControls.lockScroll('navigation');
+      sidebar.inert = false;
+      sidebar.classList.add('open');
+      sidebar.setAttribute('role', 'dialog'); sidebar.setAttribute('aria-modal', 'true');
+      el('sidebarBackdrop').hidden = false;
+      el('sidebarToggle').setAttribute('aria-expanded', 'true');
+      main.inert = true;
+      el('sidebarClose').focus({ preventScroll: true });
     });
-    el('sidebarBackdrop').addEventListener('click', closeSidebar);
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSidebar(); });
+    el('sidebarBackdrop').addEventListener('click', () => closeSidebar());
+    el('sidebarClose').addEventListener('click', () => closeSidebar());
+    document.addEventListener('keydown', e => {
+      if (!sidebar.classList.contains('open')) return;
+      if (e.key === 'Escape') { e.preventDefault(); closeSidebar(); }
+      if (e.key !== 'Tab') return;
+      const items = [...sidebar.querySelectorAll('a[href], button')].filter(item => !item.disabled && item.getClientRects().length);
+      if (e.shiftKey && document.activeElement === items[0]) { e.preventDefault(); items.at(-1)?.focus(); }
+      else if (!e.shiftKey && document.activeElement === items.at(-1)) { e.preventDefault(); items[0]?.focus(); }
+    });
+    mobileViewport.addEventListener('change', () => {
+      closeSidebar(false);
+      updatePagination(currentPage, pageCount, paginationTotal);
+    });
     document.querySelectorAll('[data-auth-only]').forEach(item => item.style.display = isLoggedIn ? '' : 'none');
     document.querySelector('.metric-strip').classList.toggle('is-public', !isLoggedIn);
     document.querySelectorAll('[data-route]').forEach(link => link.addEventListener('click', e => {

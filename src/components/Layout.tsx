@@ -18,7 +18,7 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
       <head>
         <title>{title}</title>
         <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
         {description && <meta name="description" content={description} />}
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="SeekFeed" />
@@ -51,6 +51,7 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
         <link href="/css/workspace.css" rel="stylesheet" />
         <link href="/css/analytics.css" rel="stylesheet" />
         <link href="/css/hot.css" rel="stylesheet" />
+        <link href="/css/mobile.css" rel="stylesheet" />
 
         {/* 主题初始化脚本 - 防止闪烁 */}
         <script

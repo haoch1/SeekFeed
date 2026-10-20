@@ -97,7 +97,7 @@ export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
             </div>
             <article class="analytics-card analytics-activity">
                 <div class="analytics-card-heading"><div><h2>发帖时段</h2><span id="analyticsActivityScope" class="analytics-caption">按星期与小时汇总</span></div><span id="analyticsActivityReadout" class="analytics-caption">—</span></div>
-                <div id="analyticsActivity" class="analytics-heatmap" tabindex="0" role="group" aria-label="发帖时段热力图，使用方向键查看数据"></div>
+                <div class="analytics-heatmap-scroll"><div id="analyticsActivity" class="analytics-heatmap" tabindex="0" role="group" aria-label="发帖时段热力图，点按或使用方向键查看数据，可横向滚动"></div></div>
                 <div class="analytics-heatmap-footer"><span id="analyticsPeak">—</span><span class="analytics-heatmap-scale">少<i data-level="0"></i><i data-level="1"></i><i data-level="2"></i><i data-level="3"></i><i data-level="4"></i>多</span></div>
             </article>
             <article class="analytics-card"><div class="analytics-card-heading"><h2>热门标题词</h2><span id="analyticsTopicSample" class="analytics-caption">—</span></div><div id="analyticsTopics" class="analytics-topics"></div></article>

@@ -41,7 +41,7 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             window.SeekFeedControls.chartInspection(box);
             box.innerHTML = empty('所选时段暂无发帖数据');
             box.removeAttribute('tabindex');
-            box.onpointermove = box.onpointerleave = box.onfocus = box.onblur = box.onkeydown = box.onclick = null;
+            box.onpointerdown = box.onpointermove = box.onpointerleave = box.onfocus = box.onblur = box.onkeydown = box.onclick = null;
             return;
         }
         const max = Math.max(...data.map(row => row.count), 1);
@@ -116,6 +116,7 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
         }
         const pointerIndex = event => Math.max(0, Math.min(data.length - 1, Math.floor((event.clientX - box.getBoundingClientRect().left + scroller.scrollLeft - left) / step)));
         const togglePin = index => { pinned = pinned === index ? -1 : index; if (pinned < 0) clearSelection(); else select(pinned); };
+        box.onpointerdown = event => { focusIndex = pointerIndex(event); box.focus({ preventScroll: true }); };
         box.onpointermove = event => { if (event.pointerType !== 'touch') select(pointerIndex(event)); };
         box.onclick = event => { if (event.clientY <= box.querySelector('svg').getBoundingClientRect().bottom) togglePin(pointerIndex(event)); };
         const dismiss = () => { pinned = -1; clearSelection(); };
@@ -202,13 +203,25 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             box.setAttribute('aria-label', text(selected) + '。方向键查看相邻时段。');
         };
         el('analyticsActivityReadout').textContent = '每格 1 小时';
+        box.onpointerdown = event => {
+            const cell = event.target.closest('[data-index]');
+            if (!cell) return;
+            selected = Number(cell.dataset.index);
+            box.focus({ preventScroll: true });
+            select(selected);
+        };
         box.onpointermove = event => { const cell = event.target.closest('[data-index]'); if (cell) select(Number(cell.dataset.index)); };
+        box.onclick = event => { const cell = event.target.closest('[data-index]'); if (cell) select(Number(cell.dataset.index)); };
         box.onfocus = () => select(selected);
         box.onpointerleave = box.onblur = () => { if (document.activeElement !== box) { box.querySelector('.heatmap-selected')?.classList.remove('heatmap-selected'); el('analyticsActivityReadout').textContent = '每格 1 小时'; } };
         box.onkeydown = event => {
             const delta = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -24, ArrowDown: 24 }[event.key];
             if (delta === undefined) return;
             event.preventDefault(); select(visibleIndices[Math.max(0, Math.min(visibleIndices.length - 1, visibleIndices.indexOf(selected) + delta))]);
+            const cell = box.querySelector(`[data-index="${selected}"]`), scroller = box.parentElement;
+            const cellRect = cell.getBoundingClientRect(), bounds = scroller.getBoundingClientRect();
+            if (cellRect.left < bounds.left + 90) scroller.scrollLeft -= bounds.left + 90 - cellRect.left;
+            else if (cellRect.right > bounds.right) scroller.scrollLeft += cellRect.right - bounds.right + 4;
         };
         if (document.activeElement === box) select(selected);
     }

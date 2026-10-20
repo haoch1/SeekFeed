@@ -46,7 +46,7 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
         for (const id of ['keywordHourChart', 'keywordDailyChart']) {
             const chart = el(id);
             window.SeekFeedControls.chartInspection(chart);
-            chart.onpointermove = chart.onpointerleave = chart.onclick = chart.onkeydown = chart.onfocus = chart.onblur = null;
+            chart.onpointerdown = chart.onpointermove = chart.onpointerleave = chart.onclick = chart.onkeydown = chart.onfocus = chart.onblur = null;
         }
     }
     function reset() {
@@ -187,6 +187,7 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
             tooltip.show(`${data.date} · ${time(row.hour)}–${row.hour + hours === 24 ? '24:00' : time(row.hour + hours)}`, row.values, x(chartIndex) - scroller.scrollLeft, y(Math.max(...row.values)), pinned === chartIndex, row.available);
         };
         const pointerIndex = event => Math.max(0, Math.min(buckets.length - 1, Math.floor((event.clientX - box.getBoundingClientRect().left + scroller.scrollLeft - left) / step)));
+        box.onpointerdown = event => { chartIndex = pointerIndex(event); box.focus({ preventScroll: true }); };
         box.onpointermove=e=>{if(e.pointerType !== 'touch')select(pointerIndex(e));};
         box.onclick = event => { if (!event.target.closest('svg')) return; const index = pointerIndex(event); pinned = pinned === index ? -1 : index; if (pinned < 0) reset(true); else select(pinned); };
         box.onfocus=()=>select(chartIndex);

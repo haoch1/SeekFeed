@@ -21,7 +21,7 @@ export const DashboardSurface: FC<PropsWithChildren<{ path?: string }>> = ({ chi
     <div class="workspace-shell">
         <button id="sidebarBackdrop" class="sidebar-backdrop" aria-label="关闭导航" hidden></button>
         <aside class="workspace-sidebar" id="workspaceSidebar" aria-label="主导航">
-            <a href="/hot" data-route class="workspace-brand"><span class="brand-icon"><BrandMark /></span><span><strong>SeekFeed</strong></span></a>
+            <div class="sidebar-brand-row"><a href="/hot" data-route class="workspace-brand"><span class="brand-icon"><BrandMark /></span><span><strong>SeekFeed</strong></span></a><button id="sidebarClose" type="button" class="icon-btn mobile-menu" aria-label="关闭导航"><Icon name="close" /></button></div>
             <nav class="workspace-nav">
                 <p class="nav-section-label">社区动态</p>
                 <a href="/hot" class="nav-item" data-route><Icon name="flame" />热榜</a>
@@ -38,7 +38,7 @@ export const DashboardSurface: FC<PropsWithChildren<{ path?: string }>> = ({ chi
         </aside>
         <div class="workspace-main">
             <header class="workspace-topbar">
-                <div class="breadcrumb"><button id="sidebarToggle" class="icon-btn mobile-menu" aria-label="打开导航" aria-expanded="false"><Icon name="menu" /></button><span id="breadcrumbSection">{path.startsWith('/settings') ? '设置' : '社区动态'}</span><span class="breadcrumb-divider">/</span><strong id="breadcrumbCurrent">{({ "/": "热榜", "/posts": "最新帖子", "/hot": "热榜", "/matched": "命中订阅", "/subscriptions": "订阅管理", "/statistics": "统计信息", "/settings/account": "账号与安全", "/settings/rss": "RSS 配置", "/settings/telegram": "Telegram" } as Record<string, string>)[path]}</strong></div>
+                <div class="breadcrumb"><button id="sidebarToggle" class="icon-btn mobile-menu" aria-label="打开导航" aria-expanded="false" aria-controls="workspaceSidebar"><Icon name="menu" /></button><span id="breadcrumbSection">{path.startsWith('/settings') ? '设置' : '社区动态'}</span><span class="breadcrumb-divider">/</span><strong id="breadcrumbCurrent">{({ "/": "热榜", "/posts": "最新帖子", "/hot": "热榜", "/matched": "命中订阅", "/subscriptions": "订阅管理", "/statistics": "统计信息", "/settings/account": "账号与安全", "/settings/rss": "RSS 配置", "/settings/telegram": "Telegram" } as Record<string, string>)[path]}</strong></div>
                 <div class="header-actions"><button id="themeToggleBtn" class="icon-btn" title="切换主题" aria-label="切换主题"><Icon name="sun" /></button></div>
             </header>
             <main class="workspace-content" id="mainContent"><section id="feedPage" class="route-page" hidden={path !== "/posts" && path !== "/matched"}>

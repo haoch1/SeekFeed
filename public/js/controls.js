@@ -4,6 +4,22 @@
     const icon = name => `<svg data-icon="${name}" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths[name] || paths.info || ''}</svg>`;
     const selects = new Map();
     const chartInspectors = new Map();
+    const scrollLocks = new Set();
+    let lockedScroll = 0;
+    function lockScroll(owner) {
+        if (!scrollLocks.size) {
+            lockedScroll = window.scrollY;
+            document.body.style.setProperty('--overlay-scroll-top', `${-lockedScroll}px`);
+            document.body.classList.add('is-overlay-open');
+        }
+        scrollLocks.add(owner);
+    }
+    function unlockScroll(owner) {
+        if (!scrollLocks.delete(owner) || scrollLocks.size) return;
+        document.body.classList.remove('is-overlay-open');
+        document.body.style.removeProperty('--overlay-scroll-top');
+        window.scrollTo({ top: lockedScroll, behavior: 'instant' });
+    }
     function dismissCharts(target) {
         chartInspectors.forEach((dismiss, box) => { if (!target || !box.contains(target)) dismiss(); });
     }
@@ -306,6 +322,6 @@
         button.setAttribute('aria-pressed', String(show));
         button.setAttribute('aria-label', `${show ? '隐藏' : '显示'}${button.dataset.secretLabel || (input.id === 'botToken' ? ' Bot Token' : '密码')}`);
     });
-    window.SeekFeedControls = { icon, beginPending, pending, closeSelect: close, refreshSelects: () => selects.forEach(s => s.refresh()), dismissCharts, chartInspection: (box, dismiss) => dismiss ? chartInspectors.set(box, dismiss) : chartInspectors.delete(box) };
+    window.SeekFeedControls = { icon, beginPending, pending, lockScroll, unlockScroll, closeSelect: close, refreshSelects: () => selects.forEach(s => s.refresh()), dismissCharts, chartInspection: (box, dismiss) => dismiss ? chartInspectors.set(box, dismiss) : chartInspectors.delete(box) };
     document.addEventListener('DOMContentLoaded', () => document.querySelectorAll('select').forEach(enhance));
 })();
