@@ -156,10 +156,11 @@ apiRoutes.get('/stats/charts', async (c) => {
 const analyticsQuery = z.object({
     days: z.coerce.number().refine(value => [-1, 7, 30, 0].includes(value)).default(-1),
     offset: z.coerce.number().int().min(-840).max(840).default(0),
+    category: z.string().trim().max(100).default(''),
 });
 apiRoutes.get('/stats/analytics', createQueryValidationMiddleware(analyticsQuery), (c) => {
-    const { days, offset } = c.get('validatedQuery');
-    const { ranking, ruleStats, ...publicData } = c.get('dbService').getAnalytics(days, offset);
+    const { days, offset, category } = c.get('validatedQuery');
+    const { ranking, ruleStats, ...publicData } = c.get('dbService').getAnalytics(days, offset, category);
     return c.json(createSuccessResponse(publicData));
 });
 

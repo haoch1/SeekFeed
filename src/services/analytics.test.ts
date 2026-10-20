@@ -19,6 +19,39 @@ beforeEach(() => {
 afterEach(() => db.close());
 
 describe('coherent publication-time analytics', () => {
+    it('filters every overview dimension by one category and retains all filter choices', () => {
+        post('2026-10-20T01:00:00Z', 3, 'tech', 'alice', 1, '2026-10-20T01:00:30Z');
+        post('2026-10-20T02:00:00Z', 2, 'trade', 'bob');
+        post('2026-10-20T03:00:00Z', 2, 'tech', 'alice');
+        const data = getAnalytics(db, -1, 480, now, 'tech');
+        expect(data.totals.posts).toBe(2);
+        expect(data.period.category).toBe('tech');
+        expect(data.availableCategories.map(row => row.category)).toEqual(['tech', 'trade']);
+        expect(data.categories.map(row => row.category)).toEqual(['tech']);
+        expect(data.authors).toEqual([{ creator: 'alice', count: 2, matched: 1 }]);
+        expect(data.trend.reduce((sum, row) => sum + row.count, 0)).toBe(2);
+        expect(data.activity.reduce((sum, row) => sum + row.count, 0)).toBe(2);
+        expect(data.authorDistribution.reduce((sum, row) => sum + row.posts, 0)).toBe(2);
+        expect(data.topics.sample).toBe(2);
+        expect(data.delivery.samples).toBe(1);
+        const empty = getAnalytics(db, -1, 480, now, "' OR 1=1 --");
+        expect(empty.totals.posts).toBe(0);
+        expect(empty.topics.terms).toEqual([]);
+        const service = new DatabaseService(db);
+        expect(service.getAnalytics(-1, 480, 'tech').totals.posts).toBe(2);
+        expect(service.getAnalytics(-1, 480, 'trade').totals.posts).toBe(1);
+        expect(service.getAnalytics(-1, 480).totals.posts).toBe(3);
+    });
+    it('provides fifty real ranked authors for the selectable author list without truncating totals', () => {
+        for (let i = 0; i < 60; i++) {
+            for (let count = 0; count <= i; count++) post('2026-10-20T01:00:00Z', 2, 'tech', 'author-' + i);
+        }
+        const data = getAnalytics(db, -1, 480, now);
+        expect(data.authors).toHaveLength(50);
+        expect(data.totals.authors).toBe(60);
+        expect(data.authors[0]).toMatchObject({ creator: 'author-59', count: 60 });
+        expect(data.authors[49]).toMatchObject({ creator: 'author-10', count: 11 });
+    });
     it('uses local midnight and exact hourly boundaries for every breakdown', () => {
         post('2026-10-19T15:59:59Z'); // Yesterday in UTC+8.
         post('2026-10-19T16:00:00Z', 1, 'tech', 'alice', 1);

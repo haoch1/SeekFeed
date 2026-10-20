@@ -18,11 +18,11 @@ export class DatabaseService {
     this.queryCache = new Map();
   }
 
-  getAnalytics(days: number, offset: number) {
-    const key = this.getCacheKey('getSubscriptionsAnalytics', [days, offset]);
+  getAnalytics(days: number, offset: number, category = '') {
+    const key = this.getCacheKey('getSubscriptionsAnalytics', [days, offset, category]);
     const cached = this.getFromCache<ReturnType<typeof getAnalytics>>(key);
     if (cached) return cached;
-    const data = this.db.transaction(() => getAnalytics(this.db, days, offset))();
+    const data = this.db.transaction(() => getAnalytics(this.db, days, offset, new Date(), category))();
     this.setCache(key, data, 10000);
     return data;
   }

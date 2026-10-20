@@ -6,6 +6,7 @@ import { AuthService } from '../services/auth'
 import { DatabaseService } from '../services/database'
 import type { SessionData } from '../types'
 import { requireSession } from '../middleware/session';
+import { sessionManagementId } from '../services/session';
 
 type Bindings = {
   ENVIRONMENT: string
@@ -25,6 +26,7 @@ authRoutes.use('*', async (c, next) => {
 });
 
 authRoutes.use('/sessions', requireSession);
+authRoutes.use('/sessions/*', requireSession);
 authRoutes.use('/logout-all', requireSession);
 
 // 检查初始化状态
@@ -236,6 +238,7 @@ authRoutes.get('/sessions', async (c) => {
     const currentSession = c.get('sessionData')
     const sessions = authService.getUserSessions(currentSession.userId).map(({ sessionId, ...session }) => ({
       ...session,
+      id: sessionManagementId(sessionId),
       current: sessionId === currentSession.sessionId
     }))
     
@@ -250,6 +253,18 @@ authRoutes.get('/sessions', async (c) => {
     }, 500)
   }
 })
+
+authRoutes.delete('/sessions/:id', async c => {
+    const id = c.req.param('id');
+    if (!/^[a-f0-9]{64}$/.test(id)) return c.json({ success: false, message: '设备标识无效。' }, 400);
+    const current = c.get('sessionData');
+    const authService = c.get('authService');
+    const target = authService.getUserSessions(current.userId).find(session => sessionManagementId(session.sessionId) === id);
+    if (!target) return c.json({ success: false, message: '该设备已退出或登录已过期。' }, 404);
+    const result = await authService.logout(target.sessionId);
+    if (!result.success) return c.json({ success: false, message: '退出失败，请重试。' }, 500);
+    return c.json({ success: true, message: '该设备已退出。', data: { current: target.sessionId === current.sessionId } });
+});
 
 // 初始化系统（与注册相同的逻辑，但使用不同的端点）
 authRoutes.post('/init', async (c) => {

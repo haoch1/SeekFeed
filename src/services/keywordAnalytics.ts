@@ -39,7 +39,7 @@ export function getKeywordAnalytics(db: Database, terms: string[], date: string,
         return {
             term, total: today.length, previous, authors: authors.size, categoryCount: categories.size,
             hourly, daily, peak: peak ? { hour: hourly.findIndex(row => row.count === peak), count: peak } : null,
-            categories: ranked(categories, 'category'), topAuthors: ranked(authors, 'creator').slice(0, 5),
+            categories: ranked(categories, 'category'), topAuthors: ranked(authors, 'creator').slice(0, 50),
         };
     });
     const earliest = db.query('SELECT MIN(julianday(pub_date)) AS value FROM posts WHERE julianday(pub_date) <= julianday(?)').get(now.toISOString()) as { value: number | null };

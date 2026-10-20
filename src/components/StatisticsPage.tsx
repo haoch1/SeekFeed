@@ -13,6 +13,7 @@ export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
             </div>
         </div>
         <div class="analytics-meta"><span id="analyticsPeriodLabel">正在读取统计…</span><span id="analyticsTimezone"></span></div>
+        <div class="analytics-toolbar"><div class="analytics-toolbar-filters"><select id="analyticsCategoryFilter" class="input-field" aria-label="总览统计分类"><option value="">全部分类</option></select><button type="button" id="analyticsClearCategory" class="btn btn-secondary btn-xs" hidden>清除筛选</button><span class="analytics-caption">总览随分类筛选 · 关键词分析独立统计</span></div><button type="button" id="analyticsExport" class="btn btn-secondary btn-xs" disabled>导出 CSV</button></div>
         <div id="analyticsError" class="analytics-error" role="status" hidden><span>统计加载失败。</span><button type="button" class="btn btn-secondary btn-xs" id="retryAnalytics">重试</button></div>
         <div id="analyticsContent" class="analytics-content" aria-busy="true">
             <div class="analytics-kpis">
@@ -23,24 +24,23 @@ export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
                     ['average', '日均发帖', 'chart', 'analyticsDailyAverage', 'analyticsDailyDetail'],
                 ].map(([tone, label, icon, value, detail]) => (
                     <article class={`analytics-kpi analytics-${tone}`}>
-                        <div class="analytics-kpi-label"><span>{label}</span><span class="analytics-icon"><Icon name={icon} /></span></div>
+                        <div class="analytics-kpi-label"><span id={tone === 'average' ? 'analyticsDailyLabel' : undefined}>{label}</span><span class="analytics-icon"><Icon name={icon} /></span></div>
                         <strong id={value} class="analytics-value">—</strong><div class="analytics-kpi-detail" id={detail}>—</div>
                     </article>
                 ))}
             </div>
             <div class="analytics-top-grid">
                 <article class="analytics-card analytics-trend">
-                    <div class="analytics-card-heading"><div><h2>发帖趋势</h2><span id="analyticsTrendUnit" class="analytics-caption">按小时</span></div><span class="analytics-legend"><span><i class="dot-posts"></i>收录帖子</span></span></div>
+                    <div class="analytics-card-heading"><div><h2>发帖趋势</h2><span id="analyticsTrendUnit" class="analytics-caption">按小时</span></div><div id="analyticsTrendStyle" class="analytics-period analytics-style-selector" role="group" aria-label="趋势图样式"><button type="button" class="chart-range-btn active" data-chart-style="bar" aria-pressed="true">柱形</button><button type="button" class="chart-range-btn" data-chart-style="line" aria-pressed="false">折线</button></div></div>
                     <div class="analytics-trend-readout" id="analyticsTrendReadout" aria-live="off">正在读取数据</div><div id="analyticsTrend" class="analytics-plot"></div>
                 </article>
                 <article class="analytics-card analytics-status">
                     <div class="analytics-card-heading"><h2>分类占比</h2><a href="#analyticsCategoryCard" class="analytics-text-link" id="analyticsCategoryLink">查看全部</a></div>
-                    <div class="analytics-donut-wrap"><div id="analyticsDonut" class="analytics-donut"><div><strong id="analyticsCategoryShare">—</strong><span id="analyticsLeadingCategory">最多的分类</span></div></div></div>
-                    <div id="analyticsCategoryLegend" class="analytics-status-list"></div>
+                    <div id="analyticsCategoryOverview" class="category-breakdown"></div>
                 </article>
             </div>
             <article id="keywordAnalysis" class="analytics-card keyword-analysis">
-                <div class="analytics-card-heading"><div><h2>关键词分析</h2><span class="analytics-caption">按所选日期统计，每个词独立计数</span></div><div class="keyword-module-actions"><button id="keywordReset" type="button" class="btn btn-text btn-xs">重置</button><button id="keywordToggle" type="button" class="btn btn-text btn-xs" aria-expanded="true" aria-controls="keywordAnalysisBody"><span>收起</span><Icon name="chevron-down" /></button></div></div>
+                <div class="analytics-card-heading"><div><h2>关键词分析</h2><span class="analytics-caption">按所选日期统计，每个词独立计数</span></div><div class="keyword-module-actions"><button id="keywordReset" type="button" class="btn btn-secondary btn-xs">重置</button><button id="keywordToggle" type="button" class="btn btn-secondary btn-xs" aria-expanded="true" aria-controls="keywordAnalysisBody"><span>收起</span><Icon name="chevron-down" /></button></div></div>
                 <div id="keywordAnalysisBody">
                 <form id="keywordAnalysisForm" class="keyword-analysis-form">
                     <div class="keyword-query-fields">
@@ -79,8 +79,8 @@ export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
                             <div id="keywordCategories" class="keyword-category-chart"></div>
                         </section>
                         <section class="keyword-panel">
-                            <div class="keyword-chart-heading"><h3>活跃作者</h3><span id="keywordAuthorTerm" class="analytics-caption"></span></div>
-                            <div id="keywordAuthors" class="keyword-ranked"></div>
+                            <div class="keyword-chart-heading"><h3>活跃作者</h3><div class="analytics-author-controls"><span id="keywordAuthorTerm" class="analytics-caption"></span><select id="keywordAuthorLimit" class="input-field" aria-label="关键词活跃作者数量">{[5, 10, 20, 50].map(limit => <option value={limit}>TOP {limit}</option>)}</select></div></div>
+                            <div id="keywordAuthors" class="keyword-ranked" tabindex="0" role="region" aria-label="关键词活跃作者排名，可滚动查看更多"></div>
                         </section>
                     </div>
                 </div>
@@ -93,7 +93,7 @@ export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
             </article>
             <div class="analytics-bottom-grid">
                 <article class="analytics-card"><div class="analytics-card-heading"><div><h2>作者贡献</h2><span class="analytics-caption">按发帖量分组</span></div></div><div id="analyticsAuthorDistribution" class="analytics-contribution"></div></article>
-                <article class="analytics-card"><div class="analytics-card-heading"><h2>活跃作者</h2><span class="analytics-caption">TOP 6</span></div><div id="analyticsAuthorList" class="analytics-ranked-list"></div></article>
+                <article class="analytics-card"><div class="analytics-card-heading"><h2>活跃作者</h2><select id="analyticsAuthorLimit" class="input-field" aria-label="活跃作者数量">{[5, 10, 20, 50].map(limit => <option value={limit}>TOP {limit}</option>)}</select></div><div id="analyticsAuthorList" class="analytics-ranked-list" tabindex="0" role="region" aria-label="活跃作者排名，可滚动查看更多"></div></article>
             </div>
             <article class="analytics-card analytics-activity">
                 <div class="analytics-card-heading"><div><h2>发帖时段</h2><span id="analyticsActivityScope" class="analytics-caption">按星期与小时汇总</span></div><span id="analyticsActivityReadout" class="analytics-caption">—</span></div>

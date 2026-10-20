@@ -5,6 +5,7 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
     const number = value => Number(value || 0).toLocaleString('zh-CN');
     const percent = (part, total) => total ? `${(part / total * 100).toFixed(1).replace(/\.0$/, '')}%` : '—';
     let days = -1, requestId = 0, lastLoad = 0, inflight = false, currentData = null, chartKey = '', focusIndex = -1;
+    let trendStyle = 'bar', category = '';
     const offset = -new Date().getTimezoneOffset();
     const shortTime = date => new Date(new Date(date).getTime() + offset * 60000);
     const label = (date, hourly) => new Intl.DateTimeFormat('zh-CN', { timeZone: 'UTC', ...(hourly ? { hour: '2-digit', minute: '2-digit', hour12: false } : { month: 'numeric', day: 'numeric' }) }).format(shortTime(date));
@@ -29,7 +30,7 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
         const total = currentData.totals;
         el('analyticsTrendReadout').textContent = point
             ? `${bucketText(point)} · 收录 ${number(point.count)} 篇`
-            : `共收录 ${number(total.posts)} 篇`;
+            : `共收录 ${number(total.posts)} 篇${el('analyticsTrend').dataset.overflow === 'true' ? ' · 左右滑动查看完整时段' : ''}`;
     }
 
     function renderTrend() {
@@ -39,23 +40,31 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
         if (!data.length) {
             box.innerHTML = empty('所选时段暂无发帖数据');
             box.removeAttribute('tabindex');
-            box.onpointermove = box.onpointerleave = box.onfocus = box.onblur = box.onkeydown = null;
+            box.onpointermove = box.onpointerleave = box.onfocus = box.onblur = box.onkeydown = box.onclick = null;
             return;
         }
         const max = Math.max(...data.map(row => row.count), 1);
         const slot = Math.max(38, number(max).length * 7 + 22);
-        const width = Math.max(box.clientWidth, 45 + data.length * slot), height = 228, left = 33, right = width - 12, top = 34, bottom = 196;
+        const width = trendStyle === 'line' ? box.clientWidth : Math.max(box.clientWidth, 45 + data.length * slot), height = 228, left = 33, right = width - 12, top = 34, bottom = 196;
+        box.dataset.overflow = String(width > box.clientWidth + 1);
         const ceiling = Math.max(4, Math.ceil(max / 4) * 4);
         const step = (right - left) / data.length, barWidth = Math.min(34, step * .64);
         const x = index => left + step * (index + .5);
         const y = value => bottom - value / ceiling * (bottom - top);
+        const visibleLabels = new Set();
+        if (trendStyle === 'line') {
+            const peakIndex = data.findIndex(row => row.count === max);
+            for (const index of [peakIndex, data.length - 1, 0, ...data.map((_, i) => i)]) {
+                if (index >= 0 && [...visibleLabels].every(other => Math.abs(x(other) - x(index)) >= slot)) visibleLabels.add(index);
+            }
+        }
         const bars = data.map((row, index) => {
             const start = x(index) - barWidth / 2, end = start + barWidth, barTop = y(row.count);
             const radius = Math.min(4, barWidth / 2, bottom - barTop);
             const path = `M${start},${bottom} V${barTop + radius} Q${start},${barTop} ${start + radius},${barTop} H${end - radius} Q${end},${barTop} ${end},${barTop + radius} V${bottom} Z`;
             const value = number(row.count), labelWidth = Math.max(28, value.length * 7 + 14);
-            return `<path class="analytics-post-bar" data-bar-index="${index}" data-count="${row.count}" d="${path}"/>
-                <g class="analytics-bar-label" data-label-index="${index}"><rect x="${x(index) - labelWidth / 2}" y="${barTop - 28}" width="${labelWidth}" height="21" rx="5"/><text class="analytics-bar-value" x="${x(index)}" y="${barTop - 17.5}" text-anchor="middle" dominant-baseline="central">${value}</text></g>`;
+            return `${trendStyle === 'line' ? `<circle class="analytics-post-bar analytics-line-point" data-bar-index="${index}" data-count="${row.count}" cx="${x(index)}" cy="${barTop}" r="3.5"/>` : `<path class="analytics-post-bar" data-bar-index="${index}" data-count="${row.count}" d="${path}"/>`}
+                <g class="analytics-bar-label${trendStyle === 'line' && !visibleLabels.has(index) ? ' is-compact' : ''}" data-label-index="${index}"><rect x="${x(index) - labelWidth / 2}" y="${barTop - 28}" width="${labelWidth}" height="21" rx="5"/><text class="analytics-bar-value" x="${x(index)}" y="${barTop - 17.5}" text-anchor="middle" dominant-baseline="central">${value}</text></g>`;
         }).join('');
         const grid = Array.from({ length: 5 }, (_, index) => {
             const value = ceiling * index / 4;
@@ -67,14 +76,14 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
         const stride = strides.find(value => value >= minimumStride) || minimumStride;
         const ticks = data.map((_, index) => index).filter(index => index % stride === 0);
         box.innerHTML = `<div class="analytics-plot-scroll"><div class="analytics-plot-canvas" style="width:${width}px"><svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true">${grid}
-            <rect id="analyticsCursor" y="${top}" width="${step}" height="${bottom - top}" class="analytics-bar-cursor" visibility="hidden" rx="4"/>${bars}
+            <rect id="analyticsCursor" y="${top}" width="${step}" height="${bottom - top}" class="analytics-bar-cursor" visibility="hidden" rx="4"/>${trendStyle === 'line' ? `<polygon class="analytics-line-area" points="${x(0)},${bottom} ${data.map((row, i) => `${x(i)},${y(row.count)}`).join(' ')} ${x(data.length - 1)},${bottom}"/><polyline class="analytics-trend-line" points="${data.map((row, i) => `${x(i)},${y(row.count)}`).join(' ')}"/>` : ''}${bars}
             ${ticks.map(index => `<text class="analytics-time-tick" x="${x(index)}" y="220" text-anchor="middle">${bucketText(data[index], true)}</text>`).join('')}
             </svg><div class="analytics-chart-tooltip" id="analyticsTrendTooltip" aria-hidden="true" hidden><span></span><div><i></i>收录帖子<strong></strong></div></div></div></div>`;
         box.setAttribute('role', 'group');
         box.setAttribute('tabindex', '0');
-        box.setAttribute('aria-label', `发帖趋势柱形图，${data.length} 个时间段。使用左右方向键查看数据。`);
+        box.setAttribute('aria-label', `发帖趋势${trendStyle === 'bar' ? '柱形' : '折线'}图，${data.length} 个时间段。方向键查看，回车固定，Escape 取消。`);
         const columns = [...box.querySelectorAll('.analytics-post-bar')], labels = [...box.querySelectorAll('.analytics-bar-label')], tooltip = el('analyticsTrendTooltip'), scroller = box.querySelector('.analytics-plot-scroll');
-        let selected = -1;
+        let selected = -1, pinned = -1;
         function select(index) {
             focusIndex = Math.max(0, Math.min(data.length - 1, index));
             const cursor = el('analyticsCursor');
@@ -96,18 +105,24 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             }
             tooltip.style.left = `${Math.max(scroller.scrollLeft + 8, Math.min(scroller.scrollLeft + box.clientWidth - tooltip.offsetWidth - 8, x(focusIndex) - tooltip.offsetWidth / 2))}px`;
             tooltip.style.top = `${Math.max(0, y(data[focusIndex].count) - tooltip.offsetHeight - 10)}px`;
-            box.setAttribute('aria-label', el('analyticsTrendReadout').textContent + '。左右方向键查看相邻时间段。');
+            tooltip.dataset.pinned = String(pinned === focusIndex);
+            box.setAttribute('aria-label', el('analyticsTrendReadout').textContent + '。方向键查看，回车固定，Escape 取消。');
         }
         function clearSelection() {
             el('analyticsCursor').setAttribute('visibility', 'hidden'); tooltip.hidden = true;
             if (selected >= 0) { columns[selected].removeAttribute('data-active'); labels[selected].removeAttribute('data-active'); }
             selected = -1; showReadout();
         }
-        box.onpointermove = event => select(Math.floor((event.clientX - box.getBoundingClientRect().left + scroller.scrollLeft - left) / step));
-        box.onpointerleave = () => { if (document.activeElement !== box) clearSelection(); };
+        const pointerIndex = event => Math.max(0, Math.min(data.length - 1, Math.floor((event.clientX - box.getBoundingClientRect().left + scroller.scrollLeft - left) / step)));
+        const togglePin = index => { pinned = pinned === index ? -1 : index; if (pinned < 0) clearSelection(); else select(pinned); };
+        box.onpointermove = event => { if (event.pointerType !== 'touch') select(pointerIndex(event)); };
+        box.onclick = event => { if (event.clientY <= box.querySelector('svg').getBoundingClientRect().bottom) togglePin(pointerIndex(event)); };
+        box.onpointerleave = () => { if (pinned >= 0) select(pinned); else if (document.activeElement !== box) clearSelection(); };
         box.onfocus = () => select(focusIndex < 0 ? data.length - 1 : focusIndex);
-        box.onblur = clearSelection;
+        box.onblur = () => { if (pinned >= 0) select(pinned); else clearSelection(); };
         box.onkeydown = event => {
+            if (event.key === 'Escape') { pinned = -1; clearSelection(); event.preventDefault(); return; }
+            if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); togglePin(Math.max(0, focusIndex)); return; }
             if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
             event.preventDefault();
             select(event.key === 'Home' ? 0 : event.key === 'End' ? data.length - 1 : focusIndex + (event.key === 'ArrowRight' ? 1 : -1));
@@ -126,15 +141,13 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
         el('analyticsCategoryLink').textContent = `全部 ${number(data.categories.length)} 个分类`;
     }
     function renderCategoryOverview(data) {
-        const categories = data.categories.length > 5
-            ? [...data.categories.slice(0, 4), { category: '其余分类', count: data.categories.slice(4).reduce((sum, row) => sum + row.count, 0), aggregate: true }]
-            : data.categories;
-        let position = 0;
-        const stops = categories.map((row, index) => { const begin = position; position += row.count / data.totals.posts * 100; return `var(--analytics-color-${index}) ${begin}% ${position}%`; });
-        el('analyticsDonut').style.background = data.totals.posts ? `conic-gradient(${stops.join(',')})` : 'var(--bg-hover)';
-        el('analyticsCategoryShare').textContent = categories.length ? percent(categories[0].count, data.totals.posts) : '—';
-        el('analyticsLeadingCategory').textContent = categories.length ? getCategoryName(categories[0].category) : '暂无分类';
-        el('analyticsCategoryLegend').innerHTML = categories.length ? categories.map((row, index) => `<div><span title="${esc(getCategoryName(row.category))}"><i style="background:var(--analytics-color-${index})"></i><span>${esc(getCategoryName(row.category))}</span></span><strong>${number(row.count)}</strong><span>${percent(row.count, data.totals.posts)}</span></div>`).join('') : '<span class="analytics-caption">有帖子后显示分类分布</span>';
+        window.SeekFeedCategoryBreakdown(el('analyticsCategoryOverview'), data.categories, data.totals.posts, { escapeHtml: esc, getCategoryName, overview: true });
+    }
+    function renderAuthors() {
+        if (!currentData) return;
+        const rows = currentData.authors.slice(0, Number(el('analyticsAuthorLimit').value));
+        el('analyticsAuthorList').scrollTop = 0;
+        el('analyticsAuthorList').innerHTML = rows.length ? rows.map((row, index) => `<div class="analytics-author-row"><span class="analytics-rank">${String(index + 1).padStart(2, '0')}</span><span class="analytics-avatar">${esc(Array.from(row.creator)[0])}</span><span class="analytics-author-name" title="${esc(row.creator)}">${esc(row.creator)}</span><strong>${number(row.count)}<small>篇</small></strong></div>`).join('') : empty('所选时段暂无作者');
     }
     function renderAuthorDistribution(data) {
         const names = ['1 篇', '2–4 篇', '5–9 篇', '10 篇及以上'];
@@ -198,15 +211,25 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
     }
     function render(data) {
         currentData = data;
+        const options = data.availableCategories || data.categories;
+        const categoryFilter = el('analyticsCategoryFilter');
+        categoryFilter.innerHTML = '<option value="">全部分类</option>' + options.map(row => `<option value="${esc(row.category)}">${esc(getCategoryName(row.category))}</option>`).join('');
+        if (category && !options.some(row => row.category === category)) categoryFilter.add(new Option(getCategoryName(category), category));
+        categoryFilter.value = category;
+        el('analyticsClearCategory').hidden = !category;
+        el('analyticsExport').disabled = false;
+        window.SeekFeedControls.refreshSelects();
         keywordAnalysis.suggestions(data.topics.terms);
         const { totals: t, period: p } = data;
         const range = rangeText(p);
         el('analyticsPeriodLabel').textContent = `${days === -1 ? '今日' : days === 0 ? '全部记录' : `近 ${days} 天`} · ${range}`;
         el('analyticsTimezone').textContent = '按发帖时间';
         for (const [id, value] of Object.entries({ analyticsPosts: t.posts, analyticsAuthors: t.authors, analyticsCategoriesTotal: data.categories.length })) el(id).textContent = number(value);
-        el('analyticsDailyAverage').textContent = (t.posts / p.calendarDays).toLocaleString('zh-CN', { maximumFractionDigits: 1 });
-        el('analyticsDailyDetail').textContent = `覆盖 ${number(p.calendarDays)} 个自然日`;
-        el('analyticsPostsDetail').textContent = `峰值 ${number(Math.max(...data.trend.map(row => row.count), 0))} 篇 / ${p.hourly ? '小时' : p.stepDays > 1 ? `${p.stepDays} 天` : '天'}`;
+        const peak = data.trend.reduce((best, row) => !best || row.count > best.count ? row : best, null);
+        el('analyticsDailyLabel').textContent = p.hourly ? '高峰时刻' : '日均发帖';
+        el('analyticsDailyAverage').textContent = p.hourly ? (peak?.count ? label(peak.time, true) : '—') : (t.posts / p.calendarDays).toLocaleString('zh-CN', { maximumFractionDigits: 1 });
+        el('analyticsDailyDetail').textContent = p.hourly ? (peak?.count ? `该小时 ${number(peak.count)} 篇` : '暂无发帖记录') : `覆盖 ${number(p.calendarDays)} 个自然日`;
+        el('analyticsPostsDetail').textContent = p.hourly ? `截至 ${label(p.to, true)}` : `峰值 ${number(Math.max(...data.trend.map(row => row.count), 0))} 篇 / ${p.stepDays > 1 ? `${p.stepDays} 天` : '天'}`;
         el('analyticsCategoryDetail').textContent = data.categories.length ? `${getCategoryName(data.categories[0].category)}占 ${percent(data.categories[0].count, t.posts)}` : '暂无分类记录';
         el('analyticsAuthorsDetail').textContent = t.authors ? `人均 ${(data.authorDistribution.reduce((sum, row) => sum + row.posts, 0) / t.authors).toFixed(1)} 篇` : '暂无发帖记录';
         el('analyticsTrendUnit').textContent = `${p.hourly ? '每小时' : p.stepDays > 1 ? `每 ${p.stepDays} 天` : '每天'} · ${timezone}`;
@@ -215,10 +238,10 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
         renderCategories(data);
         renderCategoryOverview(data);
         renderAuthorDistribution(data);
-        el('analyticsAuthorList').innerHTML = data.authors.length ? data.authors.map((row, index) => `<div class="analytics-author-row"><span class="analytics-rank">${index + 1}</span><span class="analytics-avatar">${esc(Array.from(row.creator)[0])}</span><span class="analytics-author-name" title="${esc(row.creator)}">${esc(row.creator)}</span><strong>${number(row.count)}<small>篇</small></strong></div>`).join('') : empty('所选时段暂无作者');
+        renderAuthors();
         renderActivity(data);
         el('analyticsTopicSample').textContent = `${data.topics.limited ? '最近 ' : ''}${number(data.topics.sample)} 篇标题`;
-        el('analyticsTopics').innerHTML = data.topics.terms.length ? data.topics.terms.map((row, index) => `<div class="analytics-topic-row"><span class="analytics-rank">${String(index + 1).padStart(2, '0')}</span><span class="analytics-topic-name" title="${esc(row.term)}">${esc(row.term)}</span><span class="analytics-topic-meter"><i style="width:${row.count / data.topics.terms[0].count * 100}%"></i></span><strong>${number(row.count)}</strong></div>`).join('') : empty('暂无重复出现的标题词');
+        el('analyticsTopics').innerHTML = data.topics.terms.length ? data.topics.terms.map((row, index) => `<button type="button" class="analytics-topic-row" data-analysis-topic="${esc(row.term)}" aria-label="分析关键词 ${esc(row.term)}"><span class="analytics-rank">${String(index + 1).padStart(2, '0')}</span><span class="analytics-topic-name" title="${esc(row.term)}">${esc(row.term)}</span><span class="analytics-topic-meter"><i style="width:${row.count / data.topics.terms[0].count * 100}%"></i></span><strong>${number(row.count)}<small>篇</small></strong></button>`).join('') : empty('暂无重复出现的标题词');
     }
 
     function renderRanking(rows) {
@@ -231,7 +254,8 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
     async function load(silent = false) {
         const request = ++requestId;
         inflight = true; lastLoad = Date.now();
-        const query = `days=${days}&offset=${offset}`;
+        el('analyticsExport').disabled = true;
+        const query = new URLSearchParams({ days: String(days), offset: String(offset), category });
         if (!silent) el('analyticsContent').setAttribute('aria-busy', 'true');
         const result = await apiRequest(`/api/stats/analytics?${query}`, { silent: true });
         if (request !== requestId) return;
@@ -272,6 +296,34 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
         loadNotifications,
         init() {
             keywordAnalysis.init();
+            el('analyticsCategoryFilter').addEventListener('change', event => { category = event.target.value; load(); });
+            el('analyticsClearCategory').addEventListener('click', () => { category = ''; el('analyticsCategoryFilter').value = ''; load(); });
+            el('analyticsExport').addEventListener('click', () => {
+                if (!currentData) return;
+                const data = currentData, rows = [['维度', '项目', '帖子数', '作者数', '占比', '统计开始', '统计截止', '时区', '分类筛选']];
+                const add = (dimension, name, count, authors = '', share = '') => rows.push([dimension, name, count, authors, share, data.period.from, data.period.to, timezone, data.period.category ? getCategoryName(data.period.category) : '全部分类']);
+                add('总览', '收录帖子', data.totals.posts, data.totals.authors);
+                data.trend.forEach(row => add('发帖趋势', bucketText(row), row.count));
+                data.categories.forEach(row => add('分类', getCategoryName(row.category), row.count, row.authors, percent(row.count, data.totals.posts)));
+                data.authors.forEach(row => add('活跃作者（最多50名）', row.creator, row.count));
+                data.topics.terms.forEach(row => add(`标题词（样本${data.topics.sample}篇）`, row.term, row.count));
+                const cell = value => '"' + String(value ?? '').replace(/^[=+@\-\t\r]/, char => "'" + char).replaceAll('"', '""') + '"';
+                const url = URL.createObjectURL(new Blob(['\uFEFF' + rows.map(row => row.map(cell).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+                const link = document.createElement('a'); link.href = url; link.download = `SeekFeed-统计-${shortTime(data.period.from).toISOString().slice(0,10)}.csv`; link.click();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            });
+            el('analyticsAuthorLimit').addEventListener('change', renderAuthors);
+            el('analyticsTrendStyle').addEventListener('click', event => {
+                const button = event.target.closest('[data-chart-style]');
+                if (!button || button.dataset.chartStyle === trendStyle) return;
+                trendStyle = button.dataset.chartStyle;
+                el('analyticsTrendStyle').querySelectorAll('button').forEach(item => { item.classList.toggle('active', item === button); item.setAttribute('aria-pressed', String(item === button)); });
+                renderTrend(); showReadout();
+            });
+            el('analyticsTopics').addEventListener('click', event => {
+                const button = event.target.closest('[data-analysis-topic]');
+                if (button) keywordAnalysis.analyze(button.dataset.analysisTopic);
+            });
             el('notificationRangeSelector').querySelectorAll('button').forEach(button => button.addEventListener('click', () => {
                 const next = Number(button.dataset.days);
                 if (notificationDays === next) return;

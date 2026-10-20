@@ -17,7 +17,7 @@ function titleTerms(titles: { title: string }[]) {
         .sort((a, b) => b.count - a.count || a.term.localeCompare(b.term)).slice(0, 12);
 }
 
-export function getAnalytics(db: Database, days: number, offset: number, now = new Date()) {
+export function getAnalytics(db: Database, days: number, offset: number, now = new Date(), category = '') {
     const end = now.getTime();
     const shift = offset * 60000;
     const midnight = Math.floor((end + shift) / DAY) * DAY - shift;
@@ -27,7 +27,10 @@ export function getAnalytics(db: Database, days: number, offset: number, now = n
     const from = new Date(start).toISOString();
     const to = now.toISOString();
     // All panels describe the same cohort, selected by publication time.
-    const scope = 'julianday(pub_date) >= julianday(?) AND julianday(pub_date) <= julianday(?)';
+    const dateScope = 'julianday(pub_date) >= julianday(?) AND julianday(pub_date) <= julianday(?)';
+    const scope = dateScope + (category ? ' AND category = ?' : '');
+    const cohort = category ? [from, to, category] : [from, to];
+    const availableCategories = db.query(`SELECT category, COUNT(*) AS count FROM posts WHERE ${dateScope} GROUP BY category ORDER BY count DESC, category`).all(from, to) as { category: string; count: number }[];
     const totals = db.query(`SELECT COUNT(*) AS posts,
         COALESCE(SUM(push_status IN (1, 3)), 0) AS matched,
         COALESCE(SUM(push_status = 3), 0) AS pushed,
@@ -35,26 +38,26 @@ export function getAnalytics(db: Database, days: number, offset: number, now = n
         COALESCE(SUM(push_status = 2), 0) AS unmatched,
         COALESCE(SUM(push_status = 0), 0) AS unprocessed,
         COUNT(DISTINCT NULLIF(TRIM(creator), '')) AS authors
-        FROM posts WHERE ${scope}`).get(from, to) as Record<string, number>;
+        FROM posts WHERE ${scope}`).get(...cohort) as Record<string, number>;
     const categories = db.query(`SELECT category, COUNT(*) AS count, COUNT(DISTINCT NULLIF(TRIM(creator), '')) AS authors, SUM(push_status IN (1, 3)) AS matched,
         SUM(push_status = 3) AS pushed FROM posts WHERE ${scope}
-        GROUP BY category ORDER BY count DESC, category`).all(from, to) as { category: string; count: number; authors: number; matched: number; pushed: number }[];
+        GROUP BY category ORDER BY count DESC, category`).all(...cohort) as { category: string; count: number; authors: number; matched: number; pushed: number }[];
     const authors = db.query(`SELECT TRIM(creator) AS creator, COUNT(*) AS count,
         SUM(push_status IN (1, 3)) AS matched FROM posts WHERE ${scope} AND TRIM(creator) <> ''
-        GROUP BY TRIM(creator) ORDER BY count DESC, creator LIMIT 6`).all(from, to) as { creator: string; count: number; matched: number }[];
+        GROUP BY TRIM(creator) ORDER BY count DESC, creator LIMIT 50`).all(...cohort) as { creator: string; count: number; matched: number }[];
     const authorDistribution = db.query(`WITH authors AS (SELECT COUNT(*) AS posts FROM posts WHERE ${scope}
         AND TRIM(creator) <> '' GROUP BY TRIM(creator)) SELECT CASE WHEN posts = 1 THEN 0 WHEN posts < 5 THEN 1 WHEN posts < 10 THEN 2 ELSE 3 END AS band,
-        COUNT(*) AS authors, SUM(posts) AS posts FROM authors GROUP BY band ORDER BY band`).all(from, to) as { band: number; authors: number; posts: number }[];
+        COUNT(*) AS authors, SUM(posts) AS posts FROM authors GROUP BY band ORDER BY band`).all(...cohort) as { band: number; authors: number; posts: number }[];
     const activity = db.query(`SELECT CAST(strftime('%w', pub_date, ?) AS INTEGER) AS weekday,
         CAST(strftime('%H', pub_date, ?) AS INTEGER) AS hour, COUNT(*) AS count
-        FROM posts WHERE ${scope} GROUP BY weekday, hour`).all(`${offset} minutes`, `${offset} minutes`, from, to) as { weekday: number; hour: number; count: number }[];
+        FROM posts WHERE ${scope} GROUP BY weekday, hour`).all(`${offset} minutes`, `${offset} minutes`, ...cohort) as { weekday: number; hour: number; count: number }[];
     const stepDays = Math.max(1, Math.ceil((midnight - start + DAY) / DAY / 60));
     const step = days === -1 ? HOUR : stepDays * DAY;
     const bucketCount = Math.floor((end - start) / step) + 1;
     // Bucket keys use the same UTC start instant as the range predicate, including timezone offsets.
     const buckets = db.query(`SELECT CAST(((julianday(pub_date) - julianday(?)) * 86400000 + 1) / ? AS INTEGER) AS bucket,
         COUNT(*) AS count, SUM(push_status IN (1, 3)) AS matched FROM posts WHERE ${scope}
-        GROUP BY bucket ORDER BY bucket`).all(from, step, from, to) as { bucket: number; count: number; matched: number }[];
+        GROUP BY bucket ORDER BY bucket`).all(from, step, ...cohort) as { bucket: number; count: number; matched: number }[];
     const byBucket = new Map(buckets.map(row => [row.bucket, row]));
     const trend = Array.from({ length: bucketCount }, (_, bucket) => ({
         time: new Date(start + bucket * step).toISOString(),
@@ -70,11 +73,11 @@ export function getAnalytics(db: Database, days: number, offset: number, now = n
         CASE WHEN s.id IS NULL THEN 1 ELSE 0 END AS deleted,
         COALESCE(h.matched, 0) AS matched, COALESCE(h.pushed, 0) AS pushed
     FROM ids LEFT JOIN keywords_sub s ON s.id = ids.id LEFT JOIN hits h ON h.sub_id = ids.id
-    ORDER BY matched DESC, ids.id LIMIT 8`).all(from, to);
+    ORDER BY matched DESC, ids.id LIMIT 8`).all(...cohort);
     const ruleStats = db.query(`WITH hits AS (SELECT DISTINCT sub_id FROM posts WHERE ${scope} AND push_status IN (1, 3))
         SELECT COUNT(*) AS active, COALESCE(SUM(id IN (SELECT sub_id FROM hits WHERE sub_id IS NOT NULL)), 0) AS withHits
-        FROM keywords_sub WHERE enabled = 1`).get(from, to) as { active: number; withHits: number };
-    const titles = db.query(`SELECT title FROM posts WHERE ${scope} ORDER BY julianday(pub_date) DESC, id DESC LIMIT 5000`).all(from, to) as { title: string }[];
+        FROM keywords_sub WHERE enabled = 1`).get(...cohort) as { active: number; withHits: number };
+    const titles = db.query(`SELECT title FROM posts WHERE ${scope} ORDER BY julianday(pub_date) DESC, id DESC LIMIT 5000`).all(...cohort) as { title: string }[];
     const topics = { sample: titles.length, limited: totals.posts > titles.length, terms: titleTerms(titles) };
     const delivery = db.query(`WITH timings AS (
         SELECT ROUND((julianday(push_date) - julianday(pub_date)) * 86400, 3) AS seconds
@@ -86,9 +89,9 @@ export function getAnalytics(db: Database, days: number, offset: number, now = n
         COALESCE(SUM(seconds < 60), 0) AS underMinute,
         COALESCE(SUM(seconds >= 60 AND seconds < 300), 0) AS underFive,
         COALESCE(SUM(seconds >= 300 AND seconds < 900), 0) AS underFifteen,
-        COALESCE(SUM(seconds >= 900), 0) AS overFifteen FROM timings`).get(from, to) as {
+        COALESCE(SUM(seconds >= 900), 0) AS overFifteen FROM timings`).get(...cohort) as {
             samples: number; average: number | null; median: number | null; p90: number | null;
             underMinute: number; underFive: number; underFifteen: number; overFifteen: number;
         };
-    return { period: { days, offset, from, to, stepDays, calendarDays: Math.round((midnight - start) / DAY) + 1, hourly: days === -1 }, totals, trend, categories, authors, authorDistribution, activity, subscriptions, ranking, ruleStats, topics, delivery };
+    return { period: { days, offset, from, to, category, stepDays, calendarDays: Math.round((midnight - start) / DAY) + 1, hourly: days === -1 }, totals, trend, categories, availableCategories, authors, authorDistribution, activity, subscriptions, ranking, ruleStats, topics, delivery };
 }

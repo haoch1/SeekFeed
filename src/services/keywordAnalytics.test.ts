@@ -65,11 +65,11 @@ describe('keyword publication cohorts', () => {
         expect(getKeywordAnalytics(db, ["' OR 1=1 --"], '2026-10-20', 480, 'title', now).series[0].total).toBe(0);
     });
     it('does not truncate categories or counts and returns stable zero-filled empty cohorts', () => {
-        for (let i = 0; i < 48; i++) post('2026-10-20T01:00:00Z', 'DMIT', 'author-' + i, 'category-' + i);
+        for (let i = 0; i < 60; i++) post('2026-10-20T01:00:00Z', 'DMIT', 'author-' + i, 'category-' + i);
         const data = getKeywordAnalytics(db, ['DMIT', 'unmatched'], '2026-10-20', 480, 'title', now);
-        expect(data.series[0].categories).toHaveLength(48);
-        expect(data.series[0].authors).toBe(48);
-        expect(data.series[0].topAuthors).toHaveLength(5);
+        expect(data.series[0].categories).toHaveLength(60);
+        expect(data.series[0].authors).toBe(60);
+        expect(data.series[0].topAuthors).toHaveLength(50);
         expect(data.series[1]).toMatchObject({ total: 0, previous: 0, peak: null, authors: 0, categories: [], topAuthors: [] });
         expect(data.series[1].hourly).toHaveLength(24);
         expect(data.series[1].daily).toHaveLength(7);

@@ -21,12 +21,14 @@
         previous?.animation.cancel();
         const shade = current.getPropertyValue('--control-press-shade').trim();
         const pressedShadow = `${baseShadow === 'none' ? '' : baseShadow + ', '}inset 0 0 0 999px ${shade}`;
+        // Fixed dropdown menus need a stable trigger rectangle throughout pointer feedback.
+        const pressedScale = control.matches('.select-trigger') ? '1' : '.97';
         // A quick click still completes a visible press and release, independent of request time.
         const animation = control.animate(hold ? [
-            { scale, boxShadow: shadow }, { scale: '.97', boxShadow: pressedShadow },
+            { scale, boxShadow: shadow }, { scale: pressedScale, boxShadow: pressedShadow },
         ] : [
             { scale, boxShadow: shadow },
-            { scale: '.97', boxShadow: pressedShadow, offset: .22 },
+            { scale: pressedScale, boxShadow: pressedShadow, offset: .22 },
             { scale: '1', boxShadow: baseShadow },
         ], { duration: hold ? 90 : 360, easing: 'cubic-bezier(.2,.7,.2,1)', fill: hold ? 'forwards' : 'none' });
         animation.id = hold ? 'control-press' : 'control-release';

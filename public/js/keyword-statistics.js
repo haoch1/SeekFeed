@@ -43,6 +43,7 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
         (el('keywordAddCompare').hidden ? el('analysisCompare1') : el('keywordAddCompare')).focus({ preventScroll: true });
     }
     function reset() {
+        el('keywordAuthorLimit').value = '5';
         cancelRequest();
         data = config = undefined;
         selected = chartIndex = 0; hours = 1; lastLoad = 0;
@@ -51,6 +52,10 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
         compareVisible(1, false); compareVisible(2, false);
         el('keywordAnalysisResults').hidden = true;
         for (const id of ['keywordComparison', 'keywordMetrics', 'keywordOverlap', 'keywordHourChart', 'keywordDailyChart', 'keywordCategories', 'keywordAuthors']) el(id).replaceChildren();
+        for (const id of ['keywordHourChart', 'keywordDailyChart']) {
+            const chart = el(id);
+            chart.onpointermove = chart.onpointerleave = chart.onclick = chart.onkeydown = chart.onfocus = chart.onblur = null;
+        }
         el('keywordBucketSelector').querySelectorAll('button').forEach(button => {
             const active = button.dataset.hours === '1';
             button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active));
@@ -60,17 +65,29 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
         if (!collapsed) el('analysisKeyword').focus({ preventScroll: true });
     }
     function renderAuthors(series) {
-        el('keywordAuthors').innerHTML = series.topAuthors.length ? series.topAuthors.map((row, index) => `<div class="keyword-rank-row"><span class="keyword-rank">${String(index + 1).padStart(2, '0')}</span><span class="keyword-author-name" title="${esc(row.creator)}">${esc(row.creator)}</span><span><strong>${number(row.count)}<small>篇</small></strong><small>${percent(row.count, series.total)}</small></span></div>`).join('') : '<p class="keyword-no-data">暂无作者记录</p>';
+        const rows = series.topAuthors.slice(0, Number(el('keywordAuthorLimit').value));
+        el('keywordAuthors').scrollTop = 0;
+        el('keywordAuthors').innerHTML = rows.length ? rows.map((row, index) => `<div class="keyword-rank-row"><span class="keyword-rank">${String(index + 1).padStart(2, '0')}</span><span class="keyword-author-name" title="${esc(row.creator)}">${esc(row.creator)}</span><span><strong>${number(row.count)}<small>篇</small></strong><small>${percent(row.count, series.total)}</small></span></div>`).join('') : '<p class="keyword-no-data">暂无作者记录</p>';
     }
     function renderCategoryChart(series) {
-        const rows = series.categories.length > 5 ? [...series.categories.slice(0, 4), { category: '其他分类', count: series.categories.slice(4).reduce((sum, row) => sum + row.count, 0) }] : series.categories;
-        let cursor = 0;
-        const segments = rows.map((row, index) => {
-            const start = cursor;
-            cursor += row.count / series.total * 100;
-            return `var(--analytics-color-${index}) ${start}% ${cursor}%`;
-        });
-        el('keywordCategories').innerHTML = !rows.length ? '<p class="keyword-no-data">暂无分类记录</p>' : `<div class="keyword-category-ring" role="img" aria-label="${esc(rows.map(row => `${getCategoryName(row.category)} ${number(row.count)} 篇，占 ${percent(row.count, series.total)}`).join('；'))}" style="background:conic-gradient(${segments.join(',')})"><div><strong>${number(series.total)}</strong><span>篇帖子</span></div></div><div class="keyword-category-legend">${rows.map((row, index) => `<div><i style="background:var(--analytics-color-${index})"></i><span title="${esc(getCategoryName(row.category))}">${esc(getCategoryName(row.category))}</span><strong>${number(row.count)}</strong><small>${percent(row.count, series.total)}</small></div>`).join('')}</div>`;
+        window.SeekFeedCategoryBreakdown(el('keywordCategories'), series.categories, series.total, { escapeHtml: esc, getCategoryName });
+    }
+    function chartTooltip(box) {
+        const tooltip = document.createElement('div');
+        tooltip.className = 'analytics-chart-tooltip keyword-chart-tooltip';
+        tooltip.setAttribute('aria-hidden', 'true');
+        tooltip.hidden = true;
+        box.appendChild(tooltip);
+        return {
+            hide() { tooltip.hidden = true; },
+            show(label, values, cx, cy, pinned = false, available = true) {
+                tooltip.innerHTML = `<span>${esc(label)}</span>${available ? data.series.map((series, i) => `<div><i style="background:${color(i)}"></i><span title="${esc(series.term)}">${esc(series.term)}</span><strong>${number(values[i])} 篇</strong></div>`).join('') : '<div>尚未到该时段</div>'}`;
+                tooltip.hidden = false;
+                tooltip.dataset.pinned = String(pinned);
+                tooltip.style.left = `${Math.max(6, Math.min(box.clientWidth - tooltip.offsetWidth - 6, cx - tooltip.offsetWidth / 2))}px`;
+                tooltip.style.top = `${Math.max(0, cy - tooltip.offsetHeight - 12)}px`;
+            },
+        };
     }
     function renderDailyChart() {
         const box = el('keywordDailyChart');
@@ -92,25 +109,36 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
             const marker = (cx, cy) => termIndex === 1 ? `<rect x="${cx - 3.5}" y="${cy - 3.5}" width="7" height="7" rx="1"/>` : termIndex === 2 ? `<path d="M${cx},${cy - 4.5}l4.5,4.5 -4.5,4.5 -4.5,-4.5Z"/>` : `<circle cx="${cx}" cy="${cy}" r="3.5"/>`;
             return `<g data-trend-series="${termIndex}" class="keyword-trend-series series-${termIndex}" style="--series-color:${color(termIndex)}">${!multiple ? `<polygon class="keyword-line-area" points="${x(0)},${bottom} ${points} ${x(6)},${bottom}"/>` : ''}<polyline class="keyword-trend-line" points="${points}"/>${series.daily.map((row, index) => `<g class="keyword-trend-point${row.date === data.date ? ' is-selected' : ''}" data-daily-count="${row.count}" data-daily-index="${index}"><g class="keyword-trend-marker">${marker(x(index), y(row.count))}</g>${!multiple || index === 6 ? `<text x="${x(index)}" y="${multiple ? labelY(termIndex) : y(row.count) - 13}" text-anchor="middle">${number(row.count)}</text>` : ''}<title>${esc(series.term)} · ${row.date} · ${number(row.count)} 篇</title></g>`).join('')}</g>`;
         }).join('')}<line class="keyword-day-guide" x1="0" x2="0" y1="${top}" y2="${bottom}" hidden/></svg><div class="keyword-day-tabs" style="padding-left:${left}px;padding-right:${width - right}px">${rows.map((row, index) => `<button type="button" class="keyword-day${row.date === data.date ? ' is-selected' : ''}" data-analysis-date="${row.date}" data-day-index="${index}" aria-pressed="${row.date === data.date}" aria-label="查看 ${row.date}，${esc(counts(index))}">${row.date.slice(5).replace('-', '/')}</button>`).join('')}</div></div></div><p class="keyword-daily-note">${data.partial ? '末日截至 ' + new Date(Date.parse(data.to) + offset * 60000).toISOString().slice(11, 16) : '各日按全天统计'}</p>`;
+        const tooltip = chartTooltip(box);
+        let pinned = -1;
         const readout = el('keywordDailyReadout'), reset = () => {
             readout.textContent = '各词分别统计 · 点击日期查看当天';
             box.querySelector('.keyword-day-guide').setAttribute('hidden', '');
+            tooltip.hide();
         };
         const inspect = index => {
             readout.textContent = rows[index].date + ' · ' + counts(index);
             const guide = box.querySelector('.keyword-day-guide');
             guide.removeAttribute('hidden'); guide.setAttribute('x1', x(index)); guide.setAttribute('x2', x(index));
+            tooltip.show(rows[index].date, data.series.map(series => series.daily[index].count), x(index) - box.querySelector('.keyword-line-scroll').scrollLeft, y(Math.max(...data.series.map(series => series.daily[index].count))), pinned === index);
         };
+        const pointerIndex = event => Math.max(0, Math.min(6, Math.floor((event.clientX - box.querySelector('svg').getBoundingClientRect().left - left) / step)));
         box.onpointermove = event => {
-            const svg = box.querySelector('svg'), bounds = svg.getBoundingClientRect();
-            inspect(Math.max(0, Math.min(6, Math.floor((event.clientX - bounds.left - left) / step))));
+            if (event.pointerType !== 'touch') inspect(pointerIndex(event));
         };
+        box.onclick = event => {
+            if (!event.target.closest('svg')) return;
+            const index = pointerIndex(event);
+            pinned = pinned === index ? -1 : index;
+            if (pinned < 0) reset(); else inspect(pinned);
+        };
+        box.onkeydown = event => { if (event.key === 'Escape') { pinned = -1; reset(); event.preventDefault(); } };
         box.querySelectorAll('[data-day-index]').forEach(button => {
             button.onfocus = () => inspect(Number(button.dataset.dayIndex));
-            button.onblur = event => { if (!box.contains(event.relatedTarget)) reset(); };
+            button.onblur = event => { if (!box.contains(event.relatedTarget)) { if (pinned >= 0) inspect(pinned); else reset(); } };
         });
         box.querySelector('.keyword-line-scroll').scrollLeft = scrollLeft;
-        box.onpointerleave = () => { if (!box.contains(document.activeElement)) reset(); };
+        box.onpointerleave = () => { if (pinned >= 0) inspect(pinned); else if (!box.contains(document.activeElement)) reset(); };
         reset();
     }
     function renderChart() {
@@ -138,6 +166,8 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
         }).join('')}</svg></div>`;
         const scroller=box.firstElementChild;
         scroller.scrollLeft = scrollLeft;
+        const tooltip = chartTooltip(box);
+        let pinned = -1;
         const select = index => {
             chartIndex=Math.max(0,Math.min(buckets.length-1,index));
             const row=buckets[chartIndex];
@@ -148,12 +178,19 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
             box.setAttribute('aria-label',el('keywordChartReadout').textContent+'。左右方向键查看相邻时段。');
             box.querySelectorAll('[data-keyword-bucket]').forEach((column,i)=>column.classList.toggle('is-active',i===chartIndex));
             if(document.activeElement===box){const start=x(chartIndex)-step/2;if(start<scroller.scrollLeft)scroller.scrollLeft=start;else if(start+step>scroller.scrollLeft+box.clientWidth)scroller.scrollLeft=start+step-box.clientWidth;}
+            tooltip.show(`${data.date} · ${time(row.hour)}–${row.hour + hours === 24 ? '24:00' : time(row.hour + hours)}`, row.values, x(chartIndex) - scroller.scrollLeft, y(Math.max(...row.values)), pinned === chartIndex, row.available);
         };
-        box.onpointermove=e=>{const column=e.target.closest('[data-keyword-bucket]');if(column)select(Number(column.dataset.keywordBucket));};
+        const pointerIndex = event => Math.max(0, Math.min(buckets.length - 1, Math.floor((event.clientX - box.getBoundingClientRect().left + scroller.scrollLeft - left) / step)));
+        box.onpointermove=e=>{if(e.pointerType !== 'touch')select(pointerIndex(e));};
+        box.onclick = event => { if (!event.target.closest('svg')) return; const index = pointerIndex(event); pinned = pinned === index ? -1 : index; if (pinned < 0) reset(true); else select(pinned); };
         box.onfocus=()=>select(chartIndex);
-        box.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();select(e.key==='Home'?0:e.key==='End'?buckets.length-1:chartIndex+(e.key==='ArrowRight'?1:-1));};
-        const reset=()=>{if(document.activeElement===box)return;box.querySelectorAll('.is-active').forEach(n=>n.classList.remove('is-active'));el('keywordChartReadout').textContent=`${data.date} · ${multiple?'各词并排对比，':'每柱 '}${hours} 小时 · ${data.partial?'截至 '+new Date(Date.parse(data.to)+offset*60000).toISOString().slice(11,16):'全天'} · UTC${offset>=0?'+':'−'}${Math.abs(offset/60)}`;};
-        box.onpointerleave=box.onblur=reset;reset();
+        box.onkeydown=e=>{
+            if(e.key==='Escape'){pinned=-1;reset(true);e.preventDefault();return;}
+            if(e.key==='Enter'||e.key===' '){e.preventDefault();pinned=pinned===chartIndex?-1:chartIndex;if(pinned<0)reset(true);else select(pinned);return;}
+            if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();select(e.key==='Home'?0:e.key==='End'?buckets.length-1:chartIndex+(e.key==='ArrowRight'?1:-1));
+        };
+        const reset=(force=false)=>{if(!force && pinned>=0){select(pinned);return;}if(!force && document.activeElement===box)return;tooltip.hide();box.querySelectorAll('.is-active').forEach(n=>n.classList.remove('is-active'));el('keywordChartReadout').textContent=`${data.date} · ${multiple?'各词并排对比，':'每柱 '}${hours} 小时 · ${data.partial?'截至 '+new Date(Date.parse(data.to)+offset*60000).toISOString().slice(11,16):'全天'} · UTC${offset>=0?'+':'−'}${Math.abs(offset/60)}`;};
+        box.onpointerleave=box.onblur=()=>reset();reset();
     }
     function render() {
         el('keywordAnalysisResults').hidden=false;
@@ -162,7 +199,7 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
         el('keywordHourLegend').innerHTML = el('keywordDailyLegend').innerHTML = legend();
         el('keywordDetailLabel').textContent = series.term + ' · 详细指标（点击上方关键词切换）';
         el('keywordCategoryTerm').textContent = series.term + ' · 帖子占比';
-        el('keywordAuthorTerm').textContent = series.term + ' · TOP 5';
+        el('keywordAuthorTerm').textContent = series.term;
         const difference=total-series.previous;
         const previousCovered=data.coverageFrom&&Date.parse(data.coverageFrom)<=Date.parse(data.from)-86400000;
         const comparison=!previousCovered?'上日记录不完整':`上日${data.partial?'同时段':''} ${number(series.previous)} 篇`;
@@ -194,12 +231,22 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
         return window.SeekFeedControls.pending(el('keywordAnalyzeBtn'),()=>load());
     }
     return {
+        analyze(term) {
+            cancelRequest();
+            if (collapsed) el('keywordToggle').click();
+            el('analysisKeyword').value = term;
+            el('analysisDate').value = localDate();
+            el('keywordAnalysis').scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+            el('analysisKeyword').focus({ preventScroll: true });
+            submit();
+        },
         init() {
             el('analysisDate').value=el('analysisDate').max=localDate();
             el('keywordAnalysisForm').addEventListener('submit',e=>{e.preventDefault();submit();});
             el('keywordAddCompare').addEventListener('click',()=>{const index=[1,2].find(index=>el('analysisCompare'+index).hidden);if(!index)return;compareVisible(index,true);el('analysisCompare'+index).focus();});
             el('keywordAnalysisForm').addEventListener('click', event => { const button = event.target.closest('[data-remove-compare]'); if (button) removeCompare(Number(button.dataset.removeCompare)); });
             el('keywordReset').addEventListener('click', reset);
+            el('keywordAuthorLimit').addEventListener('change', () => { if (data) renderAuthors(selectedTerm()); });
             el('keywordToggle').addEventListener('click', () => {
                 collapsed = !collapsed;
                 el('keywordAnalysisBody').hidden = collapsed;

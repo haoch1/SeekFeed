@@ -6,7 +6,7 @@ import { authRoutes } from './auth';
 import { telegramRoutes } from './telegram';
 import { AuthService } from '../services/auth';
 import { DatabaseService } from '../services/database';
-import { SessionService } from '../services/session';
+import { SessionService, sessionManagementId } from '../services/session';
 import * as bcrypt from 'bcryptjs';
 import { apiRoutes } from './api';
 import { pageRoutes } from './pages';
@@ -115,7 +115,13 @@ describe('account settings and session expiry', () => {
         expect((await app.request('/api/stats/subscription-ranking?days=7&offset=480')).status).toBe(401);
         const privateResponse = await app.request('/api/stats/subscription-ranking?days=7&offset=480', { headers: headers() });
         expect((await privateResponse.json()).data.ranking[0].id).toBe(sub.id);
-        for (const query of ['days=8', 'days=NaN', 'offset=9999', 'offset=1.5']) {
+        const scoped = await app.request('/api/stats/analytics?days=7&offset=480&category=%20tech%20');
+        const scopedData = (await scoped.json()).data;
+        expect(scoped.status).toBe(200);
+        expect(scopedData.period.category).toBe('tech');
+        expect(scopedData.ranking).toBeUndefined();
+        expect(scopedData.availableCategories).toBeArray();
+        for (const query of ['days=8', 'days=NaN', 'offset=9999', 'offset=1.5', 'category=' + 'x'.repeat(101)]) {
             expect((await app.request(`/api/stats/analytics?${query}`)).status).toBe(400);
         }
     });
@@ -229,7 +235,45 @@ describe('session management authorization', () => {
         const body = await response.json();
         expect(body.data).toHaveLength(1);
         expect(body.data[0].current).toBe(true);
+        expect(body.data[0].id).toMatch(/^[a-f0-9]{64}$/);
+        expect((await app.request('/auth/account', { headers: { Authorization: `Bearer ${body.data[0].id}` } })).status).toBe(401);
         expect(JSON.stringify(body)).not.toContain(sessionId);
+    });
+
+    it('revokes just the selected device and keeps the calling session and other devices valid', async () => {
+        const target = sessions.createSession(1, 'tester', '192.0.2.2', 'second-device').sessionId;
+        const untouched = sessions.createSession(1, 'tester', '192.0.2.3', 'third-device').sessionId;
+        const path = '/auth/sessions/' + sessionManagementId(target);
+        const response = await app.request(path, { method: 'DELETE', headers: { Authorization: `Bearer ${sessionId}` } });
+        expect(response.status).toBe(200);
+        expect((await response.json()).data.current).toBe(false);
+        expect(sessions.verifySession(target).valid).toBe(false);
+        expect(sessions.verifySession(sessionId).valid).toBe(true);
+        expect(sessions.verifySession(untouched).valid).toBe(true);
+        expect((await app.request(path, { method: 'DELETE', headers: { Authorization: `Bearer ${sessionId}` } })).status).toBe(404);
+    });
+
+    it('rejects anonymous, forged, malformed and foreign device revocation requests', async () => {
+        const foreign = sessions.createSession(2, 'tester').sessionId;
+        const currentPath = '/auth/sessions/' + sessionManagementId(sessionId);
+        for (const headers of [{}, { Authorization: 'Bearer forged' }]) {
+            expect((await app.request(currentPath, { method: 'DELETE', headers })).status).toBe(401);
+        }
+        const headers = { Authorization: `Bearer ${sessionId}` };
+        expect((await app.request('/auth/sessions/not-a-device', { method: 'DELETE', headers })).status).toBe(400);
+        expect((await app.request('/auth/sessions/' + sessionManagementId(foreign), { method: 'DELETE', headers })).status).toBe(404);
+        expect(sessions.verifySession(foreign).valid).toBe(true);
+        expect(sessions.verifySession(sessionId).valid).toBe(true);
+    });
+
+    it('can exit the current device without logging out another device', async () => {
+        const other = sessions.createSession(1, 'tester').sessionId;
+        const response = await app.request('/auth/sessions/' + sessionManagementId(sessionId), { method: 'DELETE', headers: { Authorization: `Bearer ${sessionId}` } });
+        expect(response.status).toBe(200);
+        expect((await response.json()).data.current).toBe(true);
+        expect(sessions.verifySession(sessionId).valid).toBe(false);
+        expect(sessions.verifySession(other).valid).toBe(true);
+        expect((await app.request('/auth/sessions', { headers: { Authorization: `Bearer ${sessionId}` } })).status).toBe(401);
     });
 
     it('prevents anonymous logout-all from invalidating the administrator session', async () => {

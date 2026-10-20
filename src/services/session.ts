@@ -1,7 +1,10 @@
 import { DatabaseService } from './database';
 import type { SessionData, SessionVerification } from '../types';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { logger } from '../utils/logger';
+
+// A management identifier cannot be reused as the bearer credential.
+export const sessionManagementId = (sessionId: string): string => createHash('sha256').update('seekfeed-device:' + sessionId).digest('hex');
 
 export class SessionService {
   private readonly SESSION_EXPIRY_HOURS = 24 * 7; // 7天过期

@@ -1,5 +1,5 @@
 /* ReUI table/card, segmented tabs and badge anatomy, using workspace tokens. */
-.hot-panel { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 1px 3px #10182808; overflow: clip; }
+.hot-panel { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); box-shadow: var(--shadow); overflow: clip; }
 .hot-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid var(--border-color); }
 .hot-tabs { display: inline-flex; align-items: center; gap: 4px; padding: 4px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 7px; flex-shrink: 0; }
 .hot-tabs button { border: 1px solid transparent; background: transparent; color: var(--text-secondary); height: 32px; min-width: 70px; padding: 0 14px; border-radius: 4px; font: inherit; font-size: 13px; font-weight: 500; transition: color .15s, background-color .15s, border-color .15s; }

@@ -14,7 +14,7 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
     <Layout
       title="SeekFeed"
       description="NodeSeek RSS 文章列表"
-      scriptSrc={["/js/keyword-statistics.js", "/js/statistics.js", "/js/hot.js", "/js/home.js"]}
+      scriptSrc={["/js/category-breakdown.js", "/js/keyword-statistics.js", "/js/statistics.js", "/js/hot.js", "/js/home.js"]}
     >
       <DashboardSurface path={path}>
 

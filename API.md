@@ -21,10 +21,17 @@
 | `GET /auth/account` | 需认证；返回用户名和 `session_expiry_hours`，不返回密码 |
 | `PUT /auth/account` | 需认证；JSON `{ "username": "new-admin", "currentPassword": "...", "newPassword": "..." }`。新密码为空时保留密码；用户名 3–50 字，新密码 8–50 字。成功后所有会话失效，需要重新登录 |
 | `PUT /auth/preferences` | 需认证；JSON `{ "session_expiry_hours": 168 }`，仅接受 `1`、`24`、`168`、`720`；对新会话生效 |
-| `GET /auth/sessions` | 需认证；返回活跃设备、创建/到期时间和 `current`，不暴露可重用的会话 ID |
+| `GET /auth/sessions` | 需认证；返回活跃设备、创建/到期时间、`current` 和不可用作登录凭据的管理标识 `id`，不暴露可重用的会话 ID |
+| `DELETE /auth/sessions/:id` | 需认证；使用设备列表的管理标识注销自己的指定设备，返回 `data.current` 标明是否为当前设备；无效格式为 400，不存在或不属于本账号为 404 |
 | `POST /auth/logout-all` | 需认证；注销包括当前设备在内的所有会话 |
 
 通用 `PUT /api/config` 不接受用户名、密码或会话有效期，账号设置必须使用上述接口验证。
+
+## 统计总览与关键词
+
+`GET /api/stats/analytics?days=-1&offset=480&category=tech` 返回按发帖时间统计的总览。`days` 支持 `-1`（今日）、`7`、`30`、`0`（全部）；`offset` 为时区偏移分钟，范围 −840 至 840；`category` 可省略或传空字符串查看所有分类，最多 100 字符。分类过滤同时作用于各项统计，`availableCategories` 始终返回当前日期范围内可用的分类；`authors` 最多返回 50 名。公开响应不包含订阅规则和订阅 ID。
+
+`GET /api/stats/keywords` 使用独立的 `date`、`offset`、`q`、`compare1`、`compare2` 和 `scope`，不继承总览分类。每个词独立返回全天、时段、七天趋势、分类和最多 50 名活跃作者；共同命中另外返回，不把多个关键词合并成一个数量。
 
 ## 配置管理
 

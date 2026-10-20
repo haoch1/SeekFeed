@@ -250,7 +250,43 @@ document.addEventListener("DOMContentLoaded", function () {
   let renderedFilters = '';
   let latestSeenPostId = null;
   let liveRefreshing = false;
+  let searchTimer, creatorTimer;
+  const feedStates = new Map();
+  const isFeedPath = path => path === '/posts' || path === '/matched';
   const el = id => document.getElementById(id);
+
+  function saveFeedState(path) {
+    const pendingSearch = searchTimer || creatorTimer;
+    clearTimeout(searchTimer); clearTimeout(creatorTimer);
+    searchTimer = creatorTimer = null;
+    feedStates.set(path, {
+      filters: { ...currentFilters }, page: pendingSearch ? 1 : requestedPage,
+      search: el('searchInput').value, creator: el('filterCreator').value,
+      expanded: el('filterPanel').style.display !== 'none',
+    });
+    postsController?.abort();
+    ++postsRequest;
+    el('postsList').setAttribute('aria-busy', 'false');
+  }
+
+  function restoreFeedState(path) {
+    const state = feedStates.get(path);
+    currentFilters = { ...(state?.filters || {}) };
+    currentPage = requestedPage = state?.page || 1;
+    el('searchInput').value = state?.search || '';
+    el('filterCreator').value = state?.creator || '';
+    for (const [id, key] of [['filterCategory', 'category'], ['filterSubscription', 'subId'], ['filterStatus', 'pushStatus']]) el(id).value = currentFilters[key] || '';
+    el('clearSearchBtn').style.display = el('searchInput').value ? 'block' : 'none';
+    el('filterPanel').style.display = state?.expanded ? 'block' : 'none';
+    el('filterToggleBtn').setAttribute('aria-expanded', String(Boolean(state?.expanded)));
+    setMatched(path === '/matched' || Boolean(currentFilters.pushStatusIn));
+    el('postsList').replaceChildren();
+    el('postsList').style.minHeight = '';
+    renderedFilters = '';
+    latestSeenPostId = null;
+    el('newPostsBtn').hidden = true;
+    window.SeekFeedControls.refreshSelects();
+  }
 
   async function loadPosts(page = currentPage, filters = currentFilters, quiet = false) {
     const list = el("postsList");
@@ -435,8 +471,13 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
   function setMatched(active) {
-    if (active) { currentFilters.pushStatusIn = "1,3"; delete currentFilters.pushStatus; el("filterStatus").value = ""; }
+    if (active) {
+      if (!['1', '3'].includes(String(currentFilters.pushStatus))) delete currentFilters.pushStatus;
+      currentFilters.pushStatusIn = currentFilters.pushStatus || "1,3";
+      el("filterStatus").value = currentFilters.pushStatus || "";
+    }
     else delete currentFilters.pushStatusIn;
+    [...el('filterStatus').options].forEach(option => { option.disabled = active && Boolean(option.value) && !['1', '3'].includes(option.value); });
     el("subscribedOnlyChip").classList.toggle("active", active);
     el("subscribedOnlyChip").setAttribute("aria-pressed", String(active));
     el("navMatched").classList.toggle("selected", active);
@@ -447,14 +488,14 @@ document.addEventListener("DOMContentLoaded", function () {
   }
   function initFilters() {
     el('newPostsBtn').addEventListener('click', async () => { await loadPosts(1); el('feedPage').scrollIntoView({ block: 'start', behavior: 'instant' }); });
-    let searchTimer, creatorTimer;
     el("searchInput").addEventListener("input", e => {
       clearTimeout(searchTimer);
       el("clearSearchBtn").style.display = e.target.value ? "block" : "none";
-      searchTimer = setTimeout(() => { currentFilters.search = e.target.value.trim(); loadPosts(1); }, 300);
+      currentFilters.search = e.target.value.trim();
+      searchTimer = setTimeout(() => { searchTimer = null; loadPosts(1); }, 300);
     });
     el("clearSearchBtn").addEventListener("click", () => {
-      clearTimeout(searchTimer); el("searchInput").value = ""; el("clearSearchBtn").style.display = "none";
+      clearTimeout(searchTimer); searchTimer = null; el("searchInput").value = ""; el("clearSearchBtn").style.display = "none";
       delete currentFilters.search; loadPosts(1);
     });
     el("filterToggleBtn").addEventListener("click", () => {
@@ -464,21 +505,25 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     [["filterCategory", "category"], ["filterSubscription", "subId"], ["filterStatus", "pushStatus"]].forEach(([id, key]) => {
       el(id).addEventListener("change", e => {
-        if (key === "pushStatus") setMatched(false);
-        currentFilters[key] = e.target.value; loadPosts(1);
+        currentFilters[key] = e.target.value;
+        if (key === "pushStatus") setMatched(activePath === '/matched');
+        window.SeekFeedControls.refreshSelects();
+        loadPosts(1);
       });
     });
     el("filterCreator").addEventListener("input", e => {
       clearTimeout(creatorTimer);
-      creatorTimer = setTimeout(() => { currentFilters.creator = e.target.value.trim(); loadPosts(1); }, 300);
+      currentFilters.creator = e.target.value.trim();
+      creatorTimer = setTimeout(() => { creatorTimer = null; loadPosts(1); }, 300);
     });
     el("clearFiltersBtn").addEventListener("click", () => {
       clearTimeout(searchTimer); clearTimeout(creatorTimer);
+      searchTimer = creatorTimer = null;
       ["searchInput", "filterCreator", "filterCategory", "filterSubscription", "filterStatus"].forEach(id => el(id).value = "");
       window.SeekFeedControls.refreshSelects();
-      el("clearSearchBtn").style.display = "none"; currentFilters = {}; setMatched(false); loadPosts(1);
+      el("clearSearchBtn").style.display = "none"; currentFilters = {}; setMatched(activePath === '/matched'); loadPosts(1);
     });
-    el("subscribedOnlyChip").addEventListener("click", () => { setMatched(!currentFilters.pushStatusIn); loadPosts(1); });
+    el("subscribedOnlyChip").addEventListener("click", () => navigate(activePath === '/matched' ? '/posts' : '/matched'));
     el("refreshBtn").addEventListener("click", pendingClick(() => Promise.all([loadPosts(), updateStats(), updateMonitor()])));
     document.querySelectorAll('[data-feed-pagination]').forEach(pager => pager.addEventListener('click', event => {
       const button = event.target.closest('button');
@@ -975,6 +1020,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const apply = () => {
       if (id !== routeRequest) return;
       if (activePath) routeScroll.set(activePath, scrollY);
+      if (isFeedPath(activePath) && activePath !== path) saveFeedState(activePath);
       if (push && location.pathname !== path) history.pushState({}, '', path);
       window.SeekFeedControls.closeSelect();
       document.querySelectorAll('.route-page').forEach(page => page.hidden = page.id !== `${name}Page`);
@@ -986,7 +1032,10 @@ document.addEventListener("DOMContentLoaded", function () {
       el('breadcrumbSection').textContent = path.startsWith('/settings') ? '设置' : '社区动态';
       el('breadcrumbCurrent').textContent = title;
       document.title = `${title} · SeekFeed`;
-      if (name === 'feed') { setMatched(path === '/matched'); loadPosts(currentPage); }
+      if (name === 'feed') {
+        if (activePath !== path) restoreFeedState(path);
+        loadPosts(currentPage);
+      }
       if (name === 'subscriptions') { loadSubscriptions(); loadMatchingScope(); analytics.loadNotifications(); }
       if (name === 'rss') loadRssConfig();
       if (name === 'telegram') loadTelegramConfig();
@@ -1026,7 +1075,6 @@ document.addEventListener("DOMContentLoaded", function () {
     document.querySelectorAll('[data-route]').forEach(link => link.addEventListener('click', e => {
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
       e.preventDefault(); closeSidebar();
-      if (link.pathname !== activePath && ['/posts', '/matched'].includes(link.pathname)) currentPage = 1;
       navigate(link.pathname);
     }));
     document.querySelectorAll('.route-page h1').forEach(h => h.tabIndex = -1);
@@ -1046,10 +1094,25 @@ document.addEventListener("DOMContentLoaded", function () {
     el('sessionsList').innerHTML = response.data.map(session => {
       const agent = session.userAgent || '未知浏览器';
       const browser = /Edg/.test(agent) ? 'Microsoft Edge' : /Firefox/.test(agent) ? 'Firefox' : /Chrome/.test(agent) ? 'Chrome' : /Safari/.test(agent) ? 'Safari' : '浏览器 / 客户端';
-      return `<div class="session-item"><span class="session-icon">${renderIcon('user')}</span><div><strong>${browser}${session.current ? '<span class="tag tag-blue">当前设备</span>' : ''}</strong><p class="session-ip">登录 IP · ${escapeHtml(session.ipAddress || "未记录（重新登录后记录）")}</p><p>登录于 ${escapeHtml(new Date(session.createdAt).toLocaleString('zh-CN'))}</p><p>到期于 ${escapeHtml(new Date(session.expiresAt).toLocaleString('zh-CN'))}</p></div></div>`;
+      return `<div class="session-item"><span class="session-icon">${renderIcon('user')}</span><div class="session-details"><strong>${browser}${session.current ? '<span class="tag tag-blue">当前设备</span>' : ''}</strong><p class="session-ip">登录 IP · ${escapeHtml(session.ipAddress || "未记录（重新登录后记录）")}</p><p>登录于 ${escapeHtml(new Date(session.createdAt).toLocaleString('zh-CN'))}</p><p>到期于 ${escapeHtml(new Date(session.expiresAt).toLocaleString('zh-CN'))}</p></div><button type="button" class="btn btn-secondary btn-xs revoke-session" data-session-id="${escapeHtml(session.id || '')}" aria-label="退出${escapeHtml(session.current ? '当前设备' : browser + '，' + (session.ipAddress || '未记录 IP'))}">退出</button></div>`;
     }).join('');
   }
   function initAccount() {
+    el('sessionsList').addEventListener('click', event => {
+      const button = event.target.closest('.revoke-session');
+      if (!button) return;
+      window.SeekFeedControls.pending(button, async () => {
+        const result = await apiRequest('/auth/sessions/' + encodeURIComponent(button.dataset.sessionId), { method: 'DELETE' });
+        if (!result?.success) return Toast.error(result?.message || '退出失败，请重试。');
+        if (result.data.current) {
+          localStorage.removeItem('sessionId'); localStorage.removeItem('user'); location.href = '/';
+        } else {
+          const row = button.closest('.session-item');
+          const next = row.nextElementSibling?.querySelector('.revoke-session') || row.previousElementSibling?.querySelector('.revoke-session') || el('logoutAllBtn');
+          row.remove(); next.focus({ preventScroll: true }); Toast.success(result.message);
+        }
+      });
+    });
     el('accountForm').addEventListener('submit', pendingSubmit(async e => {
       e.preventDefault();
       if (el('accountNewPassword').value !== el('accountConfirmPassword').value) return Toast.error('两次输入的新密码不一致。');
