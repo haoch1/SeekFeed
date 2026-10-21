@@ -1,6 +1,7 @@
 /* ReUI card, metric, chart and ranked-list patterns share the workspace tokens. */
 .chart-heading-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; min-width: 0; }
 .chart-expand-button { flex-shrink: 0; width: 34px; height: 34px; border: 1px solid var(--border-color); border-radius: 7px; }
+.chart-expand-button svg { width: 16px; height: 16px; }
 .chart-expand-button .header-tooltip { z-index: 3; }
 .chart-dialog { margin: auto; padding: 0; width: calc(100% - 40px); max-width: 1560px; max-height: calc(100dvh - 40px); border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: var(--bg-card); color: var(--text-primary); box-shadow: var(--shadow-lg); overscroll-behavior: contain; }
 .chart-dialog::backdrop { background: #09090b88; }

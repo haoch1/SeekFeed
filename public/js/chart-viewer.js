@@ -41,8 +41,8 @@
         panel.classList.add('chart-expanded');
         dialog.setAttribute('aria-label', state.label.replace('放大查看', '') + '，放大视图');
         dialog.appendChild(panel);
-        button.innerHTML = window.SeekFeedControls.icon('close') + '<span class="header-tooltip" role="tooltip" id="' + chart.id + 'ExpandHint">关闭图表</span>';
-        button.setAttribute('aria-label', '关闭放大图表');
+        button.innerHTML = window.SeekFeedControls.icon('shrink') + '<span class="header-tooltip" role="tooltip" id="' + chart.id + 'ExpandHint">缩小还原</span>';
+        button.setAttribute('aria-label', '缩小图表');
         button.setAttribute('aria-expanded', 'true');
         window.SeekFeedControls.lockScroll(dialog);
         dialog.showModal();
