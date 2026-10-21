@@ -18,6 +18,13 @@ export function getKeywordAnalytics(db: Database, terms: string[], date: string,
         .all(new Date(first).toISOString(), new Date(start + DAY).toISOString(), now.toISOString()) as Row[];
     const prepared = rows.map(row => ({ ...row, text: normalized(scope === 'content' ? `${row.title}\n${row.memo}` : row.title) }));
     const dayRows = prepared.filter(row => row.time >= start && row.time < end + (end === now.getTime() ? 1 : 0));
+    // Denominators use exactly the same publication-time cohort and cutoff as each keyword.
+    const baseline = {
+        hourly: Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0, available: start + hour * HOUR <= now.getTime() })),
+        daily: Array.from({ length: 7 }, (_, index) => ({ date: new Date(first + index * DAY + shift).toISOString().slice(0, 10), count: 0 })),
+    };
+    for (const row of prepared) baseline.daily[Math.min(6, Math.floor((row.time - first) / DAY))].count++;
+    for (const row of dayRows) baseline.hourly[Math.floor((row.time - start) / HOUR)].count++;
     const series = terms.map(term => {
         const query = normalized(term);
         const matched = prepared.filter(row => row.text.includes(query));
@@ -49,7 +56,7 @@ export function getKeywordAnalytics(db: Database, terms: string[], date: string,
     })));
     return {
         date, offset, scope, from: new Date(start).toISOString(), to: new Date(end).toISOString(), partial: elapsed < DAY,
-        totalPosts: dayRows.length, series, overlaps,
+        totalPosts: dayRows.length, baseline, series, overlaps,
         coverageFrom: earliest.value === null ? null : new Date((earliest.value - 2440587.5) * DAY).toISOString(),
     };
 }

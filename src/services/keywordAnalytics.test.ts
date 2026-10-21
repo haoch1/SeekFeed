@@ -26,6 +26,8 @@ describe('keyword publication cohorts', () => {
         const data = getKeywordAnalytics(db, ['DMIT', '香港'], '2026-10-20', 480, 'title', now);
         expect(data.from).toBe('2026-10-19T16:00:00.000Z');
         expect(data.totalPosts).toBe(4);
+        expect(data.baseline.hourly.reduce((sum, row) => sum + row.count, 0)).toBe(data.totalPosts);
+        expect(data.baseline.daily[6].count).toBe(data.totalPosts);
         expect(data.series[0].total).toBe(4);
         expect(data.series[0].authors).toBe(2);
         expect(data.series[0].hourly.filter(row => row.count).map(row => row.hour)).toEqual([0, 8, 9, 13]);
@@ -82,5 +84,31 @@ describe('keyword publication cohorts', () => {
         expect(data.series[0].daily.map(row => row.date)).toEqual(['2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17', '2026-10-18', '2026-10-19', '2026-10-20']);
         expect(data.series[0].total).toBe(1);
         expect(data.series[0].daily[5].count).toBe(1);
+    });
+    it('returns all-post denominators without keyword filters or duplicate counting, including partial and empty intervals', () => {
+        post('2026-10-19T17:00:00Z', 'DMIT 香港');
+        post('2026-10-19T17:20:00Z', '另一篇帖子');
+        post('2026-10-19T18:00:00Z', '只有普通文字');
+        post('2026-10-20T05:30:00Z', 'DMIT');
+        post('2026-10-20T05:30:00.001Z', '未来帖子');
+        post('2026-10-18T17:00:00Z', '历史普通帖子');
+        const data = getKeywordAnalytics(db, ['DMIT', '香港', '无匹配'], '2026-10-20', 480, 'title', now);
+        expect(data.totalPosts).toBe(4);
+        expect(data.baseline.hourly[1]).toEqual({ hour: 1, count: 2, available: true });
+        expect(data.baseline.hourly[2].count).toBe(1);
+        expect(data.baseline.hourly[3].count).toBe(0);
+        expect(data.baseline.hourly[13].count).toBe(1);
+        expect(data.baseline.hourly[14].available).toBe(false);
+        expect(data.baseline.daily.map(row => row.count)).toEqual([0, 0, 0, 0, 0, 1, 4]);
+        expect(data.series.map(row => row.total)).toEqual([2, 1, 0]);
+        for (const series of data.series) {
+            series.hourly.forEach((row, i) => expect(row.count).toBeLessThanOrEqual(data.baseline.hourly[i].count));
+            series.daily.forEach((row, i) => expect(row.count).toBeLessThanOrEqual(data.baseline.daily[i].count));
+        }
+        const content = getKeywordAnalytics(db, ['DMIT'], '2026-10-20', 480, 'content', now);
+        expect(content.baseline).toEqual(data.baseline);
+        const empty = getKeywordAnalytics(db, ['DMIT'], '2026-10-17', 480, 'title', now);
+        expect(empty.totalPosts).toBe(0);
+        expect(empty.baseline.hourly.every(row => row.count === 0 && row.available)).toBe(true);
     });
 });

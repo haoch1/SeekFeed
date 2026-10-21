@@ -3,9 +3,36 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
     const el = id => document.getElementById(id), number = n => Number(n || 0).toLocaleString('zh-CN');
     const offset = -new Date().getTimezoneOffset();
     const localDate = () => new Date(Date.now() + offset * 60000).toISOString().slice(0, 10);
-    const percent = (n, total) => total ? (n / total * 100).toFixed(1).replace(/\.0$/, '') + '%' : '—';
+    const share = (count, total) => total > 0 ? count / total * 100 : null;
+    const percentage = value => value === null ? '—' : value > 0 && value < .1 ? '＜0.1%' : value.toFixed(1).replace(/\.0$/, '') + '%';
+    const percent = (count, total) => percentage(share(count, total));
     let data, selected = 0, hours = 1, request = 0, lastLoad = 0, busy = false, controller, config, chartIndex = 0, collapsed = false, draft = false;
-    let hourStyle = 'bar', dailyStyle = 'line';
+    let hourStyle = 'bar', dailyStyle = 'line', hourMetric = 'count', dailyMetric = 'count';
+    const plotted = (count, total, metric) => metric === 'share' ? share(count, total) : count;
+    const valueLabel = (value, metric) => metric === 'share' ? percentage(value) : number(value);
+    const ceilingFor = (values, metric) => {
+        const max = Math.max(...values.filter(value => value !== null), 0);
+        return metric === 'count' ? Math.max(4, Math.ceil(max / 4) * 4) : max ? [.1, .2, .5, 1, 2, 5, 10, 20, 25, 50, 75, 100].find(value => value >= max) || 100 : 100;
+    };
+    const axisLabel = (value, metric) => metric === 'share' ? number(Number(value.toFixed(3))) + '%' : number(value);
+    const totalLabel = total => total === null ? '总帖数暂不可用' : `总发帖 ${number(total)} 篇${total ? '' : ' · 无收录数据'}`;
+    const dailyTotal = index => data.baseline?.daily?.[index]?.count ?? null;
+    const lineSegments = (values, x, y) => {
+        const segments = []; let points = [];
+        for (let index = 0; index < values.length; index++) {
+            if (values[index] === null) { if (points.length) segments.push(points.join(' ')); points = []; }
+            else points.push(`${x(index)},${y(values[index])}`);
+        }
+        if (points.length) segments.push(points.join(' '));
+        return segments;
+    };
+    function emptyShare(box, values, metric) {
+        if (metric !== 'share' || values.some(value => value !== null)) return;
+        const hint = document.createElement('p');
+        hint.className = 'keyword-share-empty';
+        hint.textContent = '暂无收录数据，无法计算发帖占比';
+        box.appendChild(hint);
+    }
     const selectedTerm = () => data.series[selected];
     const normalize = term => (term || '').normalize('NFKC').toLocaleLowerCase('zh-CN').trim();
     const color = index => `var(--analytics-color-${index})`;
@@ -87,8 +114,8 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
         box.appendChild(tooltip);
         return {
             hide() { tooltip.hidden = true; },
-            show(label, values, cx, cy, pinned = false) {
-                tooltip.innerHTML = `<span>${esc(label)}</span>${data.series.map((series, i) => `<div><i style="background:${color(i)}"></i><span title="${esc(series.term)}">${esc(series.term)}</span><strong>${number(values[i])} 篇</strong></div>`).join('')}`;
+            show(label, values, total, cx, cy, pinned = false) {
+                tooltip.innerHTML = `<span>${esc(label)}</span><span class="keyword-tooltip-total">${totalLabel(total)}</span>${data.series.map((series, i) => `<div><i style="background:${color(i)}"></i><span title="${esc(series.term)}">${esc(series.term)}</span><strong>${number(values[i])} 篇<small>${percent(values[i], total)}</small></strong></div>`).join('')}`;
                 tooltip.hidden = false;
                 tooltip.dataset.pinned = String(pinned);
                 tooltip.style.left = `${Math.max(6, Math.min(box.clientWidth - tooltip.offsetWidth - 6, cx - tooltip.offsetWidth / 2))}px`;
@@ -97,30 +124,39 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
         };
     }
     function renderDailyChart() {
+        const metric = dailyMetric;
         const box = el('keywordDailyChart');
         if (!data || !box.clientWidth) return;
         const scrollLeft = box.querySelector('.keyword-line-scroll')?.scrollLeft || 0;
         const rows = data.series[0].daily, multiple = data.series.length > 1;
-        const max = Math.max(...data.series.flatMap(series => series.daily.map(row => row.count)), 1);
+        const values = data.series.map(series => series.daily.map((row, index) => plotted(row.count, dailyTotal(index), metric)));
         const expanded = !!box.closest('.chart-expanded');
         const width = expanded ? box.clientWidth : Math.max(box.clientWidth, 7 * (dailyStyle === 'bar' ? Math.max(42, data.series.length * 22 + 14) : 34) + 36), height = expanded ? Math.max(178, Math.min(420, innerHeight * .5)) : 178;
         box.style.height = `${height + 58}px`;
-        const left = dailyStyle === 'bar' ? 32 : 10, right = width - 26, top = 26, bottom = height - 24, step = (right - left) / rows.length;
+        const showAxis = dailyStyle === 'bar' || metric === 'share';
+        const left = metric === 'share' ? 46 : showAxis ? 32 : 10, right = width - 26, top = 26, bottom = height - 24, step = (right - left) / rows.length;
         const barStep = Math.min(22, step * .8 / data.series.length), barWidth = Math.min(18, barStep * .72);
         const barX = (index, termIndex) => x(index) + (termIndex - (data.series.length - 1) / 2) * barStep;
-        box.dataset.chartStyle = dailyStyle;
-        const ceiling = Math.max(4, Math.ceil(max / 4) * 4);
+        box.dataset.chartStyle = dailyStyle; box.dataset.metric = metric;
+        const ceiling = ceilingFor(values.flat(), metric);
         const x = index => left + (index + .5) * step, y = value => bottom - value / ceiling * (bottom - top);
         // End labels are separated vertically so equal/near-equal series stay legible.
-        const endLabels = data.series.map((series, index) => ({ index, y: y(series.daily[6].count) - 12 })).sort((a, b) => a.y - b.y);
+        const endLabels = values.map((rows, index) => rows[6] === null ? null : { index, y: y(rows[6]) - 12 }).filter(Boolean).sort((a, b) => a.y - b.y);
         endLabels.forEach((label, index) => { label.y = Math.max(12, label.y, index ? endLabels[index - 1].y + 17 : 0); });
         const labelY = index => endLabels.find(label => label.index === index).y;
-        const counts = index => data.series.map(series => `${series.term} ${number(series.daily[index].count)} 篇`).join('；');
-        box.innerHTML = `<div class="keyword-line-scroll"><div class="keyword-line-canvas" style="width:${width}px"><svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(rows.map((row, index) => `${row.date}：${counts(index)}`).join('。'))}">${[0, .5, 1].map(ratio => `<line x1="${left}" x2="${right}" y1="${y(ceiling * ratio)}" y2="${y(ceiling * ratio)}" class="analytics-grid-line"/>${dailyStyle === 'bar' ? `<text class="keyword-axis-label" x="${left - 7}" y="${y(ceiling * ratio) + 4}" text-anchor="end">${number(ceiling * ratio)}</text>` : ''}`).join('')}${data.series.map((series, termIndex) => {
-            const points = series.daily.map((row, index) => `${x(index)},${y(row.count)}`).join(' ');
-            if (dailyStyle === 'bar') return `<g data-trend-series="${termIndex}" class="keyword-trend-series series-${termIndex}" style="--series-color:${color(termIndex)}">${series.daily.map((row, index) => `<g class="keyword-trend-point${row.date === data.date ? ' is-selected' : ''}" data-daily-count="${row.count}" data-daily-index="${index}"><rect class="keyword-daily-bar" x="${barX(index, termIndex) - barWidth / 2}" y="${y(row.count)}" width="${barWidth}" height="${bottom - y(row.count)}" rx="3"/>${!multiple && step >= 34 ? `<text x="${barX(index, termIndex)}" y="${y(row.count) - 12}" text-anchor="middle">${number(row.count)}</text>` : ''}<title>${esc(series.term)} · ${row.date} · ${number(row.count)} 篇</title></g>`).join('')}</g>`;
-            return `<g data-trend-series="${termIndex}" class="keyword-trend-series series-${termIndex}" style="--series-color:${color(termIndex)}">${!multiple ? `<polygon class="keyword-line-area" points="${x(0)},${bottom} ${points} ${x(6)},${bottom}"/>` : ''}<polyline class="keyword-trend-line" points="${points}"/>${series.daily.map((row, index) => `<g class="keyword-trend-point${row.date === data.date ? ' is-selected' : ''}" data-daily-count="${row.count}" data-daily-index="${index}"><g class="keyword-trend-marker">${marker(termIndex, x(index), y(row.count))}</g>${!multiple || index === 6 ? `<text x="${x(index)}" y="${multiple ? labelY(termIndex) : y(row.count) - 13}" text-anchor="middle">${number(row.count)}</text>` : ''}<title>${esc(series.term)} · ${row.date} · ${number(row.count)} 篇</title></g>`).join('')}</g>`;
+        const counts = index => `${totalLabel(dailyTotal(index))}；` + data.series.map(series => `${series.term} ${number(series.daily[index].count)} 篇 · ${percent(series.daily[index].count, dailyTotal(index))}`).join('；');
+        box.innerHTML = `<div class="keyword-line-scroll"><div class="keyword-line-canvas" style="width:${width}px"><svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(rows.map((row, index) => `${row.date}：${counts(index)}`).join('。'))}">${[0, .5, 1].map(ratio => `<line x1="${left}" x2="${right}" y1="${y(ceiling * ratio)}" y2="${y(ceiling * ratio)}" class="analytics-grid-line"/>${showAxis ? `<text class="keyword-axis-label" x="${left - 7}" y="${y(ceiling * ratio) + 4}" text-anchor="end">${axisLabel(ceiling * ratio, metric)}</text>` : ''}`).join('')}${data.series.map((series, termIndex) => {
+            const segmentPoints = lineSegments(values[termIndex], x, y);
+            if (dailyStyle === 'bar') return `<g data-trend-series="${termIndex}" class="keyword-trend-series series-${termIndex}" style="--series-color:${color(termIndex)}">${series.daily.map((row, index) => {
+                const value = values[termIndex][index];
+                return value === null ? '' : `<g class="keyword-trend-point${row.date === data.date ? ' is-selected' : ''}" data-daily-count="${row.count}" data-daily-value="${value}" data-daily-index="${index}"><rect class="keyword-daily-bar" x="${barX(index, termIndex) - barWidth / 2}" y="${y(value)}" width="${barWidth}" height="${bottom - y(value)}" rx="3"/>${!multiple && step >= 44 ? `<text x="${barX(index, termIndex)}" y="${y(value) - 12}" text-anchor="middle">${valueLabel(value, metric)}</text>` : ''}<title>${esc(series.term)} · ${row.date} · ${number(row.count)} 篇 · ${percent(row.count, dailyTotal(index))}</title></g>`;
+            }).join('')}</g>`;
+            return `<g data-trend-series="${termIndex}" class="keyword-trend-series series-${termIndex}" style="--series-color:${color(termIndex)}">${!multiple && values[termIndex].every(value => value !== null) ? `<polygon class="keyword-line-area" points="${x(0)},${bottom} ${segmentPoints[0]} ${x(6)},${bottom}"/>` : ''}${segmentPoints.map(points => `<polyline class="keyword-trend-line" points="${points}"/>`).join('')}${series.daily.map((row, index) => {
+                const value = values[termIndex][index];
+                return value === null ? '' : `<g class="keyword-trend-point${row.date === data.date ? ' is-selected' : ''}" data-daily-count="${row.count}" data-daily-value="${value}" data-daily-index="${index}"><g class="keyword-trend-marker">${marker(termIndex, x(index), y(value))}</g>${!multiple || index === 6 ? `<text x="${x(index)}" y="${multiple ? labelY(termIndex) : y(value) - 13}" text-anchor="middle">${valueLabel(value, metric)}</text>` : ''}<title>${esc(series.term)} · ${row.date} · ${number(row.count)} 篇 · ${percent(row.count, dailyTotal(index))}</title></g>`;
+            }).join('')}</g>`;
         }).join('')}<line class="keyword-day-guide" x1="0" x2="0" y1="${top}" y2="${bottom}" hidden/></svg><div class="keyword-day-tabs" style="padding-left:${left}px;padding-right:${width - right}px">${rows.map((row, index) => `<button type="button" class="keyword-day${row.date === data.date ? ' is-selected' : ''}" data-analysis-date="${row.date}" data-day-index="${index}" aria-pressed="${row.date === data.date}" aria-label="查看 ${row.date}，${esc(counts(index))}">${row.date.slice(5).replace('-', '/')}</button>`).join('')}</div></div></div><p class="keyword-daily-note">${data.partial ? '末日截至 ' + new Date(Date.parse(data.to) + offset * 60000).toISOString().slice(11, 16) : '各日按全天统计'}</p>`;
+        emptyShare(box, values.flat(), metric);
         const tooltip = chartTooltip(box);
         let pinned = -1;
         const readout = el('keywordDailyReadout'), reset = () => {
@@ -132,18 +168,20 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
             readout.textContent = rows[index].date + ' · ' + counts(index);
             const guide = box.querySelector('.keyword-day-guide');
             guide.removeAttribute('hidden'); guide.setAttribute('x1', x(index)); guide.setAttribute('x2', x(index));
-            tooltip.show(rows[index].date, data.series.map(series => series.daily[index].count), x(index) - box.querySelector('.keyword-line-scroll').scrollLeft, y(Math.max(...data.series.map(series => series.daily[index].count))), pinned === index);
+            tooltip.show(rows[index].date, data.series.map(series => series.daily[index].count), dailyTotal(index), x(index) - box.querySelector('.keyword-line-scroll').scrollLeft, y(Math.max(0, ...values.map(rows => rows[index]).filter(value => value !== null))), pinned === index);
         };
         const pointerIndex = event => {
             const point = window.SeekFeedControls.chartPointer(event, box.querySelector('svg'));
             if (!point) return -1;
             if (dailyStyle === 'bar') {
                 const tolerance = event.pointerType === 'touch' ? 14 : 5;
-                return rows.findIndex((_, i) => data.series.some((series, termIndex) => Math.abs(point.x - barX(i, termIndex)) <= barWidth / 2 + tolerance && point.y >= y(series.daily[i].count) - tolerance && point.y <= bottom + tolerance));
+                return rows.findIndex((_, i) => values.some((series, termIndex) => series[i] !== null && Math.abs(point.x - barX(i, termIndex)) <= barWidth / 2 + tolerance && point.y >= y(series[i]) - tolerance && point.y <= bottom + tolerance));
             }
-            for (const series of data.series) for (let i = 0; i < rows.length; i++) {
-                const start = { x: x(i), y: y(series.daily[i].count) }, next = Math.min(i + 1, rows.length - 1);
-                if (window.SeekFeedControls.nearChartSegment(point, start, { x: x(next), y: y(series.daily[next].count) }, event.pointerType === 'touch' ? 14 : 7)) return Math.abs(point.x - x(i)) <= Math.abs(point.x - x(next)) ? i : next;
+            for (const series of values) for (let i = 0; i < rows.length; i++) {
+                if (series[i] === null) continue;
+                const start = { x: x(i), y: y(series[i]) }, next = Math.min(i + 1, rows.length - 1), tolerance = event.pointerType === 'touch' ? 14 : 7;
+                if (Math.hypot(point.x - start.x, point.y - start.y) <= tolerance) return i;
+                if (series[next] !== null && window.SeekFeedControls.nearChartSegment(point, start, { x: x(next), y: y(series[next]) }, tolerance)) return Math.abs(point.x - x(i)) <= Math.abs(point.x - x(next)) ? i : next;
             }
             return -1;
         };
@@ -169,6 +207,7 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
         reset();
     }
     function renderChart() {
+        const metric = hourMetric;
         if (!data || !el('keywordHourChart').clientWidth) return;
         const box = el('keywordHourChart'), multiple = data.series.length > 1;
         const scrollLeft = box.querySelector('.keyword-chart-scroll')?.scrollLeft || 0;
@@ -177,28 +216,33 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
                 const rows = series.hourly.slice(index * hours, (index + 1) * hours);
                 return rows.reduce((sum, row) => sum + row.count, 0);
             });
-            return { hour: index * hours, values, available: data.series[0].hourly.slice(index * hours, (index + 1) * hours).some(row => row.available) };
+            const allPosts = data.baseline?.hourly?.slice(index * hours, (index + 1) * hours);
+            const total = allPosts ? allPosts.reduce((sum, row) => sum + row.count, 0) : null;
+            return { hour: index * hours, values, total, plotted: values.map(count => plotted(count, total, metric)), available: data.series[0].hourly.slice(index * hours, (index + 1) * hours).some(row => row.available) };
         }).filter(row => row.available);
-        const max = Math.max(...buckets.flatMap(row => row.values), 1), ceiling = Math.max(4, Math.ceil(max / 4) * 4);
-        const slot = Math.max(30, number(max).length * 7 + 16);
+        const max = Math.max(...buckets.flatMap(row => row.plotted).filter(value => value !== null), 0), ceiling = ceilingFor(buckets.flatMap(row => row.plotted), metric);
+        const slot = metric === 'share' ? 54 : Math.max(30, number(max).length * 7 + 16);
         const expanded = !!box.closest('.chart-expanded');
         const width = expanded || hourStyle === 'line' ? box.clientWidth : Math.max(box.clientWidth, 46 + buckets.length * Math.max(42, data.series.length * slot + 14));
         const height = expanded ? Math.max(220, Math.min(480, innerHeight * .55)) : 220;
         box.style.height = `${height + 16}px`;
-        const left = 32, right = width - 12, top = 34, bottom = height - 36, step = (right - left) / buckets.length, barStep = Math.min(slot, step * .8 / data.series.length), bar = Math.min(30, barStep * .72);
+        const left = metric === 'share' ? 46 : 32, right = width - 12, top = 34, bottom = height - 36, step = (right - left) / buckets.length, barStep = Math.min(slot, step * .8 / data.series.length), bar = Math.min(30, barStep * .72);
         const tickStride = Math.max(1, Math.ceil(55 / step));
-        box.dataset.chartStyle = hourStyle; box.dataset.multiple = String(multiple);
+        box.dataset.chartStyle = hourStyle; box.dataset.multiple = String(multiple); box.dataset.metric = metric;
         const x = index => left + (index + .5) * step, y = n => bottom - n / ceiling * (bottom - top);
-        const lines = hourStyle === 'line' ? data.series.map((_, termIndex) => `<g class="keyword-trend-series series-${termIndex}" style="--series-color:${color(termIndex)}"><polyline class="keyword-trend-line" points="${buckets.map((row, index) => x(index) + ',' + y(row.values[termIndex])).join(' ')}"/></g>`).join('') : '';
-        box.innerHTML = `<div class="keyword-chart-scroll"><svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true">${Array.from({length:5},(_,i)=>{const n=ceiling*i/4;return `<line x1="${left}" x2="${right}" y1="${y(n)}" y2="${y(n)}" class="analytics-grid-line"/><text x="${left-8}" y="${y(n)+4}" text-anchor="end">${number(n)}</text>`;}).join('')}${lines}${buckets.map((row,index)=>{
-            return `<g data-keyword-bucket="${index}" class="keyword-chart-column">${row.values.map((count, termIndex) => {
+        const lines = hourStyle === 'line' ? data.series.map((_, termIndex) => `<g class="keyword-trend-series series-${termIndex}" style="--series-color:${color(termIndex)}">${lineSegments(buckets.map(row => row.plotted[termIndex]), x, y).map(points => `<polyline class="keyword-trend-line" points="${points}"/>`).join('')}</g>`).join('') : '';
+        box.innerHTML = `<div class="keyword-chart-scroll"><svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true">${Array.from({length:5},(_,i)=>{const n=ceiling*i/4;return `<line x1="${left}" x2="${right}" y1="${y(n)}" y2="${y(n)}" class="analytics-grid-line"/><text x="${left-8}" y="${y(n)+4}" text-anchor="end">${axisLabel(n, metric)}</text>`;}).join('')}${lines}${buckets.map((row,index)=>{
+            return `<g data-keyword-bucket="${index}" data-total-posts="${row.total ?? ''}" class="keyword-chart-column">${row.values.map((count, termIndex) => {
+                const plotValue = row.plotted[termIndex];
+                if (plotValue === null) return '';
                 const cx = hourStyle === 'line' ? x(index) : x(index) + (termIndex - (data.series.length - 1) / 2) * barStep;
-                const value = number(count), labelWidth = Math.max(24, value.length * 7 + 10), cy = y(count);
-                return `<g data-keyword-series="${termIndex}" style="--series-color:${color(termIndex)}">${hourStyle === 'line' ? `<g class="keyword-trend-marker">${marker(termIndex, cx, cy)}</g>` : `<rect class="keyword-bar" x="${cx-bar/2}" y="${cy}" width="${bar}" height="${bottom-cy}" rx="3"/>`}<g class="analytics-bar-label${(hourStyle === 'line' ? step < slot || multiple : expanded && barStep < slot) ? ' is-compact' : ''}"><rect x="${cx-labelWidth/2}" y="${cy-27}" width="${labelWidth}" height="20" rx="5"/><text class="analytics-bar-value" x="${cx}" y="${cy-17}" dominant-baseline="central" text-anchor="middle">${value}</text></g><title>${esc(data.series[termIndex].term)} · ${time(row.hour)} · ${number(count)} 篇</title></g>`;
+                const value = valueLabel(plotValue, metric), labelWidth = Math.max(24, value.length * 7 + 10), cy = y(plotValue);
+                return `<g data-keyword-series="${termIndex}" data-count="${count}" data-value="${plotValue}" style="--series-color:${color(termIndex)}">${hourStyle === 'line' ? `<g class="keyword-trend-marker">${marker(termIndex, cx, cy)}</g>` : `<rect class="keyword-bar" x="${cx-bar/2}" y="${cy}" width="${bar}" height="${bottom-cy}" rx="3"/>`}<g class="analytics-bar-label${(hourStyle === 'line' ? step < slot || multiple : expanded && barStep < slot) ? ' is-compact' : ''}"><rect x="${cx-labelWidth/2}" y="${cy-27}" width="${labelWidth}" height="20" rx="5"/><text class="analytics-bar-value" x="${cx}" y="${cy-17}" dominant-baseline="central" text-anchor="middle">${value}</text></g><title>${esc(data.series[termIndex].term)} · ${time(row.hour)} · ${number(count)} 篇</title></g>`;
             }).join('')}${index % tickStride === 0 ? `<text x="${x(index)}" y="${height - 11}" text-anchor="middle">${time(row.hour)}</text>` : ''}</g>`;
         }).join('')}</svg></div>`;
         const scroller=box.firstElementChild;
         scroller.scrollLeft = scrollLeft;
+        emptyShare(box, buckets.flatMap(row => row.plotted), metric);
         const tooltip = chartTooltip(box);
         let pinned = -1;
         const select = index => {
@@ -207,11 +251,11 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
             const end=Math.min(Date.parse(data.from)+(row.hour+hours)*3600000,Date.parse(data.to));
             const endText=new Date(end+offset*60000).toISOString().slice(11,16);
             const displayEnd = row.hour + hours === 24 && !data.partial ? '24:00' : endText;
-            el('keywordChartReadout').textContent=`${data.date} ${time(row.hour)}–${displayEnd} · ${data.series.map((series,index)=>series.term+' '+number(row.values[index])+' 篇').join('；')}`;
+            el('keywordChartReadout').textContent=`${data.date} ${time(row.hour)}–${displayEnd} · ${totalLabel(row.total)}；${data.series.map((series,index)=>series.term+' '+number(row.values[index])+' 篇 · '+percent(row.values[index], row.total)).join('；')}`;
             box.setAttribute('aria-label',el('keywordChartReadout').textContent+'。左右方向键查看相邻时段。');
             box.querySelectorAll('[data-keyword-bucket]').forEach((column,i)=>column.classList.toggle('is-active',i===chartIndex));
             if(document.activeElement===box && box.matches(':focus-visible')){const start=x(chartIndex)-step/2;if(start<scroller.scrollLeft)scroller.scrollLeft=start;else if(start+step>scroller.scrollLeft+box.clientWidth)scroller.scrollLeft=start+step-box.clientWidth;}
-            tooltip.show(`${data.date} · ${time(row.hour)}–${displayEnd}`, row.values, x(chartIndex) - scroller.scrollLeft, y(Math.max(...row.values)), pinned === chartIndex);
+            tooltip.show(`${data.date} · ${time(row.hour)}–${displayEnd}`, row.values, row.total, x(chartIndex) - scroller.scrollLeft, y(Math.max(0, ...row.plotted.filter(value => value !== null))), pinned === chartIndex);
         };
         const pointerIndex = event => {
             const point = window.SeekFeedControls.chartPointer(event, box.querySelector('svg'));
@@ -219,14 +263,18 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
             const tolerance = event.pointerType === 'touch' ? 14 : 5;
             if (hourStyle === 'line') {
                 for (let termIndex = 0; termIndex < data.series.length; termIndex++) for (let i = 0; i < buckets.length; i++) {
-                    const next = Math.min(i + 1, buckets.length - 1);
-                    if (window.SeekFeedControls.nearChartSegment(point, { x: x(i), y: y(buckets[i].values[termIndex]) }, { x: x(next), y: y(buckets[next].values[termIndex]) }, tolerance + 2)) return Math.abs(point.x - x(i)) <= Math.abs(point.x - x(next)) ? i : next;
+                    const value = buckets[i].plotted[termIndex];
+                    if (value === null) continue;
+                    const start = { x: x(i), y: y(value) }, next = Math.min(i + 1, buckets.length - 1), endValue = buckets[next].plotted[termIndex];
+                    if (Math.hypot(point.x - start.x, point.y - start.y) <= tolerance + 2) return i;
+                    if (endValue !== null && window.SeekFeedControls.nearChartSegment(point, start, { x: x(next), y: y(endValue) }, tolerance + 2)) return Math.abs(point.x - x(i)) <= Math.abs(point.x - x(next)) ? i : next;
                 }
                 return -1;
             }
-            return buckets.findIndex((row, i) => row.values.some((count, termIndex) => {
+            return buckets.findIndex((row, i) => row.plotted.some((value, termIndex) => {
+                if (value === null) return false;
                 const cx = x(i) + (termIndex - (data.series.length - 1) / 2) * barStep;
-                return Math.abs(point.x - cx) <= bar / 2 + tolerance && point.y >= y(count) - tolerance && point.y <= bottom + tolerance;
+                return Math.abs(point.x - cx) <= bar / 2 + tolerance && point.y >= y(value) - tolerance && point.y <= bottom + tolerance;
             }));
         };
         box.onpointerdown = event => { const index = pointerIndex(event); if (index < 0) return dismiss(); chartIndex = index; box.focus({ preventScroll: true }); };
@@ -238,7 +286,7 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
             if(e.key==='Enter'||e.key===' '){e.preventDefault();pinned=pinned===chartIndex?-1:chartIndex;if(pinned<0)reset(true);else select(pinned);return;}
             if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();select(e.key==='Home'?0:e.key==='End'?buckets.length-1:chartIndex+(e.key==='ArrowRight'?1:-1));
         };
-        const reset=(force=false)=>{if(!force && pinned>=0){select(pinned);return;}if(!force && document.activeElement===box)return;tooltip.hide();box.querySelectorAll('.is-active').forEach(n=>n.classList.remove('is-active'));el('keywordChartReadout').textContent=`${data.date} · ${multiple?'各词独立对比，':hourStyle === 'bar'?'每柱 ':'每点 '}${hours} 小时 · ${data.partial?'截至 '+new Date(Date.parse(data.to)+offset*60000).toISOString().slice(11,16):'全天'} · UTC${offset>=0?'+':'−'}${Math.abs(offset/60)}`;};
+        const reset=(force=false)=>{if(!force && pinned>=0){select(pinned);return;}if(!force && document.activeElement===box)return;tooltip.hide();box.querySelectorAll('.is-active').forEach(n=>n.classList.remove('is-active'));el('keywordChartReadout').textContent=`${data.date} · ${metric === 'share' ? '占同时段总发帖，' : ''}${multiple?'各词独立对比，':hourStyle === 'bar'?'每柱 ':'每点 '}${hours} 小时 · ${data.partial?'截至 '+new Date(Date.parse(data.to)+offset*60000).toISOString().slice(11,16):'全天'} · UTC${offset>=0?'+':'−'}${Math.abs(offset/60)}`;};
         const dismiss = () => { pinned = -1; reset(true); };
         scroller.onscroll = () => { if (!box.matches(':focus-visible')) dismiss(); };
         window.SeekFeedControls.chartInspection(box, dismiss);
@@ -249,7 +297,9 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
     function render() {
         el('keywordAnalysisResults').hidden=false;
         const series=selectedTerm(),total=series.total;
-        el('keywordComparison').innerHTML=data.series.map((row,i)=>`<button type="button" data-term-index="${i}" class="keyword-summary${i===selected?' is-selected':''}" aria-pressed="${i===selected}"><span>${esc(row.term)}</span><strong>${number(row.total)}<small>篇</small></strong><span>占当日收录 ${percent(row.total,data.totalPosts)}</span></button>`).join('');
+        el('keywordShareContext').textContent = `${data.date} · 总发帖 ${number(data.totalPosts)} 篇${data.partial ? '（截至查询时刻）' : ''}`;
+        el('keywordShareNote').textContent = data.totalPosts ? `关键词帖子数 ÷ 该日期已收录总帖数${data.series.length > 1 ? '；各词独立计算，同一帖子可同时计入多个词，占比不相加。' : '。'}` : '该日期暂无收录帖子，暂无法计算占比。';
+        el('keywordComparison').innerHTML=data.series.map((row,i)=>`<button type="button" data-term-index="${i}" class="keyword-summary${i===selected?' is-selected':''}" style="--series-color:${color(i)}" aria-pressed="${i===selected}" aria-label="${esc(row.term)}，${number(row.total)} 篇，占总发帖 ${percent(row.total,data.totalPosts)}，查看详细指标"><span class="keyword-summary-term"><i aria-hidden="true"></i><span title="${esc(row.term)}">${esc(row.term)}</span></span><span class="keyword-summary-values"><strong>${number(row.total)}<small>篇</small></strong><b>${percent(row.total,data.totalPosts)}</b></span><span class="keyword-share-track" role="${data.totalPosts ? 'meter' : 'img'}" aria-label="${esc(row.term)} 发帖占比${data.totalPosts ? '' : '，无收录数据'}" aria-valuemin="0" aria-valuemax="100" ${data.totalPosts ? `aria-valuenow="${share(row.total,data.totalPosts)}"` : ''} aria-valuetext="${data.totalPosts ? `${number(row.total)} / ${number(data.totalPosts)} 篇，${percent(row.total,data.totalPosts)}` : '无收录数据'}"><i style="width:${share(row.total,data.totalPosts) ?? 0}%" ${row.total ? '' : 'hidden'}></i></span><span class="keyword-summary-base">${number(row.total)} / ${number(data.totalPosts)} 篇${i === selected ? ' · 当前明细' : ''}</span></button>`).join('');
         el('keywordHourLegend').innerHTML = el('keywordDailyLegend').innerHTML = legend();
         el('keywordDetailLabel').textContent = series.term + ' · 详细指标（点击上方关键词切换）';
         el('keywordCategoryTerm').textContent = series.term + ' · 帖子占比';
@@ -263,6 +313,7 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
         renderCategoryChart(series);
         renderAuthors(series);
         renderDailyChart();
+        el('keywordDailyUnit').textContent = dailyMetric === 'share' ? '占当日总发帖' : '篇 / 天';
         el('keywordAnalysisStatus').textContent=`${data.date} · ${data.scope==='title'?'标题包含':'标题或 RSS 摘要包含'} · 每篇每词计 1 次${data.coverageFrom&&Date.parse(data.coverageFrom)>Date.parse(data.from)-6*86400000?' · 历史记录未覆盖完整 7 天':''}`;
         chartIndex=0;renderChart();
     }
@@ -272,11 +323,13 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
         if(!silent)el('keywordAnalysisResults').setAttribute('aria-busy','true');
         const result=await apiRequest('/api/stats/keywords?'+new URLSearchParams(config),{signal:controller.signal,silent:true});
         if(id!==request)return;busy=false;el('keywordAnalysisResults').setAttribute('aria-busy','false');
-        if(!result?.success){el('keywordAnalysisStatus').textContent='分析读取失败，请重试。'+(data?'已保留上次结果。':'');return;}
+        if(!result?.success){el('keywordAnalysisStatus').dataset.error='true';el('keywordAnalysisStatus').textContent='分析读取失败，请重试。'+(data?'已保留上次结果。':'');return;}
         const active=data?.series[selected]?.term;
         const signature=value=>JSON.stringify(value&&{...value,to:null});
         const unchanged=signature(result.data)===signature(data);data=result.data;selected=Math.max(0,data.series.findIndex(row=>row.term===active));
-        if(!unchanged)render();
+        const recovered = el('keywordAnalysisStatus').dataset.error === 'true';
+        delete el('keywordAnalysisStatus').dataset.error;
+        if(!unchanged || !silent || recovered)render();
     }
     function submit() {
         if(!el('keywordAnalysisForm').reportValidity())return;
@@ -332,6 +385,16 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
                     else { if (dailyStyle === style) return; dailyStyle = style; }
                     el(id).querySelectorAll('button').forEach(item => { const active = item === button; item.classList.toggle('active', active); item.setAttribute('aria-pressed', String(active)); });
                     renderChartStyle();
+                });
+            }
+            for (const [id, draw] of [['keywordHourMetric', renderChart], ['keywordDailyMetric', renderDailyChart]]) {
+                el(id).addEventListener('click', event => {
+                    const button = event.target.closest('[data-keyword-metric]');
+                    if (!button) return;
+                    if (id === 'keywordHourMetric') { if (hourMetric === button.dataset.keywordMetric) return; hourMetric = button.dataset.keywordMetric; }
+                    else { if (dailyMetric === button.dataset.keywordMetric) return; dailyMetric = button.dataset.keywordMetric; el('keywordDailyUnit').textContent = dailyMetric === 'share' ? '占当日总发帖' : '篇 / 天'; }
+                    el(id).querySelectorAll('button').forEach(item => { const active = item === button; item.classList.toggle('active', active); item.setAttribute('aria-pressed', String(active)); });
+                    draw();
                 });
             }
             el('keywordBucketSelector').addEventListener('click',e=>{const button=e.target.closest('[data-hours]');if(!button)return;hours=Number(button.dataset.hours);el('keywordBucketSelector').querySelectorAll('button').forEach(n=>{n.classList.toggle('active',n===button);n.setAttribute('aria-pressed',String(n===button));});renderChart();});

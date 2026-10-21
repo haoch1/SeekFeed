@@ -10,6 +10,10 @@ const ChartStyle: FC<{ id: string; label: string; selected: 'bar' | 'line' }> = 
     <div id={id} class="analytics-period analytics-style-selector" role="group" aria-label={label}>{[['bar', '柱形'], ['line', '折线']].map(([style, text]) => <button type="button" class={`chart-range-btn${selected === style ? ' active' : ''}`} data-chart-style={style} aria-pressed={selected === style ? 'true' : 'false'}>{text}</button>)}</div>
 );
 
+const ChartMetric: FC<{ id: string; label: string }> = ({ id, label }) => (
+    <div id={id} class="analytics-period keyword-metric-selector" role="group" aria-label={label}>{[['count', '帖子数', '帖数'], ['share', '发帖占比', '占比']].map(([metric, text, short]) => <button type="button" class={`chart-range-btn${metric === 'count' ? ' active' : ''}`} data-keyword-metric={metric} aria-label={text} aria-pressed={String(metric === 'count')}><span class="keyword-control-long">{text}</span><span class="keyword-control-short">{short}</span></button>)}</div>
+);
+
 export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
     <section id="statsPage" class="route-page" hidden={!active}>
         <div class="workspace-heading analytics-heading">
@@ -65,20 +69,22 @@ export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
                 <div id="keywordSuggestions" class="keyword-suggestions" aria-label="快速分析热门标题词"></div>
                 <p id="keywordAnalysisStatus" class="keyword-analysis-status" role="status">输入关键词，查看全天与各时段的发帖分布。</p>
                 <div id="keywordAnalysisResults" class="keyword-analysis-results" hidden>
+                    <div class="keyword-share-heading"><h3>发帖占比</h3><span id="keywordShareContext" class="analytics-caption"></span></div>
                     <div id="keywordComparison" class="keyword-comparison" role="group" aria-label="选择关键词的分类、作者与详细指标"></div>
+                    <p id="keywordShareNote" class="analytics-caption keyword-share-note"></p>
                     <p id="keywordDetailLabel" class="keyword-detail-label"></p>
                     <div id="keywordMetrics" class="keyword-metrics"></div>
                     <div id="keywordOverlap" class="keyword-overlap" hidden></div>
                     <div class="keyword-panels">
                         <section class="keyword-panel">
                             <div class="keyword-chart-heading"><h3>时段分布</h3><div class="chart-heading-actions"><ChartStyle id="keywordHourStyle" label="时段分布图样式" selected="bar" /><ChartExpand target="keywordHourChart" label="关键词时段分布" /></div></div>
-                            <div class="keyword-chart-toolbar"><div id="keywordHourLegend" class="keyword-chart-legend"></div><div id="keywordBucketSelector" class="analytics-period" role="group" aria-label="关键词时间粒度">{[1, 3, 6].map(hours => <button type="button" class={`chart-range-btn${hours === 1 ? ' active' : ''}`} data-hours={hours} aria-pressed={hours === 1 ? 'true' : 'false'}>{hours} 小时</button>)}</div></div>
+                            <div id="keywordHourLegend" class="keyword-chart-legend"></div><div class="keyword-chart-toolbar"><ChartMetric id="keywordHourMetric" label="时段分布指标" /><div id="keywordBucketSelector" class="analytics-period" role="group" aria-label="关键词时间粒度">{[1, 3, 6].map(hours => <button type="button" class={`chart-range-btn${hours === 1 ? ' active' : ''}`} data-hours={hours} aria-label={`${hours} 小时`} aria-pressed={hours === 1 ? 'true' : 'false'}><span class="keyword-control-long">{hours} 小时</span><span class="keyword-control-short">{hours}时</span></button>)}</div></div>
                             <div id="keywordChartReadout" class="analytics-caption keyword-panel-readout" aria-live="polite"></div>
                             <div id="keywordHourChart" class="keyword-hour-chart" tabindex="0" role="group" aria-label="关键词时段柱形图，方向键查看数据"></div>
                         </section>
                         <section class="keyword-panel">
                             <div class="keyword-chart-heading"><h3>近 7 天趋势</h3><div class="chart-heading-actions"><ChartStyle id="keywordDailyStyle" label="近七天趋势图样式" selected="line" /><ChartExpand target="keywordDailyChart" label="关键词近 7 天趋势" /></div></div>
-                            <div class="keyword-chart-toolbar"><div id="keywordDailyLegend" class="keyword-chart-legend"></div><span class="analytics-caption">篇 / 天</span></div>
+                            <div id="keywordDailyLegend" class="keyword-chart-legend"></div><div class="keyword-chart-toolbar"><ChartMetric id="keywordDailyMetric" label="近七天趋势指标" /><span id="keywordDailyUnit" class="analytics-caption">篇 / 天</span></div>
                             <div id="keywordDailyReadout" class="analytics-caption keyword-panel-readout">点击日期查看当天</div>
                             <div id="keywordDailyChart" class="keyword-daily-chart"></div>
                         </section>
