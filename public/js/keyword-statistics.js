@@ -85,8 +85,8 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
         box.appendChild(tooltip);
         return {
             hide() { tooltip.hidden = true; },
-            show(label, values, cx, cy, pinned = false, available = true) {
-                tooltip.innerHTML = `<span>${esc(label)}</span>${available ? data.series.map((series, i) => `<div><i style="background:${color(i)}"></i><span title="${esc(series.term)}">${esc(series.term)}</span><strong>${number(values[i])} 篇</strong></div>`).join('') : '<div>尚未到该时段</div>'}`;
+            show(label, values, cx, cy, pinned = false) {
+                tooltip.innerHTML = `<span>${esc(label)}</span>${data.series.map((series, i) => `<div><i style="background:${color(i)}"></i><span title="${esc(series.term)}">${esc(series.term)}</span><strong>${number(values[i])} 篇</strong></div>`).join('')}`;
                 tooltip.hidden = false;
                 tooltip.dataset.pinned = String(pinned);
                 tooltip.style.left = `${Math.max(6, Math.min(box.clientWidth - tooltip.offsetWidth - 6, cx - tooltip.offsetWidth / 2))}px`;
@@ -169,7 +169,7 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
                 return rows.reduce((sum, row) => sum + row.count, 0);
             });
             return { hour: index * hours, values, available: data.series[0].hourly.slice(index * hours, (index + 1) * hours).some(row => row.available) };
-        });
+        }).filter(row => row.available);
         const max = Math.max(...buckets.flatMap(row => row.values), 1), ceiling = Math.max(4, Math.ceil(max / 4) * 4);
         const slot = Math.max(30, number(max).length * 7 + 16);
         const expanded = !!box.closest('.chart-expanded');
@@ -178,14 +178,12 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
         box.style.height = `${height + 16}px`;
         const left = 32, right = width - 12, top = 34, bottom = height - 36, step = (right - left) / buckets.length, barStep = Math.min(slot, step * .8 / data.series.length), bar = Math.min(30, barStep * .72);
         const tickStride = Math.max(1, Math.ceil(55 / step));
-        const futureStart = buckets.findIndex(row => !row.available);
-        const futureBand = expanded && futureStart >= 0 ? `<rect class="keyword-future-range" x="${left + futureStart * step}" y="${top}" width="${right - left - futureStart * step}" height="${bottom - top}" />` : '';
         const x = index => left + (index + .5) * step, y = n => bottom - n / ceiling * (bottom - top);
-        box.innerHTML = `<div class="keyword-chart-scroll"><svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true">${Array.from({length:5},(_,i)=>{const n=ceiling*i/4;return `<line x1="${left}" x2="${right}" y1="${y(n)}" y2="${y(n)}" class="analytics-grid-line"/><text x="${left-8}" y="${y(n)+4}" text-anchor="end">${number(n)}</text>`;}).join('')}${futureBand}${buckets.map((row,index)=>{
-            return `<g data-keyword-bucket="${index}" class="keyword-chart-column${row.available?'':' is-future'}">${row.values.map((count, termIndex) => {
+        box.innerHTML = `<div class="keyword-chart-scroll"><svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true">${Array.from({length:5},(_,i)=>{const n=ceiling*i/4;return `<line x1="${left}" x2="${right}" y1="${y(n)}" y2="${y(n)}" class="analytics-grid-line"/><text x="${left-8}" y="${y(n)+4}" text-anchor="end">${number(n)}</text>`;}).join('')}${buckets.map((row,index)=>{
+            return `<g data-keyword-bucket="${index}" class="keyword-chart-column">${row.values.map((count, termIndex) => {
                 const cx = x(index) + (termIndex - (data.series.length - 1) / 2) * barStep;
-                const value = row.available ? number(count) : '—', labelWidth = Math.max(24, value.length * 7 + 10), cy = row.available ? y(count) : top;
-                return `<g data-keyword-series="${termIndex}" style="--series-color:${color(termIndex)}"><rect class="keyword-bar" x="${cx-bar/2}" y="${cy}" width="${bar}" height="${row.available?bottom-cy:bottom-top}" rx="3"/><g class="analytics-bar-label${expanded && barStep < slot ? ' is-compact' : ''}"><rect x="${cx-labelWidth/2}" y="${cy-27}" width="${labelWidth}" height="20" rx="5"/><text class="analytics-bar-value" x="${cx}" y="${cy-17}" dominant-baseline="central" text-anchor="middle">${value}</text></g><title>${esc(data.series[termIndex].term)} · ${time(row.hour)} · ${row.available?number(count)+' 篇':'尚未到该时段'}</title></g>`;
+                const value = number(count), labelWidth = Math.max(24, value.length * 7 + 10), cy = y(count);
+                return `<g data-keyword-series="${termIndex}" style="--series-color:${color(termIndex)}"><rect class="keyword-bar" x="${cx-bar/2}" y="${cy}" width="${bar}" height="${bottom-cy}" rx="3"/><g class="analytics-bar-label${expanded && barStep < slot ? ' is-compact' : ''}"><rect x="${cx-labelWidth/2}" y="${cy-27}" width="${labelWidth}" height="20" rx="5"/><text class="analytics-bar-value" x="${cx}" y="${cy-17}" dominant-baseline="central" text-anchor="middle">${value}</text></g><title>${esc(data.series[termIndex].term)} · ${time(row.hour)} · ${number(count)} 篇</title></g>`;
             }).join('')}${index % tickStride === 0 ? `<text x="${x(index)}" y="${height - 11}" text-anchor="middle">${time(row.hour)}</text>` : ''}</g>`;
         }).join('')}</svg></div>`;
         const scroller=box.firstElementChild;
@@ -197,12 +195,12 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
             const row=buckets[chartIndex];
             const end=Math.min(Date.parse(data.from)+(row.hour+hours)*3600000,Date.parse(data.to));
             const endText=new Date(end+offset*60000).toISOString().slice(11,16);
-            const readout=`${data.date} ${time(row.hour)}–${row.hour+hours===24&&!data.partial?'24:00':endText} · ${row.available?data.series.map((series,index)=>series.term+' '+number(row.values[index])+' 篇').join('；'):'尚未到该时段'}`;
-            el('keywordChartReadout').textContent=row.available?readout:`${data.date} ${time(row.hour)}–${time(row.hour+hours)} · 尚未到该时段`;
+            const displayEnd = row.hour + hours === 24 && !data.partial ? '24:00' : endText;
+            el('keywordChartReadout').textContent=`${data.date} ${time(row.hour)}–${displayEnd} · ${data.series.map((series,index)=>series.term+' '+number(row.values[index])+' 篇').join('；')}`;
             box.setAttribute('aria-label',el('keywordChartReadout').textContent+'。左右方向键查看相邻时段。');
             box.querySelectorAll('[data-keyword-bucket]').forEach((column,i)=>column.classList.toggle('is-active',i===chartIndex));
             if(document.activeElement===box && box.matches(':focus-visible')){const start=x(chartIndex)-step/2;if(start<scroller.scrollLeft)scroller.scrollLeft=start;else if(start+step>scroller.scrollLeft+box.clientWidth)scroller.scrollLeft=start+step-box.clientWidth;}
-            tooltip.show(`${data.date} · ${time(row.hour)}–${row.hour + hours === 24 ? '24:00' : time(row.hour + hours)}`, row.values, x(chartIndex) - scroller.scrollLeft, y(Math.max(...row.values)), pinned === chartIndex, row.available);
+            tooltip.show(`${data.date} · ${time(row.hour)}–${displayEnd}`, row.values, x(chartIndex) - scroller.scrollLeft, y(Math.max(...row.values)), pinned === chartIndex);
         };
         const pointerIndex = event => {
             const point = window.SeekFeedControls.chartPointer(event, box.querySelector('svg'));
@@ -210,7 +208,7 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
             const tolerance = event.pointerType === 'touch' ? 14 : 5;
             return buckets.findIndex((row, i) => row.values.some((count, termIndex) => {
                 const cx = x(i) + (termIndex - (data.series.length - 1) / 2) * barStep;
-                return Math.abs(point.x - cx) <= bar / 2 + tolerance && point.y >= (row.available ? y(count) : top) - tolerance && point.y <= bottom + tolerance;
+                return Math.abs(point.x - cx) <= bar / 2 + tolerance && point.y >= y(count) - tolerance && point.y <= bottom + tolerance;
             }));
         };
         box.onpointerdown = event => { const index = pointerIndex(event); if (index < 0) return dismiss(); chartIndex = index; box.focus({ preventScroll: true }); };

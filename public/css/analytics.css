@@ -10,8 +10,6 @@
 .chart-expanded .analytics-bar-label.is-compact { visibility: hidden; }
 .chart-expanded .analytics-bar-label[data-active] { visibility: visible; }
 .chart-expanded .keyword-chart-column.is-active .analytics-bar-label { visibility: visible; }
-.keyword-future-range { fill: var(--bg-hover); opacity: .5; }
-.chart-expanded .keyword-chart-column.is-future .keyword-bar { visibility: hidden; }
 @media (max-width: 600px) {
     .chart-heading-actions { gap: 5px; }
     .chart-dialog { width: calc(100% - 16px); max-height: calc(100dvh - 24px); }
@@ -294,9 +292,6 @@ details[open] > summary svg { transform: rotate(180deg); }
 .keyword-chart-column.is-active .keyword-bar { fill-opacity: 1; }
 .keyword-chart-column.is-active .analytics-bar-label rect { fill: var(--series-color); }
 .keyword-chart-column.is-active .analytics-bar-value { fill: var(--bg-card); }
-.keyword-chart-column.is-future .keyword-bar { fill: var(--bg-hover); fill-opacity: .4; stroke: var(--border-color); stroke-dasharray: 3 3; }
-.keyword-chart-column.is-future .analytics-bar-label rect { fill: var(--bg-secondary); stroke: var(--border-color); }
-.keyword-chart-column.is-future .analytics-bar-value { fill: var(--text-muted); }
 .keyword-daily-chart { min-width: 0; height: 236px; margin-top: auto; }
 .keyword-line-scroll { overflow: auto hidden; overscroll-behavior-x: contain; scrollbar-width: thin; }
 .keyword-line-canvas svg { display: block; overflow: visible; }
