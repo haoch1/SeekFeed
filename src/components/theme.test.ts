@@ -3,8 +3,9 @@ import { runInNewContext } from 'node:vm';
 import themeScript from '../../public/js/theme.js' with { type: 'text' };
 import { HomePage } from './HomePage';
 
-function bootstrap(saved: string | null, dark = false, blocked = false) {
-    const local = new Map(saved ? [['theme', saved]] : []);
+function bootstrap(saved: string | null, dark = false, blocked = false, legacy?: string) {
+    const local = new Map(saved ? [['seekfeed.themePreference', saved]] : []);
+    if (legacy) local.set('theme', legacy);
     const events = new Map<string, (event?: any) => void>();
     const metas = new Map<string, string>();
     const root = { dataset: {} as Record<string, string>, style: {} as Record<string, string>, classList: { remove() {} } };
@@ -32,13 +33,23 @@ describe('resolved appearance preference', () => {
         media.matches = false; events.get('visibilitychange')!();
         expect(root.dataset.theme).toBe('light');
     });
-    it('retains explicit existing choices and resumes automatic updates only after system is selected', () => {
+    it('defaults legacy binary choices to system and retains later explicit choices', () => {
+        for (const legacy of ['light', 'dark']) {
+            const { theme, root, events } = bootstrap(null, true, false, legacy);
+            expect(theme.getPreference()).toBe('system');
+            expect(root.dataset.theme).toBe('dark');
+            events.get('storage')!({ key: 'theme', newValue: 'light' });
+            expect(root.dataset.theme).toBe('dark');
+        }
+        expect(bootstrap('light', true, false, 'dark').root.dataset.theme).toBe('light');
+    });
+    it('retains new explicit choices and resumes automatic updates only after system is selected', () => {
         const { theme, root, media, events, local } = bootstrap('light', true);
         expect(root.dataset.theme).toBe('light');
         events.get('system')!();
         expect(root.dataset.theme).toBe('light');
         theme.setPreference('system');
-        expect(local.get('theme')).toBe('system');
+        expect(local.get('seekfeed.themePreference')).toBe('system');
         expect(root.dataset.theme).toBe('dark');
         theme.setPreference('dark');
         media.matches = false; events.get('system')!();
@@ -48,7 +59,7 @@ describe('resolved appearance preference', () => {
         const { root, events, theme } = bootstrap('dark');
         events.get('storage')!({ key: 'other', newValue: 'light' });
         expect(root.dataset.theme).toBe('dark');
-        events.get('storage')!({ key: 'theme', newValue: 'light' });
+        events.get('storage')!({ key: 'seekfeed.themePreference', newValue: 'light' });
         expect(root.dataset.theme).toBe('light');
         events.get('storage')!({ key: null, newValue: null });
         expect(theme.getPreference()).toBe('system');

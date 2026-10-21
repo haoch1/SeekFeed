@@ -3,10 +3,12 @@
     const root = document.documentElement;
     const system = window.matchMedia?.('(prefers-color-scheme: dark)');
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    // New preference namespace makes system the upgrade default as well as the first-visit default.
+    const storageKey = 'seekfeed.themePreference';
     const normalize = value => ['light', 'dark', 'system'].includes(value) ? value : 'system';
     const names = { light: '浅色模式', dark: '深色模式', system: '跟随系统' };
     let preference = 'system', transition, timer, initialized = false, canAnimate = () => true;
-    try { preference = normalize(localStorage.getItem('theme')); } catch { /* System preference remains available without storage. */ }
+    try { preference = normalize(localStorage.getItem(storageKey)); } catch { /* System preference remains available without storage. */ }
     const resolved = () => preference === 'system' ? (system?.matches ? 'dark' : 'light') : preference;
     function apply() {
         const theme = resolved();
@@ -29,7 +31,7 @@
     }
     function setPreference(value) {
         preference = normalize(value);
-        try { localStorage.setItem('theme', preference); } catch { /* Keep the choice for this page. */ }
+        try { localStorage.setItem(storageKey, preference); } catch { /* Keep the choice for this page. */ }
         cancelTransition();
         if (reduced?.matches || !canAnimate()) return apply();
         if (document.startViewTransition) {
@@ -47,7 +49,7 @@
     window.addEventListener('pageshow', systemChanged);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) systemChanged(); });
     window.addEventListener('storage', event => {
-        if (event.key !== 'theme' && event.key !== null) return;
+        if (event.key !== storageKey && event.key !== null) return;
         preference = normalize(event.newValue);
         cancelTransition(); apply();
     });
