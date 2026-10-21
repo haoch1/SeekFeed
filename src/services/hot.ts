@@ -2,6 +2,7 @@ import type { Database } from 'bun:sqlite';
 import { z } from 'zod';
 import { resolve } from 'node:path';
 import { logger } from '../utils/logger';
+import cadence from '../config/cadence.json';
 
 const metric = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const postSchema = z.object({
@@ -15,10 +16,39 @@ export type HotPeriod = 'live' | 'day' | 'week';
 export type HotSort = 'heat' | 'views' | 'replies';
 const MINUTE = 60000;
 const HOUR = 60 * MINUTE;
-const COLLECT_INTERVAL = 2 * MINUTE;
+const COLLECT_INTERVAL = cadence.hotCollectIntervalSeconds * 1000;
+
+type CollectorFailureCode = 'collector_error' | 'network_timeout' | 'network_error' | 'tls_error' | 'http_error' | 'challenge_or_empty' | 'unexpected_markup' | 'invalid_output';
 
 export class CollectorUnavailable extends Error {
-    constructor(public retryAfterSeconds = 0) { super('Collector unavailable'); }
+    constructor(public retryAfterSeconds = 0, public code: CollectorFailureCode = 'collector_error', public httpStatus?: number) {
+        super('Collector unavailable');
+    }
+    get description() {
+        if (this.code === 'http_error') return this.httpStatus === 429 ? '源站限流（HTTP 429）' : this.httpStatus === 403 ? '源站拒绝访问（HTTP 403）' : `源站响应异常（HTTP ${this.httpStatus}）`;
+        return {
+            collector_error: '采集进程异常', network_timeout: '采集网络超时', network_error: '采集网络连接异常',
+            tls_error: '采集 TLS 校验失败', challenge_or_empty: '源站返回验证页或空页面',
+            unexpected_markup: '源站页面结构异常', invalid_output: '采集结果校验失败',
+        }[this.code];
+    }
+    get transient() {
+        return this.code === 'network_timeout' || this.code === 'network_error' || (this.code === 'http_error' && this.httpStatus! >= 500);
+    }
+}
+
+export function parseCollectorFailure(stderr: string, timedOut = false): CollectorUnavailable {
+    if (timedOut) return new CollectorUnavailable(0, 'network_timeout');
+    if (stderr.length > 16000) return new CollectorUnavailable();
+    try {
+        const payload = JSON.parse(stderr);
+        const parsedRetry = z.number().finite().nonnegative().max(86400).safeParse(payload.retryAfterSeconds);
+        const retryAfter = parsedRetry.success ? parsedRetry.data : 0;
+        const http = typeof payload.error === 'string' && /^http_[1-5]\d\d$/.test(payload.error) ? Number(payload.error.slice(5)) : undefined;
+        if (http) return new CollectorUnavailable(retryAfter, 'http_error', http);
+        const code = z.enum(['network_timeout', 'network_error', 'tls_error', 'challenge_or_empty', 'unexpected_markup']).safeParse(payload.error);
+        return new CollectorUnavailable(retryAfter, code.success ? code.data : 'collector_error');
+    } catch { return new CollectorUnavailable(); }
 }
 
 export function heatScore(views: number, replies: number): number {
@@ -132,13 +162,15 @@ export class HotService {
             logger.info('热榜采集完成');
             return true;
         } catch (error) {
+            const failure = error instanceof CollectorUnavailable ? error : new CollectorUnavailable(0, error instanceof z.ZodError ? 'invalid_output' : 'collector_error');
             const failures = this.state().failures + 1;
-            const retryAfter = error instanceof CollectorUnavailable && Number.isFinite(error.retryAfterSeconds)
-                ? Math.max(0, Math.min(86400, error.retryAfterSeconds)) * 1000 : 0;
-            const delay = Math.max(10 * MINUTE * Math.min(6, 2 ** Math.min(3, failures - 1)), retryAfter);
-            this.db.query("UPDATE hot_collector_state SET failures=failures+1,last_error='采集暂不可用，已保留上次榜单',next_attempt_at=? WHERE id=1")
-                .run(new Date(Date.now() + delay).toISOString());
-            logger.warn('热榜采集失败，保留缓存并退避重试');
+            const retryAfter = Number.isFinite(failure.retryAfterSeconds) ? Math.max(0, Math.min(86400, failure.retryAfterSeconds)) * 1000 : 0;
+            const backoff = failure.transient ? Math.min(5 * MINUTE, COLLECT_INTERVAL * 2 ** Math.min(3, failures - 1))
+                : 10 * MINUTE * Math.min(6, 2 ** Math.min(3, failures - 1));
+            const delay = Math.max(backoff, retryAfter);
+            this.db.query('UPDATE hot_collector_state SET failures=failures+1,last_error=?,next_attempt_at=? WHERE id=1')
+                .run(`${failure.description}，已保留上次榜单`, new Date(Date.now() + delay).toISOString());
+            logger.warn(`热榜采集失败：${failure.description}；${Math.ceil(delay / 1000)} 秒后重试`);
             return false;
         }
     }
@@ -210,7 +242,7 @@ export class HotService {
         return { posts: ranked.slice(0, limit), total: ranked.length, categories, period, sort, limit,
             updatedAt: state.last_success_at, stale: !state.last_success_at || now.getTime() - Date.parse(state.last_success_at) > 15 * MINUTE,
             error: state.last_error, busy: Boolean(this.inFlight), enabled: process.env.HOT_COLLECT_ENABLED === 'true',
-            coverage: state.batch_size, pages: state.pages, intervalSeconds: 120, nextAttemptAt: state.next_attempt_at, warmingUp };
+            coverage: state.batch_size, pages: state.pages, intervalSeconds: cadence.hotCollectIntervalSeconds, nextAttemptAt: state.next_attempt_at, warmingUp };
     }
 }
 
@@ -218,14 +250,12 @@ async function collectWithPython(full: boolean): Promise<unknown> {
     const child = Bun.spawn([process.env.HOT_COLLECTOR_PYTHON || 'python3', resolve('collector/collect.py'), ...(full ? [] : ['--light'])], {
         stdout: 'pipe', stderr: 'pipe', stdin: 'ignore', env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
     });
-    const timeout = setTimeout(() => child.kill(), 100000);
+    let timedOut = false;
+    const timeout = setTimeout(() => { timedOut = true; child.kill(); }, 100000);
     try {
         const [output, errors, exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
-        if (exitCode !== 0 || output.length > 1_000_000) {
-            let retryAfter = 0;
-            try { retryAfter = z.number().finite().nonnegative().max(86400).parse(JSON.parse(errors).retryAfterSeconds); } catch { /* Untrusted transport output is never logged. */ }
-            throw new CollectorUnavailable(retryAfter);
-        }
-        return JSON.parse(output);
+        if (exitCode !== 0 || timedOut) throw parseCollectorFailure(errors, timedOut);
+        if (output.length > 1_000_000) throw new CollectorUnavailable(0, 'invalid_output');
+        try { return JSON.parse(output); } catch { throw new CollectorUnavailable(0, 'invalid_output'); }
     } finally { clearTimeout(timeout); }
 }

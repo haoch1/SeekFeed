@@ -112,11 +112,13 @@ bun run start
 | `TRUST_PROXY` | `false` | 可信代理 IP 转发开关，部署要求见 Docker 文档 |
 | `RSS_CHECK_ENABLED` | `true` | RSS 自动监控开关 |
 | `RSS_TIMEOUT` | `30000` | RSS 请求超时，单位毫秒 |
-| `HOT_COLLECT_ENABLED` | Docker 为 `true`，本地未配置时关闭 | 约两分钟轻量采集、六分钟完整扫描，异常时退避 |
+| `HOT_COLLECT_ENABLED` | Docker 为 `true`，本地未配置时关闭 | 基础间隔 60 秒，完整扫描每三轮一次，异常时分类退避 |
 | `HOT_COLLECTOR_PYTHON` | Docker 已配置，本地 `python3` | 热榜采集 Python 路径 |
 | `TELEGRAM_WEBHOOK_URL` | 未设置 | 可选的公网 HTTPS Webhook 地址 |
 
 RSS 地址、间隔、代理与 Telegram Token、接收账号在设置页管理。
+
+默认 RSS 抓取间隔为 30 秒，订阅匹配与推送在每轮同步后执行。前台页面中，帖子列表每 5 秒更新，热榜与统计图表每 15 秒更新，已提交且展开的关键词分析每 30 秒更新。页面轮询读取本地数据库，不额外触发源站采集；页面不可见时暂停自动更新。刷新周期集中定义于 `src/config/cadence.json`，已保存的 RSS 自定义间隔优先于默认值。
 
 ## 参考项目与资源
 

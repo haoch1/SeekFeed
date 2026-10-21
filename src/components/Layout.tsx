@@ -1,6 +1,7 @@
 import type { FC, PropsWithChildren } from "hono/jsx";
 import iconPaths from './icons.json';
 import identityScript from '../../public/js/identity.js' with { type: 'text' };
+import cadence from '../config/cadence.json';
 
 interface LayoutProps {
   title?: string;
@@ -55,6 +56,7 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
         <link href="/css/mobile.css" rel="stylesheet" />
 
         {/* Establish presentation before the first body paint. APIs still verify the session. */}
+        <script dangerouslySetInnerHTML={{ __html: `window.SeekFeedCadence = ${JSON.stringify(cadence)};` }} />
         <script dangerouslySetInnerHTML={{ __html: identityScript }} />
         <script
           dangerouslySetInnerHTML={{
@@ -82,6 +84,7 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
         <script dangerouslySetInnerHTML={{ __html: 'window.SeekFeedIdentity.render();' }} />
         <script id="seekfeedIcons" type="application/json" dangerouslySetInnerHTML={{ __html: JSON.stringify(iconPaths).replace(/</g, '\\u003c') }} />
         <script src="/js/controls.js"></script>
+        <script src="/js/chart-viewer.js"></script>
         {/* PWA Scripts */}
         <script src="/js/pwa-register.js" defer></script>
 

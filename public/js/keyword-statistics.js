@@ -100,8 +100,10 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
         const scrollLeft = box.querySelector('.keyword-line-scroll')?.scrollLeft || 0;
         const rows = data.series[0].daily, multiple = data.series.length > 1;
         const max = Math.max(...data.series.flatMap(series => series.daily.map(row => row.count)), 1);
-        const width = Math.max(box.clientWidth, 7 * 34 + 36), height = 178;
-        const left = 10, right = width - 26, top = 26, bottom = 154, step = (right - left) / rows.length;
+        const expanded = !!box.closest('.chart-expanded');
+        const width = expanded ? box.clientWidth : Math.max(box.clientWidth, 7 * 34 + 36), height = expanded ? Math.max(178, Math.min(420, innerHeight * .5)) : 178;
+        box.style.height = `${height + 58}px`;
+        const left = 10, right = width - 26, top = 26, bottom = height - 24, step = (right - left) / rows.length;
         const ceiling = Math.max(4, Math.ceil(max / 4) * 4);
         const x = index => left + (index + .5) * step, y = value => bottom - value / ceiling * (bottom - top);
         // End labels are separated vertically so equal/near-equal series stay legible.
@@ -170,15 +172,21 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
         });
         const max = Math.max(...buckets.flatMap(row => row.values), 1), ceiling = Math.max(4, Math.ceil(max / 4) * 4);
         const slot = Math.max(30, number(max).length * 7 + 16);
-        const width = Math.max(box.clientWidth, 46 + buckets.length * Math.max(42, data.series.length * slot + 14));
-        const left = 32, right = width - 12, top = 34, bottom = 184, step = (right - left) / buckets.length, barStep = Math.min(slot, step * .8 / data.series.length), bar = Math.min(30, barStep * .72);
+        const expanded = !!box.closest('.chart-expanded');
+        const width = expanded ? box.clientWidth : Math.max(box.clientWidth, 46 + buckets.length * Math.max(42, data.series.length * slot + 14));
+        const height = expanded ? Math.max(220, Math.min(480, innerHeight * .55)) : 220;
+        box.style.height = `${height + 16}px`;
+        const left = 32, right = width - 12, top = 34, bottom = height - 36, step = (right - left) / buckets.length, barStep = Math.min(slot, step * .8 / data.series.length), bar = Math.min(30, barStep * .72);
+        const tickStride = Math.max(1, Math.ceil(55 / step));
+        const futureStart = buckets.findIndex(row => !row.available);
+        const futureBand = expanded && futureStart >= 0 ? `<rect class="keyword-future-range" x="${left + futureStart * step}" y="${top}" width="${right - left - futureStart * step}" height="${bottom - top}" />` : '';
         const x = index => left + (index + .5) * step, y = n => bottom - n / ceiling * (bottom - top);
-        box.innerHTML = `<div class="keyword-chart-scroll"><svg width="${width}" height="220" viewBox="0 0 ${width} 220" aria-hidden="true">${Array.from({length:5},(_,i)=>{const n=ceiling*i/4;return `<line x1="${left}" x2="${right}" y1="${y(n)}" y2="${y(n)}" class="analytics-grid-line"/><text x="${left-8}" y="${y(n)+4}" text-anchor="end">${number(n)}</text>`;}).join('')}${buckets.map((row,index)=>{
+        box.innerHTML = `<div class="keyword-chart-scroll"><svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true">${Array.from({length:5},(_,i)=>{const n=ceiling*i/4;return `<line x1="${left}" x2="${right}" y1="${y(n)}" y2="${y(n)}" class="analytics-grid-line"/><text x="${left-8}" y="${y(n)+4}" text-anchor="end">${number(n)}</text>`;}).join('')}${futureBand}${buckets.map((row,index)=>{
             return `<g data-keyword-bucket="${index}" class="keyword-chart-column${row.available?'':' is-future'}">${row.values.map((count, termIndex) => {
                 const cx = x(index) + (termIndex - (data.series.length - 1) / 2) * barStep;
                 const value = row.available ? number(count) : '—', labelWidth = Math.max(24, value.length * 7 + 10), cy = row.available ? y(count) : top;
-                return `<g data-keyword-series="${termIndex}" style="--series-color:${color(termIndex)}"><rect class="keyword-bar" x="${cx-bar/2}" y="${cy}" width="${bar}" height="${row.available?bottom-cy:bottom-top}" rx="3"/><g class="analytics-bar-label"><rect x="${cx-labelWidth/2}" y="${cy-27}" width="${labelWidth}" height="20" rx="5"/><text class="analytics-bar-value" x="${cx}" y="${cy-17}" dominant-baseline="central" text-anchor="middle">${value}</text></g><title>${esc(data.series[termIndex].term)} · ${time(row.hour)} · ${row.available?number(count)+' 篇':'尚未到该时段'}</title></g>`;
-            }).join('')}<text x="${x(index)}" y="209" text-anchor="middle">${time(row.hour)}</text></g>`;
+                return `<g data-keyword-series="${termIndex}" style="--series-color:${color(termIndex)}"><rect class="keyword-bar" x="${cx-bar/2}" y="${cy}" width="${bar}" height="${row.available?bottom-cy:bottom-top}" rx="3"/><g class="analytics-bar-label${expanded && barStep < slot ? ' is-compact' : ''}"><rect x="${cx-labelWidth/2}" y="${cy-27}" width="${labelWidth}" height="20" rx="5"/><text class="analytics-bar-value" x="${cx}" y="${cy-17}" dominant-baseline="central" text-anchor="middle">${value}</text></g><title>${esc(data.series[termIndex].term)} · ${time(row.hour)} · ${row.available?number(count)+' 篇':'尚未到该时段'}</title></g>`;
+            }).join('')}${index % tickStride === 0 ? `<text x="${x(index)}" y="${height - 11}" text-anchor="middle">${time(row.hour)}</text>` : ''}</g>`;
         }).join('')}</svg></div>`;
         const scroller=box.firstElementChild;
         scroller.scrollLeft = scrollLeft;
@@ -277,6 +285,14 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
             mobile.addEventListener('change', placeAnalyze);
             el('analysisDate').value=el('analysisDate').max=localDate();
             el('keywordAnalysisForm').addEventListener('submit',e=>{e.preventDefault();submit();});
+            const markDraft = event => {
+                if (!event.target.matches('#analysisKeyword, #analysisCompare1, #analysisCompare2, #analysisDate, #analysisScope')) return;
+                draft = true;
+                cancelRequest();
+                if (config) el('keywordAnalysisStatus').textContent = '分析条件已修改，请点击“开始分析”或按回车提交。';
+            };
+            el('keywordAnalysisForm').addEventListener('input', markDraft);
+            el('keywordAnalysisForm').addEventListener('change', markDraft);
             el('keywordAddCompare').addEventListener('click',()=>{const index=[1,2].find(index=>el('analysisCompare'+index).hidden);if(!index)return;compareVisible(index,true);el('analysisCompare'+index).focus();});
             el('keywordAnalysisForm').addEventListener('click', event => { const button = event.target.closest('[data-remove-compare]'); if (button) removeCompare(Number(button.dataset.removeCompare)); });
             el('keywordReset').addEventListener('click', reset);
@@ -287,7 +303,7 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
                 el('keywordToggle').setAttribute('aria-expanded', String(!collapsed));
                 el('keywordToggle').querySelector('span').textContent = collapsed ? '展开' : '收起';
                 if (collapsed) { const wasBusy = busy; cancelRequest(); if (wasBusy) lastLoad = 0; }
-                else if (config && !draft && Date.now() - lastLoad > 60000) load(true);
+                else if (config && !draft && Date.now() - lastLoad >= window.SeekFeedCadence.keywordRefreshMs) load(true);
             });
             el('keywordComparison').addEventListener('click',e=>{const button=e.target.closest('[data-term-index]');if(button){selected=Number(button.dataset.termIndex);render();el('keywordComparison').querySelector(`[data-term-index="${selected}"]`).focus({preventScroll:true});}});
             el('keywordBucketSelector').addEventListener('click',e=>{const button=e.target.closest('[data-hours]');if(!button)return;hours=Number(button.dataset.hours);el('keywordBucketSelector').querySelectorAll('button').forEach(n=>{n.classList.toggle('active',n===button);n.setAttribute('aria-pressed',String(n===button));});renderChart();});
@@ -295,11 +311,12 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
             el('keywordSuggestions').addEventListener('click',e=>{const button=e.target.closest('[data-keyword]');if(button)this.prepare(button.dataset.keyword,false);});
             let width=0;new ResizeObserver(entries=>{const next=Math.round(entries[0].contentRect.width);if(next&&next!==width){width=next;renderChart();}}).observe(el('keywordHourChart'));
             let dailyWidth=0;new ResizeObserver(entries=>{const next=Math.round(entries[0].contentRect.width);if(next&&next!==dailyWidth){dailyWidth=next;renderDailyChart();}}).observe(el('keywordDailyChart'));
+            window.addEventListener('resize', () => { if (el('keywordHourChart').closest('.chart-expanded')) renderChart(); if (el('keywordDailyChart').closest('.chart-expanded')) renderDailyChart(); });
         },
         suggestions(terms) {
             const next=JSON.stringify(terms.slice(0,6).map(row=>row.term));if(el('keywordSuggestions').dataset.terms===next)return;
             el('keywordSuggestions').dataset.terms=next;el('keywordSuggestions').innerHTML=terms.slice(0,6).map(row=>`<button class="btn btn-text" type="button" data-keyword="${esc(row.term)}">${esc(row.term)}</button>`).join('');
         },
-        tick(){if(config&&!draft&&!collapsed&&!busy&&Date.now()-lastLoad>60000)load(true);el('analysisDate').max=localDate();},
+        tick(){if(config&&!draft&&!collapsed&&!busy&&Date.now()-lastLoad>=window.SeekFeedCadence.keywordRefreshMs)load(true);el('analysisDate').max=localDate();},
     };
 };

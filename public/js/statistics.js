@@ -46,14 +46,17 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
         }
         const max = Math.max(...data.map(row => row.count), 1);
         const slot = Math.max(38, number(max).length * 7 + 22);
-        const width = trendStyle === 'line' ? box.clientWidth : Math.max(box.clientWidth, 45 + data.length * slot), height = 228, left = 33, right = width - 12, top = 34, bottom = 196;
+        const expanded = !!box.closest('.chart-expanded');
+        const width = expanded || trendStyle === 'line' ? box.clientWidth : Math.max(box.clientWidth, 45 + data.length * slot), height = expanded ? Math.max(228, Math.min(480, innerHeight * .55)) : 228, left = 33, right = width - 12, top = 34, bottom = height - 32;
+        box.style.height = `${height + 16}px`;
         box.dataset.overflow = String(width > box.clientWidth + 1);
         const ceiling = Math.max(4, Math.ceil(max / 4) * 4);
         const step = (right - left) / data.length, barWidth = Math.min(34, step * .64);
         const x = index => left + step * (index + .5);
         const y = value => bottom - value / ceiling * (bottom - top);
         const visibleLabels = new Set();
-        if (trendStyle === 'line') {
+        const compactLabels = trendStyle === 'line' || step < slot;
+        if (compactLabels) {
             const peakIndex = data.findIndex(row => row.count === max);
             for (const index of [peakIndex, data.length - 1, 0, ...data.map((_, i) => i)]) {
                 if (index >= 0 && [...visibleLabels].every(other => Math.abs(x(other) - x(index)) >= slot)) visibleLabels.add(index);
@@ -65,7 +68,7 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             const path = `M${start},${bottom} V${barTop + radius} Q${start},${barTop} ${start + radius},${barTop} H${end - radius} Q${end},${barTop} ${end},${barTop + radius} V${bottom} Z`;
             const value = number(row.count), labelWidth = Math.max(28, value.length * 7 + 14);
             return `${trendStyle === 'line' ? `<circle class="analytics-post-bar analytics-line-point" data-bar-index="${index}" data-count="${row.count}" cx="${x(index)}" cy="${barTop}" r="3.5"/>` : `<path class="analytics-post-bar" data-bar-index="${index}" data-count="${row.count}" d="${path}"/>`}
-                <g class="analytics-bar-label${trendStyle === 'line' && !visibleLabels.has(index) ? ' is-compact' : ''}" data-label-index="${index}"><rect x="${x(index) - labelWidth / 2}" y="${barTop - 28}" width="${labelWidth}" height="21" rx="5"/><text class="analytics-bar-value" x="${x(index)}" y="${barTop - 17.5}" text-anchor="middle" dominant-baseline="central">${value}</text></g>`;
+                <g class="analytics-bar-label${compactLabels && !visibleLabels.has(index) ? ' is-compact' : ''}" data-label-index="${index}"><rect x="${x(index) - labelWidth / 2}" y="${barTop - 28}" width="${labelWidth}" height="21" rx="5"/><text class="analytics-bar-value" x="${x(index)}" y="${barTop - 17.5}" text-anchor="middle" dominant-baseline="central">${value}</text></g>`;
         }).join('');
         const grid = Array.from({ length: 5 }, (_, index) => {
             const value = ceiling * index / 4;
@@ -76,9 +79,9 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
         const strides = currentData.period.hourly ? [1, 2, 3, 4, 6, 12, 24] : [1, 2, 5, 7, 14, 30, 60];
         const stride = strides.find(value => value >= minimumStride) || minimumStride;
         const ticks = data.map((_, index) => index).filter(index => index % stride === 0);
-        box.innerHTML = `<div class="analytics-plot-scroll"><div class="analytics-plot-canvas" style="width:${width}px"><svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true">${grid}
+        box.innerHTML = `<div class="analytics-plot-scroll" style="height:${height + 16}px"><div class="analytics-plot-canvas" style="width:${width}px"><svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" aria-hidden="true">${grid}
             <rect id="analyticsCursor" y="${top}" width="${step}" height="${bottom - top}" class="analytics-bar-cursor" visibility="hidden" rx="4"/>${trendStyle === 'line' ? `<polygon class="analytics-line-area" points="${x(0)},${bottom} ${data.map((row, i) => `${x(i)},${y(row.count)}`).join(' ')} ${x(data.length - 1)},${bottom}"/><polyline class="analytics-trend-line" points="${data.map((row, i) => `${x(i)},${y(row.count)}`).join(' ')}"/>` : ''}${bars}
-            ${ticks.map(index => `<text class="analytics-time-tick" x="${x(index)}" y="220" text-anchor="middle">${bucketText(data[index], true)}</text>`).join('')}
+            ${ticks.map(index => `<text class="analytics-time-tick" x="${x(index)}" y="${height - 8}" text-anchor="middle">${bucketText(data[index], true)}</text>`).join('')}
             </svg><div class="analytics-chart-tooltip" id="analyticsTrendTooltip" aria-hidden="true" hidden><span></span><div><i></i>收录帖子<strong></strong></div></div></div></div>`;
         box.setAttribute('role', 'group');
         box.setAttribute('tabindex', '0');
@@ -144,7 +147,7 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             event.preventDefault();
             select(event.key === 'Home' ? 0 : event.key === 'End' ? data.length - 1 : focusIndex + (event.key === 'ArrowRight' ? 1 : -1));
         };
-        if (document.activeElement === box && box.matches(':focus-visible')) select(focusIndex);
+        if (document.activeElement === box && box.matches(':focus-visible')) select(focusIndex); else showReadout();
     }
 
     function empty(text) { return `<div class="analytics-empty">${icon('chart')}<span>${text}</span></div>`; }
@@ -378,11 +381,12 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             });
             let width = 0;
             new ResizeObserver(entries => { const next = Math.round(entries[0].contentRect.width); if (next > 0 && next !== width) { width = next; renderTrend(); } }).observe(el('analyticsTrend'));
+            window.addEventListener('resize', () => { if (el('analyticsTrend').closest('.chart-expanded')) renderTrend(); });
         },
         tick() {
             if (!el('statsPage').hidden) keywordAnalysis.tick();
-            if (!el('statsPage').hidden && !inflight && Date.now() - lastLoad >= 30000) load(true);
-            if (!el('subscriptionsPage').hidden && !notificationBusy && Date.now() - notificationLoad >= 30000) loadNotifications();
+            if (!el('statsPage').hidden && !inflight && Date.now() - lastLoad >= window.SeekFeedCadence.analyticsRefreshMs) load(true);
+            if (!el('subscriptionsPage').hidden && !notificationBusy && Date.now() - notificationLoad >= window.SeekFeedCadence.analyticsRefreshMs) loadNotifications();
         },
     };
 };

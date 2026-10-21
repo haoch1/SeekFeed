@@ -123,8 +123,8 @@ window.SeekFeedHot = (() => {
         if (target !== null) { event.preventDefault(); tabs[target].focus(); tabs[target].click(); }
       });
     }
-    const tick = () => { if (Date.now() - lastLoaded > 30000) load({background:true}); };
-    setInterval(tick, 30000);
+    const tick = () => load({background:true});
+    setInterval(tick, window.SeekFeedCadence.hotRefreshMs);
     document.addEventListener('visibilitychange', tick);
   }
   return {init, load};

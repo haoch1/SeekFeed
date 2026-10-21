@@ -28,6 +28,13 @@ beforeEach(() => {
 afterEach(() => db.close());
 
 describe('subscription matching', () => {
+    it('uses a 30-second RSS default and preserves an explicitly configured interval', () => {
+        expect(new SchedulerService(db).getStatus().rssTask.intervalSeconds).toBe(30);
+        expect(new RSSService(db).getRSSConfigFromDB().intervalSeconds).toBe(30);
+        db.updateBaseConfig({ rss_interval_seconds: 45 });
+        expect(new SchedulerService(db).getStatus().rssTask.intervalSeconds).toBe(45);
+        expect(new RSSService(db).getRSSConfigFromDB().intervalSeconds).toBe(45);
+    });
     it('requires all words and applies exclusions, exact author/category filters and pause', () => {
         const sub = db.createKeywordSub({ keyword1: 'dmit', keyword2: '补货', creator: 'alice', category: 'info', exclude_keywords: '已出，求购' });
         const matcher = new MatcherService(db);

@@ -1,5 +1,6 @@
 import { DatabaseService } from "./database";
 import { getEnvConfig } from "../config/env";
+import cadence from '../config/cadence.json';
 import { logger } from "../utils/logger";
 import type { Post, RSSItem, ParsedPost, RSSProcessResult } from "../types";
 
@@ -26,7 +27,7 @@ export class RSSService {
     const config = this.dbService.getBaseConfig();
     return {
       url: config?.rss_url || "https://rss.nodeseek.com/",
-      intervalSeconds: config?.rss_interval_seconds || 60,
+      intervalSeconds: config?.rss_interval_seconds || cadence.rssIntervalSeconds,
     };
   }
 

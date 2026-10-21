@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, setSystemTime } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { readFileSync } from 'node:fs';
 import { getAnalytics } from './analytics';
@@ -38,9 +38,12 @@ describe('coherent publication-time analytics', () => {
         expect(empty.totals.posts).toBe(0);
         expect(empty.topics.terms).toEqual([]);
         const service = new DatabaseService(db);
-        expect(service.getAnalytics(-1, 480, 'tech').totals.posts).toBe(2);
-        expect(service.getAnalytics(-1, 480, 'trade').totals.posts).toBe(1);
-        expect(service.getAnalytics(-1, 480).totals.posts).toBe(3);
+        setSystemTime(now);
+        try {
+            expect(service.getAnalytics(-1, 480, 'tech').totals.posts).toBe(2);
+            expect(service.getAnalytics(-1, 480, 'trade').totals.posts).toBe(1);
+            expect(service.getAnalytics(-1, 480).totals.posts).toBe(3);
+        } finally { setSystemTime(); }
     });
     it('provides fifty real ranked authors for the selectable author list without truncating totals', () => {
         for (let i = 0; i < 60; i++) {

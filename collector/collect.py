@@ -20,6 +20,22 @@ class CollectionError(ValueError):
         super().__init__(reason)
         self.retry_after = retry_after
 
+
+def failure_details(error):
+    # Preserve a bounded reason code, never transport messages, URLs or response bodies.
+    reason = str(error) if isinstance(error, ValueError) else ''
+    if reason not in ('challenge_or_empty', 'unexpected_markup') and not re.fullmatch(r'http_[1-5]\d\d', reason):
+        code = getattr(error, 'code', None)
+        if code == 28:
+            reason = 'network_timeout'
+        elif code in (5, 6, 7, 16, 18, 35, 52, 55, 56, 92):
+            reason = 'network_error'
+        elif code in (51, 58, 60, 77, 83, 90, 91):
+            reason = 'tls_error'
+        else:
+            reason = 'transport_error'
+    return {'error': reason, 'retryAfterSeconds': error.retry_after if isinstance(error, CollectionError) else 0}
+
 def retry_after_seconds(value, now=None):
     now = now or datetime.now(timezone.utc)
     try:
@@ -112,6 +128,5 @@ if __name__ == '__main__':
         print(json.dumps(collect(light='--light' in sys.argv), ensure_ascii=False))
     except Exception as error:
         # Do not log headers, cookies, response pages or transport exceptions.
-        reason = str(error) if isinstance(error, ValueError) else 'transport_error'
-        print(json.dumps({'error': reason, 'retryAfterSeconds': error.retry_after if isinstance(error, CollectionError) else 0}), file=sys.stderr)
+        print(json.dumps(failure_details(error)), file=sys.stderr)
         sys.exit(1)

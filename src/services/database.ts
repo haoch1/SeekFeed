@@ -1,5 +1,6 @@
 import type { Database } from 'bun:sqlite';
 import { createDatabaseConnection } from '../config/database';
+import cadence from '../config/cadence.json';
 import type { BaseConfig, Post, KeywordSub } from '../types';
 import { logger } from '../utils/logger';
 import { getAnalytics } from './analytics';
@@ -129,7 +130,7 @@ export class DatabaseService {
       config.stop_push,
       config.only_title,
       config.rss_url || 'https://rss.nodeseek.com/',
-      config.rss_interval_seconds || 60,
+      config.rss_interval_seconds || cadence.rssIntervalSeconds,
       config.rss_proxy || null
     ) as BaseConfig;
     

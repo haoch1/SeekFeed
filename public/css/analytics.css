@@ -1,4 +1,25 @@
 /* ReUI card, metric, chart and ranked-list patterns share the workspace tokens. */
+.chart-heading-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; min-width: 0; }
+.chart-expand-button { flex-shrink: 0; width: 34px; height: 34px; border: 1px solid var(--border-color); border-radius: 7px; }
+.chart-expand-button .header-tooltip { z-index: 3; }
+.chart-dialog { margin: auto; padding: 0; width: calc(100% - 40px); max-width: 1560px; max-height: calc(100dvh - 40px); border: 1px solid var(--border-color); border-radius: var(--radius-lg); background: var(--bg-card); color: var(--text-primary); box-shadow: var(--shadow-lg); overscroll-behavior: contain; }
+.chart-dialog::backdrop { background: #09090b88; }
+.chart-dialog > .chart-expanded { border: 0; border-radius: 0; box-shadow: none; padding: 28px; min-height: 0; }
+.chart-expanded h3 { font-size: 15px; font-weight: 600; }
+.chart-expanded .analytics-heatmap { min-width: 0; }
+.chart-expanded .analytics-bar-label.is-compact { visibility: hidden; }
+.chart-expanded .analytics-bar-label[data-active] { visibility: visible; }
+.chart-expanded .keyword-chart-column.is-active .analytics-bar-label { visibility: visible; }
+.keyword-future-range { fill: var(--bg-hover); opacity: .5; }
+.chart-expanded .keyword-chart-column.is-future .keyword-bar { visibility: hidden; }
+@media (max-width: 600px) {
+    .chart-heading-actions { gap: 5px; }
+    .chart-dialog { width: calc(100% - 16px); max-height: calc(100dvh - 24px); }
+    .chart-dialog > .chart-expanded { padding: 16px 12px; }
+    .chart-dialog .chart-heading-actions { margin-left: auto; }
+    .chart-expanded .analytics-heatmap { grid-template-columns: 58px repeat(24, minmax(0, 1fr)); gap: 2px; }
+    .chart-expanded .keyword-panel-readout { height: auto; min-height: 48px; }
+}
 .subscription-id { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; border: 1px solid var(--border-color); border-radius: 5px; background: var(--bg-secondary); color: var(--text-secondary); padding: 2px 7px; font-size: 11px; font-weight: 500; line-height: 18px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .subscription-id span { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--text-primary); }
 .subscription-description > .subscription-id { margin-bottom: 9px; }
@@ -13,8 +34,8 @@
 .match-rule-details summary svg, .analytics-definitions summary svg { width: 13px; height: 13px; flex-shrink: 0; }
 details[open] > summary svg { transform: rotate(180deg); }
 .match-rule-details > div { margin-top: 8px; padding: 10px 12px; border: 1px solid var(--border-color); background: var(--bg-secondary); border-radius: 6px; }
-:is(#statsPage, #subscriptionAnalytics) { --analytics-pushed: #0d9488; --analytics-color-0: var(--primary); --analytics-color-1: #0d9488; --analytics-color-2: #6594db; --analytics-color-3: #a18bc2; --analytics-color-4: #8792a5; --analytics-color-5: #c18a54; --analytics-color-6: #62876f; --analytics-color-7: #b27892; --analytics-color-8: #647a91; }
-[data-theme="dark"] :is(#statsPage, #subscriptionAnalytics) { --analytics-pushed: #2dd4bf; --analytics-pending: #fbbf24; --analytics-unmatched: #3e4758; --analytics-unprocessed: #94a3b8; --analytics-color-1: #2dd4bf; --analytics-color-2: #7dacee; --analytics-color-3: #b39bdc; }
+:is(#statsPage, #subscriptionAnalytics, .chart-dialog) { --analytics-pushed: #0d9488; --analytics-color-0: var(--primary); --analytics-color-1: #0d9488; --analytics-color-2: #6594db; --analytics-color-3: #a18bc2; --analytics-color-4: #8792a5; --analytics-color-5: #c18a54; --analytics-color-6: #62876f; --analytics-color-7: #b27892; --analytics-color-8: #647a91; }
+[data-theme="dark"] :is(#statsPage, #subscriptionAnalytics, .chart-dialog) { --analytics-pushed: #2dd4bf; --analytics-pending: #fbbf24; --analytics-unmatched: #3e4758; --analytics-unprocessed: #94a3b8; --analytics-color-1: #2dd4bf; --analytics-color-2: #7dacee; --analytics-color-3: #b39bdc; }
 .analytics-heading { align-items: center; gap: 20px; }
 .analytics-period { display: inline-flex; padding: 4px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-card); flex-shrink: 0; gap: 3px; }
 .analytics-period .chart-range-btn { min-height: 32px; border: 1px solid transparent; border-radius: 5px; padding: 5px 12px; color: var(--text-secondary); background: transparent; font-size: 12px; white-space: nowrap; }

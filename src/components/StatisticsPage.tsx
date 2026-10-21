@@ -2,6 +2,10 @@ import type { FC } from 'hono/jsx';
 import { Icon } from './DashboardSurface';
 import { FieldInput } from './Controls';
 
+const ChartExpand: FC<{ target: string; label: string }> = ({ target, label }) => (
+    <button type="button" class="icon-btn chart-expand-button header-tooltip-trigger" data-chart-expand={target} aria-haspopup="dialog" aria-label={`放大查看${label}`} aria-describedby={`${target}ExpandHint`}><Icon name="expand" /><span id={`${target}ExpandHint`} class="header-tooltip" role="tooltip">放大查看</span></button>
+);
+
 export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
     <section id="statsPage" class="route-page" hidden={!active}>
         <div class="workspace-heading analytics-heading">
@@ -31,7 +35,7 @@ export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
             </div>
             <div class="analytics-top-grid">
                 <article class="analytics-card analytics-trend">
-                    <div class="analytics-card-heading"><div><h2>发帖趋势</h2><span id="analyticsTrendUnit" class="analytics-caption">按小时</span></div><div id="analyticsTrendStyle" class="analytics-period analytics-style-selector" role="group" aria-label="趋势图样式"><button type="button" class="chart-range-btn active" data-chart-style="bar" aria-pressed="true">柱形</button><button type="button" class="chart-range-btn" data-chart-style="line" aria-pressed="false">折线</button></div></div>
+                    <div class="analytics-card-heading"><div><h2>发帖趋势</h2><span id="analyticsTrendUnit" class="analytics-caption">按小时</span></div><div class="chart-heading-actions"><div id="analyticsTrendStyle" class="analytics-period analytics-style-selector" role="group" aria-label="趋势图样式"><button type="button" class="chart-range-btn active" data-chart-style="bar" aria-pressed="true">柱形</button><button type="button" class="chart-range-btn" data-chart-style="line" aria-pressed="false">折线</button></div><ChartExpand target="analyticsTrend" label="发帖趋势" /></div></div>
                     <div class="analytics-trend-readout" id="analyticsTrendReadout" aria-live="off">正在读取数据</div><div id="analyticsTrend" class="analytics-plot"></div>
                 </article>
                 <article class="analytics-card analytics-status">
@@ -63,13 +67,13 @@ export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
                     <div id="keywordOverlap" class="keyword-overlap" hidden></div>
                     <div class="keyword-panels">
                         <section class="keyword-panel">
-                            <div class="keyword-chart-heading"><h3>时段分布</h3><div id="keywordBucketSelector" class="analytics-period" role="group" aria-label="关键词时间粒度">{[1, 3, 6].map(hours => <button type="button" class={`chart-range-btn${hours === 1 ? ' active' : ''}`} data-hours={hours} aria-pressed={hours === 1 ? 'true' : 'false'}>{hours} 小时</button>)}</div></div>
+                            <div class="keyword-chart-heading"><h3>时段分布</h3><div class="chart-heading-actions"><div id="keywordBucketSelector" class="analytics-period" role="group" aria-label="关键词时间粒度">{[1, 3, 6].map(hours => <button type="button" class={`chart-range-btn${hours === 1 ? ' active' : ''}`} data-hours={hours} aria-pressed={hours === 1 ? 'true' : 'false'}>{hours} 小时</button>)}</div><ChartExpand target="keywordHourChart" label="关键词时段分布" /></div></div>
                             <div id="keywordHourLegend" class="keyword-chart-legend"></div>
                             <div id="keywordChartReadout" class="analytics-caption keyword-panel-readout" aria-live="polite"></div>
                             <div id="keywordHourChart" class="keyword-hour-chart" tabindex="0" role="group" aria-label="关键词时段柱形图，方向键查看数据"></div>
                         </section>
                         <section class="keyword-panel">
-                            <div class="keyword-chart-heading"><h3>近 7 天趋势</h3><span class="analytics-caption">篇 / 天</span></div>
+                            <div class="keyword-chart-heading"><h3>近 7 天趋势</h3><div class="chart-heading-actions"><span class="analytics-caption">篇 / 天</span><ChartExpand target="keywordDailyChart" label="关键词近 7 天趋势" /></div></div>
                             <div id="keywordDailyLegend" class="keyword-chart-legend"></div>
                             <div id="keywordDailyReadout" class="analytics-caption keyword-panel-readout">点击日期查看当天</div>
                             <div id="keywordDailyChart" class="keyword-daily-chart"></div>
@@ -96,7 +100,7 @@ export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
                 <article class="analytics-card"><div class="analytics-card-heading"><h2>活跃作者</h2><select id="analyticsAuthorLimit" class="input-field" aria-label="活跃作者数量">{[5, 10, 20, 50].map(limit => <option value={limit}>TOP {limit}</option>)}</select></div><div id="analyticsAuthorList" class="analytics-ranked-list" tabindex="0" role="region" aria-label="活跃作者排名，可滚动查看更多"></div></article>
             </div>
             <article class="analytics-card analytics-activity">
-                <div class="analytics-card-heading"><div><h2>发帖时段</h2><span id="analyticsActivityScope" class="analytics-caption">按星期与小时汇总</span></div><span id="analyticsActivityReadout" class="analytics-caption">—</span></div>
+                <div class="analytics-card-heading"><div><h2>发帖时段</h2><span id="analyticsActivityScope" class="analytics-caption">按星期与小时汇总</span></div><div class="chart-heading-actions"><span id="analyticsActivityReadout" class="analytics-caption">—</span><ChartExpand target="analyticsActivity" label="发帖时段" /></div></div>
                 <div class="analytics-heatmap-scroll"><div id="analyticsActivity" class="analytics-heatmap" tabindex="0" role="group" aria-label="发帖时段热力图，点按或使用方向键查看数据，可横向滚动"></div></div>
                 <div class="analytics-heatmap-footer"><span id="analyticsPeak">—</span><span class="analytics-heatmap-scale">少<i data-level="0"></i><i data-level="1"></i><i data-level="2"></i><i data-level="3"></i><i data-level="4"></i>多</span></div>
             </article>

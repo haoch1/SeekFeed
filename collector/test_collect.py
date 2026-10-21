@@ -1,5 +1,5 @@
 import unittest
-from collect import count, parse, collect, retry_after_seconds, CollectionError, URLS
+from collect import count, parse, collect, retry_after_seconds, failure_details, CollectionError, URLS
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
@@ -41,6 +41,15 @@ class ParserTests(unittest.TestCase):
         now = datetime(2026, 10, 20, 5, 0, tzinfo=timezone.utc)
         for value, expected in [('120', 120), ('Tue, 20 Oct 2026 05:30:00 GMT', 1800), ('Tue, 20 Oct 2026 04:30:00 GMT', 0), ('bogus', 0), (None, 0), ('99999999', 86400)]:
             self.assertEqual(retry_after_seconds(value, now), expected)
+
+    def test_diagnostics_preserve_safe_causes_without_transport_secrets(self):
+        self.assertEqual(failure_details(CollectionError('http_429', 1800)), {'error': 'http_429', 'retryAfterSeconds': 1800})
+        self.assertEqual(failure_details(ValueError('unexpected_markup'))['error'], 'unexpected_markup')
+        for code, reason in [(28, 'network_timeout'), (6, 'network_error'), (92, 'network_error'), (60, 'tls_error'), (99, 'transport_error')]:
+            error = RuntimeError('https://user:SECRET@example.com COOKIE=SECRET')
+            error.code = code
+            self.assertEqual(failure_details(error), {'error': reason, 'retryAfterSeconds': 0})
+        self.assertNotIn('SECRET', str(failure_details(ValueError('TOKEN_SECRET'))))
 
     def test_light_and_full_scan_request_budget(self):
         for light, pages in [(True, 2), (False, 4)]:

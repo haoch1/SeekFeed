@@ -3,6 +3,7 @@ import { RSSService } from './rss';
 import { TelegramPushService } from './telegram/push';
 import { MatcherService } from './matcher';
 import { getEnvConfig } from '../config/env';
+import cadence from '../config/cadence.json';
 import { logger } from '../utils/logger';
 import type { RSSProcessResult, PushResult } from '../types';
 
@@ -25,7 +26,7 @@ export class SchedulerService {
     constructor(private dbService: DatabaseService) {}
 
     private getRSSIntervalSeconds(): number {
-        return Math.max(10, this.dbService.getBaseConfig()?.rss_interval_seconds || 60);
+        return Math.max(10, this.dbService.getBaseConfig()?.rss_interval_seconds || cadence.rssIntervalSeconds);
     }
 
     start(): void {

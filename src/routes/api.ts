@@ -20,6 +20,7 @@ import {
 } from '../utils/validation';
 import type { ContextVariables } from '../types';
 import { getEnvConfig } from '../config/env';
+import cadence from '../config/cadence.json';
 import { logger } from '../utils/logger';
 import { getScheduler } from '../services/runtime';
 
@@ -665,7 +666,7 @@ apiRoutes.get('/rss/config', async (c) => {
 
         return c.json(createSuccessResponse({
             rss_url: config.rss_url || 'https://rss.nodeseek.com/',
-            rss_interval_seconds: config.rss_interval_seconds || 60,
+            rss_interval_seconds: config.rss_interval_seconds || cadence.rssIntervalSeconds,
             rss_proxy: config.rss_proxy || '',
         }));
     } catch (error) {

@@ -1,7 +1,7 @@
 import { beforeEach, afterEach, describe, expect, it } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { readFileSync } from 'node:fs';
-import { HotService, heatScore, weekStart, liveActivity, CollectorUnavailable } from './hot';
+import { HotService, heatScore, weekStart, liveActivity, CollectorUnavailable, parseCollectorFailure } from './hot';
 
 let db: Database;
 const now = new Date('2026-10-20T05:00:00Z');
@@ -241,7 +241,9 @@ describe('independent hot ranking', () => {
             db.query('UPDATE hot_collector_state SET next_attempt_at=NULL,last_attempt_at=NULL WHERE id=1').run();
             expect(await service.refresh()).toBe(true);
             const state = db.query('SELECT next_attempt_at FROM hot_collector_state').get() as any;
-            expect(Date.parse(state.next_attempt_at) - Date.now()).toBeGreaterThan(119000);
+            expect(Date.parse(state.next_attempt_at) - Date.now()).toBeGreaterThan(59000);
+            expect(Date.parse(state.next_attempt_at) - Date.now()).toBeLessThanOrEqual(75000);
+            expect(service.ranking().intervalSeconds).toBe(60);
             expect(Date.parse(state.next_attempt_at) - Date.now()).toBeLessThanOrEqual(135000);
             expect(await service.refresh()).toBe(false);
             const restarted = new HotService(db, async () => { throw new Error('must not collect'); });
@@ -261,6 +263,48 @@ describe('independent hot ranking', () => {
             expect(Date.parse(state.next_attempt_at) - Date.now()).toBeGreaterThan(minimum * 1000 - 1000);
             expect(await service.refresh()).toBe(false);
             expect(calls).toBe(i + 1);
+        }
+    });
+    it('recovers transient transport and server failures without applying the long blocked-source cooldown', async () => {
+        for (const failure of [new CollectorUnavailable(0, 'network_timeout'), new CollectorUnavailable(0, 'network_error'), new CollectorUnavailable(0, 'http_error', 503)]) {
+            db.query('UPDATE hot_collector_state SET failures=0,last_error=NULL,next_attempt_at=NULL,last_attempt_at=NULL WHERE id=1').run();
+            let broken = true, calls = 0;
+            const service = new HotService(db, async () => { calls++; if (broken) throw failure; return batch([post(1)], new Date()); });
+            for (const seconds of [60, 120, 240, 300]) {
+                db.query('UPDATE hot_collector_state SET next_attempt_at=NULL,last_attempt_at=NULL WHERE id=1').run();
+                expect(await service.refresh()).toBe(false);
+                const state = db.query('SELECT next_attempt_at,last_error FROM hot_collector_state').get() as any;
+                expect(Date.parse(state.next_attempt_at) - Date.now()).toBeGreaterThan(seconds * 1000 - 1000);
+                expect(Date.parse(state.next_attempt_at) - Date.now()).toBeLessThanOrEqual(seconds * 1000);
+                expect(state.last_error).toContain(failure.description);
+                expect(await service.refresh()).toBe(false);
+            }
+            expect(calls).toBe(4);
+            broken = false;
+            db.query('UPDATE hot_collector_state SET next_attempt_at=NULL,last_attempt_at=NULL WHERE id=1').run();
+            expect(await service.refresh()).toBe(true);
+            expect(db.query('SELECT failures,last_error FROM hot_collector_state').get()).toEqual({ failures: 0, last_error: null });
+        }
+    });
+    it('retains long cooldowns for blocked, rate-limited and invalid pages and honors Retry-After on transient errors', async () => {
+        for (const failure of [new CollectorUnavailable(0, 'http_error', 403), new CollectorUnavailable(0, 'http_error', 429), new CollectorUnavailable(0, 'challenge_or_empty'), new CollectorUnavailable(0, 'unexpected_markup'), new CollectorUnavailable(1800, 'http_error', 503)]) {
+            db.query('UPDATE hot_collector_state SET failures=0,next_attempt_at=NULL,last_attempt_at=NULL WHERE id=1').run();
+            const service = new HotService(db, async () => { throw failure; });
+            expect(await service.refresh()).toBe(false);
+            const state = db.query('SELECT next_attempt_at,last_error FROM hot_collector_state').get() as any;
+            expect(Date.parse(state.next_attempt_at) - Date.now()).toBeGreaterThan(Math.max(600, failure.retryAfterSeconds) * 1000 - 1000);
+            expect(state.last_error).toContain(failure.description);
+        }
+    });
+    it('accepts only bounded diagnostic codes without exposing subprocess output or transport secrets', () => {
+        expect(parseCollectorFailure('{"error":"http_429","retryAfterSeconds":1800}')).toMatchObject({ code: 'http_error', httpStatus: 429, retryAfterSeconds: 1800, transient: false });
+        expect(parseCollectorFailure('{"error":"network_timeout"}')).toMatchObject({ code: 'network_timeout', transient: true });
+        expect(parseCollectorFailure('', true)).toMatchObject({ code: 'network_timeout', transient: true });
+        for (const stderr of ['COOKIE_TOKEN_SECRET', 'null', '{"error":"COOKIE_TOKEN_SECRET","retryAfterSeconds":-1}', 'A'.repeat(16001)]) {
+            const failure = parseCollectorFailure(stderr);
+            expect(failure.code).toBe('collector_error');
+            expect(failure.description).not.toContain('SECRET');
+            expect(failure.retryAfterSeconds).toBe(0);
         }
     });
 });

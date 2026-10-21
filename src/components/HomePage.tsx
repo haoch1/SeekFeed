@@ -7,6 +7,7 @@ import { FieldInput } from './Controls';
 import type { FC } from "hono/jsx";
 import { Layout } from "./Layout";
 import { DashboardSurface, Icon } from "./DashboardSurface";
+import cadence from '../config/cadence.json';
 
 export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
   if (path === '/') path = '/hot';
@@ -95,8 +96,8 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
             </div>
             <div class="form-group">
               <label for="rssInterval" class="form-label">抓取间隔（秒）</label>
-              <FieldInput type="number" id="rssInterval" class="input-field" min="10" max="3600" placeholder="60" />
-              <span class="form-hint">最小 10 秒，建议 60 秒以上</span>
+              <FieldInput type="number" id="rssInterval" class="input-field" min="10" max="3600" placeholder={String(cadence.rssIntervalSeconds)} />
+              <span class="form-hint">默认 30 秒，最小 10 秒；同步失败时自动延长重试间隔。</span>
             </div>
             <div class="form-group">
               <label for="rssProxy" class="form-label">代理地址（可选）</label>

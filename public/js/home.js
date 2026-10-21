@@ -653,7 +653,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const result = await apiRequest("/api/rss/config");
     if (result?.success) {
       document.getElementById("rssUrl").value = result.data.rss_url || "";
-      document.getElementById("rssInterval").value = result.data.rss_interval_seconds || 60;
+      document.getElementById("rssInterval").value = result.data.rss_interval_seconds || window.SeekFeedCadence.rssIntervalSeconds;
       document.getElementById("rssProxy").value = result.data.rss_proxy || "";
     }
   }
@@ -1455,7 +1455,7 @@ document.addEventListener("DOMContentLoaded", function () {
     loadFilterSubscriptions();
     updateMonitor();
     const liveTick = () => { if (!document.hidden) { updateMonitor(true); updateStats(true); refreshFeed(); analytics.tick(); } };
-    setInterval(liveTick, 10000);
+    setInterval(liveTick, window.SeekFeedCadence.feedRefreshMs);
     document.addEventListener('visibilitychange', liveTick);
   }
 
