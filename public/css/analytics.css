@@ -280,6 +280,15 @@ details[open] > summary svg { transform: rotate(180deg); }
 .keyword-chart-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; min-height: 36px; flex-shrink: 0; }
 .keyword-chart-heading .analytics-period { padding: 2px; gap: 2px; }
 .keyword-chart-heading .chart-range-btn { min-height: 28px; font-size: 11px; padding: 4px 8px; }
+.keyword-chart-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; min-width: 0; }
+.keyword-chart-toolbar .keyword-chart-legend { margin-bottom: 0; flex-shrink: 1; flex: 1; gap: 10px; }
+.keyword-chart-toolbar > .analytics-caption { flex-shrink: 0; }
+.keyword-chart-toolbar .analytics-period { padding: 2px; gap: 2px; width: auto; }
+.keyword-chart-toolbar .chart-range-btn { min-height: 28px; padding: 4px 7px; font-size: 11px; }
+.keyword-daily-bar { fill: var(--series-color); fill-opacity: .8; }
+.keyword-axis-label { fill: var(--text-secondary); font: 11px inherit; font-size: 11px; font-family: inherit; }
+.keyword-chart-column.is-active .analytics-bar-label { visibility: visible; }
+.keyword-hour-chart[data-chart-style="line"][data-multiple="true"] .analytics-bar-label { visibility: hidden; }
 .keyword-panel-readout { height: 48px; line-height: 16px; font-size: 11px; overflow: auto; overflow-wrap: anywhere; flex-shrink: 0; font-variant-numeric: tabular-nums; }
 .keyword-analysis h3 { color: var(--text-primary); font-size: 13px; font-weight: 600; }
 .keyword-hour-chart { min-width: 0; height: 236px; border-radius: 4px; outline-offset: 3px; margin-top: auto; }
