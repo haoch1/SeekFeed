@@ -1,6 +1,7 @@
 import type { FC, PropsWithChildren } from "hono/jsx";
 import iconPaths from './icons.json';
 import identityScript from '../../public/js/identity.js' with { type: 'text' };
+import themeScript from '../../public/js/theme.js' with { type: 'text' };
 import cadence from '../config/cadence.json';
 
 interface LayoutProps {
@@ -32,7 +33,7 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
 
         {/* PWA Config */}
         <meta name="theme-color" content="#4f46e5" />
-        <meta name="color-scheme" content="dark light" />
+        <meta name="color-scheme" content="light dark" />
         <meta name="application-name" content="SeekFeed" />
         <meta name="apple-mobile-web-app-title" content="SeekFeed" />
         <link rel="manifest" href="/manifest.json" />
@@ -58,25 +59,7 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
         {/* Establish presentation before the first body paint. APIs still verify the session. */}
         <script dangerouslySetInnerHTML={{ __html: `window.SeekFeedCadence = ${JSON.stringify(cadence)};` }} />
         <script dangerouslySetInnerHTML={{ __html: identityScript }} />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-            (function() {
-              let savedTheme;
-              try {
-                savedTheme = localStorage.getItem('theme');
-              } catch { /* Use the system theme when browser storage is unavailable. */ }
-              if (savedTheme === 'dark') {
-                document.documentElement.setAttribute('data-theme', 'dark');
-              } else if (savedTheme === 'light') {
-                document.documentElement.setAttribute('data-theme', 'light');
-              } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                document.documentElement.setAttribute('data-theme', 'dark');
-              }
-            })();
-          `,
-          }}
-        />
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
         {children}

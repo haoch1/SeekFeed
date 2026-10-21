@@ -178,54 +178,6 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // ============================================
-  // 主题切换
-  // ============================================
-  let themeTransition;
-  function initTheme() {
-    const savedTheme = localStorage.getItem("theme");
-    if (savedTheme) {
-      document.documentElement.setAttribute("data-theme", savedTheme);
-    } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
-      document.documentElement.setAttribute("data-theme", "dark");
-    }
-
-    const themeButton = document.getElementById("themeToggleBtn");
-    const themeHint = document.getElementById("themeToggleHint");
-    const updateThemeIcon = () => {
-      if (!themeButton) return;
-      const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-      themeButton.setAttribute("aria-label", isDark ? "切换到浅色模式" : "切换到暗色模式");
-      if (themeHint) themeHint.textContent = themeButton.getAttribute("aria-label");
-    };
-    updateThemeIcon();
-    let themeTimer;
-    themeButton?.addEventListener("click", () => {
-      const currentTheme = document.documentElement.getAttribute("data-theme");
-      const newTheme = currentTheme === "dark" ? "light" : "dark";
-      const root = document.documentElement;
-      const apply = () => {
-        root.setAttribute("data-theme", newTheme);
-        localStorage.setItem("theme", newTheme);
-        updateThemeIcon();
-      };
-      if (document.startViewTransition && routeAnimation?.playState !== 'running' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        themeTransition?.skipTransition();
-        themeTransition = document.startViewTransition(apply);
-        return;
-      }
-      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        clearTimeout(themeTimer);
-        root.classList.add('theme-transition');
-        // Resolve transition styles before changing the shared color tokens.
-        getComputedStyle(document.body).backgroundColor;
-        themeTimer = setTimeout(() => root.classList.remove('theme-transition'), 360);
-      }
-      apply();
-
-    });
-  }
-
-  // ============================================
   // 抽屉系统
   // ============================================
   let closeMobileSidebar = () => {};
@@ -1092,7 +1044,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const root = document.documentElement;
     const content = el('mainContent');
     const opacity = getComputedStyle(content).opacity;
-    themeTransition?.skipTransition();
+    window.SeekFeedTheme.cancelTransition();
     routeAnimation?.cancel();
     const animate = activePath && activePath !== path && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const apply = () => {
@@ -1436,7 +1388,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // ============================================
   function init() {
     initIdentity();
-    initTheme();
+    window.SeekFeedTheme.init({ canAnimate: () => routeAnimation?.playState !== 'running' });
     Drawer.init();
     initFilters();
     initRssConfig();
