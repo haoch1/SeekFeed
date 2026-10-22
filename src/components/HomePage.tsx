@@ -3,7 +3,6 @@ import { TelegramSettings } from './TelegramSettings';
 import { SubscriptionAnalytics } from './SubscriptionAnalytics';
 import { StatisticsPage } from './StatisticsPage';
 import { HotPage } from './HotPage';
-import { TradeAnalyticsPage } from './TradeAnalyticsPage';
 import { FieldInput } from './Controls';
 import type { FC } from "hono/jsx";
 import { Layout } from "./Layout";
@@ -16,7 +15,7 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
     <Layout
       title="SeekFeed · NodeSeek 社区动态"
       description="浏览 NodeSeek 实时热榜、最新帖子与社区数据分析。"
-      scriptSrc={["/js/collection-insights.js", "/js/trade-labels.js", "/js/trade-analytics.js", "/js/category-breakdown.js", "/js/keyword-statistics.js", "/js/statistics.js", "/js/hot.js", "/js/home.js"]}
+      scriptSrc={["/js/collection-insights.js", "/js/category-breakdown.js", "/js/keyword-statistics.js", "/js/statistics.js", "/js/hot.js", "/js/home.js"]}
     >
       <DashboardSurface path={path}>
 
@@ -129,7 +128,6 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
       <AccountSettings active={path === "/settings/account"} />
 
       <StatisticsPage active={path === "/statistics"} />
-      <TradeAnalyticsPage active={path === "/trades"} />
       <HotPage active={path === "/hot"} />
 
       </DashboardSurface>

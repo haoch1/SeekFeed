@@ -32,7 +32,7 @@ describe('server rendered workspace', () => {
         expect(html).toContain('class="brand-mark" aria-hidden="true"');
     });
     it('renders all independent destinations without SVG namespace/raw HTML conflicts', () => {
-        for (const path of ['/', '/hot', '/posts', '/matched', '/subscriptions', '/statistics', '/trades', '/settings/account', '/settings/rss', '/settings/telegram']) {
+        for (const path of ['/', '/hot', '/posts', '/matched', '/subscriptions', '/statistics', '/settings/account', '/settings/rss', '/settings/telegram']) {
             const html = HomePage({ path }).toString();
             expect(html).toContain('SeekFeed');
             expect(html).not.toContain('<use');

@@ -60,7 +60,7 @@ API、认证响应禁止共享缓存。客户端不得将私有响应交由 Serv
 | `pushStatusNot` | 0–3，需认证 |
 | `subId` | 正整数，需认证 |
 
-响应 `data` 包含 `posts`、`total`、`page`、`totalPages`。访客帖子字段仅包含 `post_id`、`title`、`memo`、`category`、`creator`、`pub_date`、`tradeInfo` 及可选 `authorId`，不包含命中规则及推送状态。
+响应 `data` 包含 `posts`、`total`、`page`、`totalPages`。访客帖子字段仅包含 `post_id`、`title`、`memo`、`category`、`creator`、`pub_date` 及可选 `authorId`，不包含命中规则及推送状态。
 
 `DELETE /api/matched-posts/:id` 需要有效会话，`:id` 为论坛帖子 ID。该接口将已命中帖子从命中订阅列表中持久移除，并停止后续自动推送；原始帖子、推送历史及已发送的 Telegram 消息保留。重复删除返回成功，非命中帖子或不存在的 ID 返回 `404`。命中状态及订阅筛选结果均排除已移除帖子，公开帖子列表不受影响。
 
@@ -159,33 +159,4 @@ Webhook 使用公网 HTTPS 地址；Polling 与 Webhook 为互斥连接方式。
 | `GET /api/posts/:id/revisions` | 管理员 | 最近 30 天内最多 20 个变更；每条包含 `observedAt`、`before`、`after`，均为内容字段 |
 | `GET /api/posts/:id/activity?days=7` | 公开 | `points` 为近 2 小时逐轮及较早小时真实观察值，含 `bucket`、`observedAt`、`views`、`replies`；`days=30` 查看 30 天，其余值使用 7 天 |
 
-`:id` 为论坛帖子编号。不存在观察记录时返回空数组。公开帖子不返回旧版本内容、变更计数或私有推送字段；认证帖子增加 `changed_at` 和 `revision_count`，交易标题提取位于 `tradeInfo`。金额以字符串保存，`currency=未明确` 不代表美元。保留策略、提取规则及幂等边界见 [采集与数据质量](docs/collection-insights.md)。
-
-## 交易分析
-
-`GET /api/stats/trades` 为公开只读接口，仅使用论坛公开字段，不返回订阅、推送或账号信息。
-
-| 参数 | 约束与默认值 |
-| --- | --- |
-| `days` | `0`（全部，默认）、`-1`（今日）、`7`、`30` |
-| `offset` | 浏览器 UTC 偏移分钟，范围 -840 至 840，默认 480 |
-| `provider`、`region` | 归一商家或地区，最多 80 字；空值不限，`未识别` 选择缺失记录 |
-| `intent`、`asset` | 意图或商品类型，最多 30 字；空值不限 |
-| `q` | 标题、RSS 摘要及作者的包含搜索，最多 100 字；不影响订阅匹配 |
-| `priceGroup` | 币种、用途及周期组合，最多 100 字；无效或空值选择当前范围可用默认组 |
-| `page` | 1–100000，默认 1；每页 20 条，超出范围回到最后一页 |
-
-响应包含 `range`、`totals`、`coverage`、`facets`、`providers`、`regions`、`assets`、`delivery`、`network`、`specifications`、`trend`、`pricing`、`records`、`page`、`pageCount` 与规则版本。`pricing.groups` 为可选组，`selectedGroup` 为实际采用组，分位数无样本时为 `null`。`records.fact` 保留结构化提取与原文依据。金额数值仅用于对应组内的展示，不执行换汇或总额合计。详细口径见 [交易分析](docs/trade-analysis.md)。
-
-### 人工标记（管理员）
-
-| 接口 | 行为 |
-| --- | --- |
-| `GET /api/trades/labels?postId=123` | 当前单帖标签、可用商家、最近商家和共享别名；不返回完整事件历史 |
-| `GET /api/trades/labels?export=1` | 导出商家目录、当前标记、共享别名及带原文与规则预测的全部审阅事件 |
-| `POST /api/trades/labels` | 提交 `{postId, labels, alias?}`，事务保存人工字段、可选共享别名与审阅事件；清除当前交易缓存 |
-| `DELETE /api/trades/labels/aliases/:id` | 删除自定义共享别名并保留删除事件；不删除单帖标记或商家目录 |
-
-`labels` 可包含 `provider`、`region`（1–60 字）、`intent`（求购／出售／其他）、`asset`（页面商品类型枚举）及 `prices`（最多 20 项）。每项人工金额包含 `text`、`amount`（0–1,000,000,000）、`currency`、`kind`、`period`、`source=manual`。支持币种为未明确、CNY、USD、CAD、EUR、GBP、HKD、SGD、AUD、NZD、USDT。费用周期未确认时不进入周期报价分布，非周期金额统一使用“不适用”。
-
-请求中的 `labels` 替换该帖全部人工字段，空对象恢复自动识别。`alias` 为至少两个字符的原文别名，并要求 `labels.provider` 非空。请求不允许未知字段；不存在的交易帖返回 404，别名与内置词表或已存在映射冲突返回 409。商家名称忽略大小写复用已保存的标准名称。匿名或无效会话无法管理标记或导出样本。
+`:id` 为论坛帖子编号。不存在观察记录时返回空数组。公开帖子不返回旧版本内容、变更计数或私有推送字段；认证帖子增加 `changed_at` 和 `revision_count`。保留策略及幂等边界见 [采集与数据质量](docs/collection-insights.md)。

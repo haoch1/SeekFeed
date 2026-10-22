@@ -7,8 +7,7 @@
 | [Docker 部署](Docker.md) | 安装、代理、升级、备份与恢复 |
 | [CI/CD](CI-CD.md) | 自动化测试、镜像标签与发布流程 |
 | [API](../API.md) | Session、账号、订阅、帖子、统计及通知接口 |
-| [采集与数据质量](collection-insights.md) | 身份补全、变更同步、诊断、互动历史与交易提取 |
-| [交易分析](trade-analysis.md) | 数据范围、别名、供求、报价分组、识别覆盖与原文依据 |
+| [采集与数据质量](collection-insights.md) | 身份补全、变更同步、诊断与互动历史 |
 | [统计分析](analytics.md) | 指标口径、时间边界、对比与导出 |
 | [热榜](hot-ranking.md) | 采集频率、增长样本、衰减、评分与限流退避 |
 | [界面规范](style-guide.md) | 设计变量、组件、交互与移动端约束 |

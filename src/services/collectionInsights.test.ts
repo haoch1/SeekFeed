@@ -25,6 +25,23 @@ beforeEach(() => {
 afterEach(() => db.close());
 
 describe('collection observations and delivery invariants', () => {
+    it('removes retired analysis metadata idempotently while preserving forum data and subscriptions', () => {
+        const rule = db.createKeywordSub({ keyword1: 'DMIT' });
+        insights.sync([post(1)], true, now);
+        insights.sample(1, 100, 5, now.toISOString());
+        insights.record({ source: 'rss', startedAt: now.toISOString(), durationMs: 20, status: 'success', received: 1 });
+        const tables = ['trade_annotations', 'trade_label_events', 'trade_provider_aliases', 'trade_providers'];
+        for (const table of tables) sqlite.exec(`CREATE TABLE ${table}(value TEXT); INSERT INTO ${table} VALUES('legacy label')`);
+        const retained = ['base_config', 'keywords_sub', 'posts', 'hot_metric_hourly', 'collection_runs'];
+        const before = retained.map(table => sqlite.query(`SELECT * FROM ${table}`).all());
+        const removal = readFileSync(new URL('../database/migrations/014_remove_trade_analysis.sql', import.meta.url), 'utf8');
+        sqlite.exec(removal);
+        sqlite.exec(removal);
+        expect(sqlite.query("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'trade_%'").all()).toEqual([]);
+        expect(retained.map(table => sqlite.query(`SELECT * FROM ${table}`).all())).toEqual(before);
+        expect(db.getAllKeywordSubs()[0].id).toBe(rule.id);
+        expect(db.decoratePosts([db.getPostByPostId(1)!])[0]).not.toHaveProperty('tradeInfo');
+    });
     it('updates meaningful content atomically, preserves dates, records bounded revisions and ignores duplicate entries', () => {
         expect(insights.sync([post(1), post(1)], true, now)).toEqual({ new: 1, updated: 0, skipped: 1 });
         const original = db.getPostByPostId(1)!;

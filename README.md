@@ -122,9 +122,7 @@ RSS 地址、间隔、代理与 Telegram Token、接收账号在设置页管理�
 
 默认 RSS 抓取间隔为 30 秒，订阅匹配与推送在每轮同步后执行。前台页面中，帖子列表每 5 秒更新，热榜与统计图表每 15 秒更新，已提交且展开的关键词分析每 30 秒更新。页面轮询读取本地数据库，不额外触发源站采集；页面不可见时暂停自动更新。刷新周期集中定义于 `src/config/cadence.json`，已保存的 RSS 自定义间隔优先于默认值。
 
-采集质量、身份补全、变更同步、互动历史与交易提取的定义、保留策略和权限见 [采集与数据质量](docs/collection-insights.md)。
-
-独立[交易分析](docs/trade-analysis.md)页面支持商家别名归一、供求趋势、地区与商品筛选、分币种及用途的报价分布、规格与交付提及、管理员人工标记、可复用商家目录和可导出的审阅依据。分析使用已收录标题和 RSS 摘要，不增加源站请求。
+采集质量、身份补全、变更同步、互动历史的定义、保留策略和权限见 [采集与数据质量](docs/collection-insights.md)。
 
 ## 参考项目与资源
 
@@ -146,9 +144,6 @@ RSS 地址、间隔、代理与 Telegram Token、接收账号在设置页管理�
 | [Miniflux](https://github.com/miniflux/v2/blob/main/internal/storage/entry.go) | 条目内容更新与用户状态分离、保留原发布时间 |
 | [changedetection.io](https://github.com/dgtlmoon/changedetection.io/blob/master/changedetectionio/model/Watch.py) | 变更版本、时间记录与历史保留策略 |
 | [GoatCounter](https://github.com/arp242/goatcounter/blob/main/hit_list.go) | 小时聚合与限定时间范围查询；未复用访问量指标 |
-| [OpenRefine](https://github.com/OpenRefine/OpenRefine) · [分面文档](https://openrefine.org/docs/manual/facets) | 交易数据多维筛选、明确别名归一、缺失分组与明细核对 |
-| [Metabase](https://github.com/metabase/metabase) · [筛选文档](https://www.metabase.com/docs/latest/dashboards/filters) | 同一筛选条件联动交易指标、图表与明细 |
-| [price-parser](https://github.com/scrapinghub/price-parser/blob/master/price_parser/parser.py) | 金额原文与币种歧义的处理；未引入运行时依赖 |
 
 参考来源的细节分别记录于 [界面规范](docs/style-guide.md)、[优化记录](docs/OPTIMIZATION.md) 与 [热榜规则](docs/hot-ranking.md)。未采用的主题预览不属于当前界面的实现来源。
 

@@ -349,7 +349,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (!item) item = createPostElement(post);
       else if (item.dataset.signature !== JSON.stringify(post)) {
         const updated = createPostElement(post);
-        for (const selector of ['.post-header', '.post-memo', '.post-meta', '.post-trade-slot', '.delivery-status']) {
+        for (const selector of ['.post-header', '.post-memo', '.post-meta', '.delivery-status']) {
           const old = item.querySelector(selector), next = updated.querySelector(selector);
           if (old && next && old.outerHTML !== next.outerHTML) old.replaceWith(next);
         }
@@ -402,7 +402,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const date = new Date(post.pub_date);
     const time = Number.isNaN(date.getTime()) ? "时间未知" : new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
     const canDeleteMatch = isLoggedIn && activePath === '/matched' && [1, 3].includes(Number(post.push_status));
-    item.innerHTML = `<div class="post-content"><div class="post-header"><h3 class="post-title"><a href="${href}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(post.title)}">${escapeHtml(post.title)}</a></h3></div><p class="post-memo">${escapeHtml(post.memo || "")}</p><div class="post-meta"><span class="post-category">${escapeHtml(getCategoryName(post.category))}</span>${window.SeekFeedControls.authorLink(post.creator, post.authorId, 'post-author')}<span class="post-date">${time}</span>${isLoggedIn && post.revision_count ? `<button type="button" class="post-revision-btn" data-post-revisions="${Number(post.post_id)}">已更新 ${Number(post.revision_count)} 次</button>` : ""}${tags ? `<span class="post-sub-tags">${tags}</span>` : ""}</div><div class="post-trade-slot">${window.SeekFeedInsights.trade(post.tradeInfo)}</div></div><div class="post-actions">${isLoggedIn ? `<span class="delivery-status" data-status="${Number(post.push_status)}">${status}</span>` : ''}<div class="post-action-buttons"><a class="icon-btn" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="打开帖子">${renderIcon("external")}</a>${canDeleteMatch ? `<button type="button" class="icon-btn delete-matched" aria-label="从命中订阅删除" title="删除命中帖子">${renderIcon('trash')}</button>` : ''}</div></div>`;
+    item.innerHTML = `<div class="post-content"><div class="post-header"><h3 class="post-title"><a href="${href}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(post.title)}">${escapeHtml(post.title)}</a></h3></div><p class="post-memo">${escapeHtml(post.memo || "")}</p><div class="post-meta"><span class="post-category">${escapeHtml(getCategoryName(post.category))}</span>${window.SeekFeedControls.authorLink(post.creator, post.authorId, 'post-author')}<span class="post-date">${time}</span>${isLoggedIn && post.revision_count ? `<button type="button" class="post-revision-btn" data-post-revisions="${Number(post.post_id)}">已更新 ${Number(post.revision_count)} 次</button>` : ""}${tags ? `<span class="post-sub-tags">${tags}</span>` : ""}</div></div><div class="post-actions">${isLoggedIn ? `<span class="delivery-status" data-status="${Number(post.push_status)}">${status}</span>` : ''}<div class="post-action-buttons"><a class="icon-btn" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="打开帖子">${renderIcon("external")}</a>${canDeleteMatch ? `<button type="button" class="icon-btn delete-matched" aria-label="从命中订阅删除" title="删除命中帖子">${renderIcon('trash')}</button>` : ''}</div></div>`;
     item.querySelector('.delete-matched')?.addEventListener('click', async event => {
       const button = event.currentTarget;
       if (matchedPostActions.has(post.post_id)) return;
@@ -1026,7 +1026,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const routeMap = {
     '/': ['hot', '热榜'], '/posts': ['feed', '最新帖子'], '/matched': ['feed', '命中订阅'],
     '/hot': ['hot', '热榜'],
-    '/subscriptions': ['subscriptions', '订阅管理'], '/statistics': ['stats', '统计信息'], '/trades': ['trades', '交易分析'],
+    '/subscriptions': ['subscriptions', '订阅管理'], '/statistics': ['stats', '统计信息'],
     '/settings/account': ['account', '账号与安全'], '/settings/rss': ['rss', 'RSS 配置'], '/settings/telegram': ['telegram', 'Telegram'],
   };
   let activePath = null;
@@ -1037,7 +1037,7 @@ document.addEventListener("DOMContentLoaded", function () {
     window.SeekFeedControls.dismissCharts();
     if (path === '/settings') path = '/settings/account';
     const [name, title] = routeMap[path] || routeMap['/'];
-    if (!isLoggedIn && !['/', '/posts', '/statistics', '/hot', '/trades'].includes(path)) {
+    if (!isLoggedIn && !['/', '/posts', '/statistics', '/hot'].includes(path)) {
       if (!activePath) {
         history.replaceState({}, '', '/hot');
         navigate('/hot', false);
@@ -1074,7 +1074,6 @@ document.addEventListener("DOMContentLoaded", function () {
       if (name === 'rss') loadRssConfig();
       if (name === 'telegram') loadTelegramConfig();
       if (name === 'stats') analytics.load();
-      if (name === 'trades') window.SeekFeedTrades.load();
       if (name === 'hot') window.SeekFeedHot.load();
       if (name === 'account') loadAccount();
       activePath = path;

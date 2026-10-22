@@ -110,19 +110,6 @@ apiRoutes.get('/posts/:id/activity', createParamValidationMiddleware(idParamSche
     return c.json(createSuccessResponse({ points: c.get('dbService').getCollectionInsights().history(id, days), days }));
 });
 
-const tradeQuery = z.object({
-    days: z.coerce.number().refine(value => [-1, 0, 7, 30].includes(value)).default(0),
-    offset: z.coerce.number().int().min(-840).max(840).default(480),
-    provider: z.string().trim().max(80).default(''), region: z.string().trim().max(80).default(''),
-    intent: z.string().trim().max(30).default(''), asset: z.string().trim().max(30).default(''),
-    q: z.string().trim().max(100).default(''), priceGroup: z.string().trim().max(100).default(''),
-    page: z.coerce.number().int().min(1).max(100000).default(1),
-});
-apiRoutes.get('/stats/trades', createQueryValidationMiddleware(tradeQuery), c => {
-    try { return c.json(createSuccessResponse(c.get('dbService').getTradeAnalytics().query(c.get('validatedQuery')))); }
-    catch (error) { logger.error('读取交易分析失败:', error); return c.json(createErrorResponse('交易分析读取失败，请重试'), 500); }
-});
-
 // 公开路由（无需认证）
 apiRoutes.get('/posts', createQueryValidationMiddleware(paginationSchema), async (c) => {
     try {
@@ -158,7 +145,7 @@ apiRoutes.get('/posts', createQueryValidationMiddleware(paginationSchema), async
         const enriched = { ...result, posts: dbService.decoratePosts(result.posts) };
         const data = authenticated ? enriched : {
             ...result,
-            posts: enriched.posts.map(({ post_id, title, memo, category, creator, pub_date, authorId, tradeInfo }) => ({ post_id, title, memo, category, creator, pub_date, tradeInfo, ...(authorId ? { authorId } : {}) })),
+            posts: enriched.posts.map(({ post_id, title, memo, category, creator, pub_date, authorId }) => ({ post_id, title, memo, category, creator, pub_date, ...(authorId ? { authorId } : {}) })),
         };
         return c.json(createSuccessResponse(data));
     } catch (error) {
@@ -231,40 +218,6 @@ apiRoutes.get('/stats/keywords', createQueryValidationMiddleware(keywordAnalytic
 
 // 应用Session中间件到所有后续API路由
 apiRoutes.use('*', requireSession);
-
-const manualName = z.string().trim().min(1).max(60).refine(value => !/[\x00-\x1f\x7f]/.test(value)).transform(value => value.normalize('NFKC'));
-const manualPrice = z.object({
-    text: z.string().trim().min(1).max(100), amount: z.number().finite().min(0).max(1000000000),
-    currency: z.enum(['未明确', 'CNY', 'USD', 'CAD', 'EUR', 'GBP', 'HKD', 'SGD', 'AUD', 'NZD', 'USDT']),
-    kind: z.enum(['出售报价', '周期费用', '溢价', '剩余价值', '手续费', '金额待分类']),
-    period: z.enum(['不适用', '未明确', '月', '季', '年', '两年', '三年']),
-    source: z.literal('manual'),
-}).strict().transform(value => ({ ...value, period: value.kind === '周期费用' ? (value.period === '不适用' ? '未明确' : value.period) : '不适用' }));
-const manualTradeLabels = z.object({
-    postId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-    labels: z.object({
-        provider: manualName.optional(), region: manualName.optional(),
-        intent: z.enum(['求购', '出售', '其他']).optional(),
-        asset: z.enum(['服务器与网络', '账号', '优惠与邀请码', '服务与席位', '软件授权', '域名', '通信产品', '其他或未明确']).optional(),
-        prices: z.array(manualPrice).max(20).optional(),
-    }).strict(),
-    alias: manualName.refine(value => value.length >= 2).optional(),
-}).strict();
-apiRoutes.get('/trades/labels', createQueryValidationMiddleware(z.object({ export: z.enum(['0', '1']).default('0'), postId: z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional() })), c => {
-    const query = c.get('validatedQuery');
-    return c.json(createSuccessResponse(c.get('dbService').getTradeLabels().read(query.export === '1', query.postId)));
-});
-apiRoutes.post('/trades/labels', createValidationMiddleware(manualTradeLabels), c => {
-    try {
-        const input = c.get('validatedData');
-        const result = c.get('dbService').getTradeLabels().save(input.postId, input.labels, input.alias);
-        return 'error' in result ? c.json(createErrorResponse(result.error), result.status) : c.json(createSuccessResponse(null, '标记已保存'));
-    } catch (error) { logger.error('保存交易标记失败:', error); return c.json(createErrorResponse('标记保存失败，请重试'), 500); }
-});
-apiRoutes.delete('/trades/labels/aliases/:id', createParamValidationMiddleware(idParamSchema), c => {
-    const removed = c.get('dbService').getTradeLabels().removeAlias(c.get('validatedParams').id);
-    return removed ? c.json(createSuccessResponse(null, '别名已删除')) : c.json(createErrorResponse('别名不存在'), 404);
-});
 
 apiRoutes.get('/collection/quality', c => c.json(createSuccessResponse(c.get('dbService').getCollectionInsights().quality())));
 apiRoutes.get('/posts/:id/revisions', createParamValidationMiddleware(idParamSchema), c => {

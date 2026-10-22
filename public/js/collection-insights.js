@@ -63,31 +63,71 @@ window.SeekFeedInsights = (() => {
     }
     function chart(points, metric, mode, availableWidth) {
         if (!points.length) return '<div class="insight-empty">尚无互动历史。近 2 小时展示逐轮观察值，较早记录按小时保留。</div>';
-        const width = Math.max(240, Math.min(880, availableWidth)), height = 280, left = 44, right = 36, top = 32, bottom = 42;
-        const min = Date.parse(points[0].bucket), max = Math.max(min + 3600000, Date.parse(points.at(-1).bucket));
-        const peak = Math.max(1, ...points.map(point => point[metric]));
-        const x = point => left + (Date.parse(point.bucket) - min) / (max - min) * (width - left - right);
-        const y = point => height - bottom - point[metric] / peak * (height - top - bottom);
+        const width = Math.max(220, availableWidth), height = width < 500 ? 260 : 300;
+        const left = width < 500 ? 39 : 50, right = 16, top = 28, bottom = 44;
+        const observations = points.map(point => ({ ...point, timestamp: Date.parse(point.observedAt) }))
+            .filter(point => Number.isFinite(point.timestamp)).sort((a, b) => a.timestamp - b.timestamp);
+        if (!observations.length) return '<div class="insight-empty">尚无有效采样。</div>';
+        const first = observations[0].timestamp, last = observations.at(-1).timestamp, span = last - first;
+        const target = width < 500 ? 10 : 20;
+        const minutes = [5, 15, 30, 60, 180, 360, 720, 1440, 2880, 10080].find(value => span / (value * 60000) <= target) || 10080;
+        const interval = minutes * 60000, grouped = new Map();
+        let continuity = 0;
+        for (const [index, point] of observations.entries()) {
+            if (index && point.timestamp - observations[index - 1].timestamp > 3600000) continuity++;
+            const bucket = Math.floor(point.timestamp / interval) * interval;
+            grouped.set(bucket, { ...point, start: bucket, continuity });
+        }
+        const values = [...grouped.values()], count = Math.floor((values.at(-1).start - values[0].start) / interval) + 1;
+        const plotWidth = width - left - right, slot = plotWidth / count;
+        const x = point => left + ((point.start - values[0].start) / interval + .5) * slot;
+        const peak = Math.max(1, ...values.map(point => point[metric]));
+        const magnitude = 10 ** Math.floor(Math.log10(peak / 4));
+        const step = Math.max(1, [1, 2, 2.5, 5, 10].map(value => value * magnitude).find(value => value >= peak / 4) || magnitude * 10);
+        const ceiling = step * 4;
+        const y = point => height - bottom - point[metric] / ceiling * (height - top - bottom);
         const label = metric === 'views' ? '浏览量' : '回复量';
-        let path = '';
-        const shapes = points.map((point, i) => {
-            const px = x(point), py = y(point);
-            path += `${!i || Date.parse(point.bucket) - Date.parse(points[i - 1].bucket) > 3600000 ? 'M' : 'L'}${px},${py} `;
-            const title = esc(`${time(point.observedAt)} · ${label} ${num(point[metric])}`);
-            const barWidth = Math.max(1, Math.min(6, (width - left - right) / Math.max(1, (max - min) / 3600000) * .65));
-            return mode === 'bar' ? `<rect x="${px - barWidth / 2}" y="${py}" width="${barWidth}" height="${Math.max(1, height - bottom - py)}" rx="1"><title>${title}</title></rect>` : `<circle cx="${px}" cy="${py}" r="${width < 500 ? 2 : 3.5}"><title>${title}</title></circle>`;
+        const clock = timestamp => new Date(timestamp).toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+        const date = timestamp => new Date(timestamp).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
+        const period = point => {
+            const start = Math.max(first, point.start), end = Math.min(last, point.start + interval);
+            if (start === end) return `${date(first) === date(last) ? '' : date(end) + ' '}${clock(end)}`;
+            if (minutes >= 1440) return date(start) === date(end) ? date(start) : `${date(start)}–${date(end)}`;
+            return `${date(first) === date(last) ? '' : date(start) + ' '}${clock(start)}–${date(start) === date(end) ? '' : date(end) + ' '}${clock(end)}`;
+        };
+        const segments = [];
+        let segment = [];
+        values.forEach((point, index) => {
+            if (index && point.continuity !== values[index - 1].continuity) {
+                segments.push(segment); segment = [];
+            }
+            segment.push(point);
+        });
+        segments.push(segment);
+        const lines = mode === 'line' ? segments.map(segment => {
+            const path = segment.map((point, index) => `${index ? 'L' : 'M'}${x(point)},${y(point)}`).join(' ');
+            return `<path class="insight-area" d="${path} L${x(segment.at(-1))},${height - bottom} L${x(segment[0])},${height - bottom} Z"/><path class="insight-line" d="${path}"/>`;
+        }).join('') : '';
+        const shapes = values.map(point => {
+            const px = x(point), py = y(point), barWidth = Math.min(42, slot * .6);
+            const title = esc(`${date(point.timestamp)} ${period(point)} · ${label} ${num(point[metric])} · 最后采样 ${clock(point.timestamp)}`);
+            return mode === 'bar' ? `<rect class="insight-bar" x="${px - barWidth / 2}" y="${py}" width="${barWidth}" height="${Math.max(1, height - bottom - py)}" rx="4"><title>${title}</title></rect>` : `<circle class="insight-point" cx="${px}" cy="${py}" r="4"><title>${title}</title></circle>`;
         }).join('');
         const grid = Array.from({ length: 5 }, (_, index) => {
             const yy = top + index * (height - top - bottom) / 4;
-            return `<line x1="${left}" x2="${width - right}" y1="${yy}" y2="${yy}" class="insight-grid"/><text x="${left - 12}" y="${yy + 4}" text-anchor="end">${num(Math.round(peak * (4 - index) / 4))}</text>`;
+            return `<line x1="${left}" x2="${width - right}" y1="${yy}" y2="${yy}" class="insight-grid"/><text x="${left - 10}" y="${yy + 4}" text-anchor="end">${num(Math.round(ceiling * (4 - index) / 4))}</text>`;
         }).join('');
-        const ticks = [...new Set([0, Math.floor((points.length - 1) / 2), points.length - 1])].map(index => `<text x="${x(points[index])}" y="${height - 12}" text-anchor="middle">${esc(new Date(points[index].bucket).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit' }))}</text>`).join('');
-        return `<svg class="insight-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="真实观察到的${label}，缺测时段不补零">${grid}${ticks}<g class="insight-series">${mode === 'line' ? `<path d="${path}" fill="none" stroke="currentColor" stroke-width="2"/>` : ''}${shapes}</g></svg>`;
+        const tickCount = Math.min(values.length, Math.max(2, Math.floor(plotWidth / (date(first) !== date(last) ? 155 : 108))));
+        const tickIndices = [...new Set(Array.from({ length: tickCount }, (_, i) => Math.round(i * (values.length - 1) / Math.max(1, tickCount - 1))))];
+        const ticks = tickIndices.map((index, position) => `<text class="insight-time-tick" x="${position === 0 ? left : position === tickIndices.length - 1 ? width - right : x(values[index])}" y="${height - 14}" text-anchor="${tickIndices.length === 1 ? 'start' : position === 0 ? 'start' : position === tickIndices.length - 1 ? 'end' : 'middle'}">${esc(period(values[index]))}</text>`).join('');
+        const unit = minutes >= 1440 ? `${minutes / 1440} 天` : minutes >= 60 ? `${minutes / 60} 小时` : `${minutes} 分钟`;
+        const range = `${date(first)} ${clock(first)}–${date(first) === date(last) ? '' : date(last) + ' '}${clock(last)}`;
+        return `<div class="insight-chart-summary"><div><strong>${num(values.at(-1)[metric])}</strong><span>${label}</span></div><span>${esc(range)} · 每 ${unit}</span></div><svg class="insight-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="按时间段取最后一次${label}，仅显示已采集时段，缺测不补零">${grid}${ticks}<g class="insight-series">${lines}${shapes}</g></svg>`;
     }
     async function activity(id, title) {
         const body = open('互动历史'); const current = ++request;
         let metric = 'views', mode = 'line', days = '7', points = [];
-        body.innerHTML = `<p class="insight-post-title"></p><div class="insight-toolbar"><div class="insight-tabs" role="group" aria-label="互动指标"><button class="btn btn-secondary" data-metric="views" aria-pressed="true">浏览量</button><button class="btn btn-secondary" data-metric="replies" aria-pressed="false">回复量</button></div><div class="insight-tabs" role="group" aria-label="图表样式"><button class="btn btn-secondary" data-mode="bar" aria-pressed="false">柱形</button><button class="btn btn-secondary" data-mode="line" aria-pressed="true">折线</button></div><div class="insight-tabs" role="group" aria-label="历史范围"><button class="btn btn-secondary" data-days="7" aria-pressed="true">7 天</button><button class="btn btn-secondary" data-days="30" aria-pressed="false">30 天</button></div></div><div class="insight-history" aria-live="polite"></div><p class="insight-note">近 2 小时为逐轮观察值，较早记录为每小时最后一次观察值 · 每 30 秒从本地更新 · 缺测不补零，超过 1 小时断开；计数回落按原值展示。</p><details class="insight-observations"><summary>查看采样明细</summary><div class="insight-table-scroll"></div></details>`;
+        body.innerHTML = `<p class="insight-post-title"></p><div class="insight-toolbar"><div class="insight-tabs" role="group" aria-label="互动指标"><button class="btn btn-secondary" data-metric="views" aria-pressed="true">浏览量</button><button class="btn btn-secondary" data-metric="replies" aria-pressed="false">回复量</button></div><div class="insight-tabs" role="group" aria-label="图表样式"><button class="btn btn-secondary" data-mode="bar" aria-pressed="false">柱形</button><button class="btn btn-secondary" data-mode="line" aria-pressed="true">折线</button></div><div class="insight-tabs" role="group" aria-label="历史范围"><button class="btn btn-secondary" data-days="7" aria-pressed="true">7 天</button><button class="btn btn-secondary" data-days="30" aria-pressed="false">30 天</button></div></div><div class="insight-history" aria-live="polite"></div><p class="insight-note">按时间段取最后一次累计值，间隔随范围自动调整 · 仅显示已采集时段 · 缺测不补零，超过 1 小时断开 · 每 30 秒读取本地数据。</p><details class="insight-observations"><summary>查看原始采样明细</summary><div class="insight-table-scroll"></div></details>`;
         body.querySelector('.insight-post-title').textContent = title;
         const draw = () => { const box = body.querySelector('.insight-history'); box.innerHTML = chart(points, metric, mode, box.clientWidth); };
         historyResize = new ResizeObserver(draw); historyResize.observe(body.querySelector('.insight-history'));
@@ -113,16 +153,11 @@ window.SeekFeedInsights = (() => {
         await load();
         if (current === request && dialog.open) historyTimer = setInterval(() => { if (!document.hidden && dialog.open && current === request) load(); }, 30000);
     }
-    function trade(info) {
-        if (!info) return '';
-        const labels = [info.intent, ...info.providers, ...info.regions, ...info.prices.map(price => `${price.kind} ${price.text}${price.currency === '未明确' ? '（币种未明确）' : ''}`)].filter(Boolean);
-        return `<div class="post-trade-info"><span class="trade-source">标题提取</span>${labels.slice(0, 8).map(label => `<span>${esc(label)}</span>`).join('')}</div>`;
-    }
     document.addEventListener('click', event => {
         const revision = event.target.closest('[data-post-revisions]');
         if (revision) revisions(Number(revision.dataset.postRevisions));
         const history = event.target.closest('[data-post-activity]');
         if (history) activity(Number(history.dataset.postActivity), history.closest('.hot-row')?.querySelector('.hot-post-title')?.textContent || '');
     });
-    return { quality, trade };
+    return { quality };
 })();
