@@ -80,7 +80,7 @@ export class CollectionInsights {
                 WHERE x.creator=p.creator AND julianday(b.attempted_at)>julianday(?) - 7)
             GROUP BY p.creator ORDER BY COUNT(*) DESC,MAX(p.post_id) DESC LIMIT 1`).get(now.toISOString()) as any;
         if (!row) return;
-        this.db.query('UPDATE author_backfill_state SET next_attempt_at=? WHERE id=1').run(new Date(now.getTime() + 5 * 60000).toISOString());
+        this.db.query('UPDATE author_backfill_state SET next_attempt_at=? WHERE id=1').run(new Date(now.getTime() + 2 * 60000).toISOString());
         this.db.query('INSERT OR REPLACE INTO author_backfill VALUES(?,?,?)').run(row.post_id, now.toISOString(), 'pending');
         return row.post_id as number;
     }
@@ -102,9 +102,15 @@ export class CollectionInsights {
     }
 
     history(postId: number, days = 7, now = new Date()) {
-        return this.db.query(`SELECT bucket,observed_at AS observedAt,views,replies FROM hot_metric_hourly
+        const hourly = this.db.query(`SELECT bucket,observed_at AS observedAt,views,replies FROM hot_metric_hourly
             WHERE post_id=? AND bucket>=? AND observed_at<=? ORDER BY bucket`)
-            .all(postId, new Date(now.getTime() - days * 24 * HOUR).toISOString(), now.toISOString());
+            .all(postId, new Date(now.getTime() - days * 24 * HOUR).toISOString(), now.toISOString()) as { bucket: string; observedAt: string; views: number; replies: number }[];
+        const recent = this.db.query(`SELECT observed_at AS bucket,observed_at AS observedAt,views,replies FROM hot_samples
+            WHERE post_id=? AND julianday(observed_at)>=julianday(?) - 2.0/24 AND observed_at<=? ORDER BY observed_at`)
+            .all(postId, now.toISOString(), now.toISOString()) as typeof hourly;
+        if (!recent.length) return hourly;
+        // Keep older hourly samples, then use actual observations rather than invented minute buckets.
+        return [...hourly.filter(p => p.observedAt < recent[0].observedAt), ...recent].sort((a, b) => a.observedAt.localeCompare(b.observedAt));
     }
 
     quality() {

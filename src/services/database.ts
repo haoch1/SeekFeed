@@ -10,12 +10,18 @@ import { createFuzzyPostSearch } from '../utils/postSearch';
 import { CollectionInsights } from './collectionInsights';
 import { extractTradeInfo } from '../utils/tradeInfo';
 import { linkForumPosts } from './forumAuthors';
+import { TradeAnalytics } from './tradeAnalytics';
+import { TradeLabelsService } from './tradeLabels';
 
 export class DatabaseService {
   private static instance: DatabaseService | undefined;
   private queryCache: Map<string, { data: any; timestamp: number; ttl: number }>;
   private readonly CACHE_TTL = 60000; // 1分钟缓存
   private hotService?: HotService;
+  private tradeAnalytics?: TradeAnalytics;
+
+  getTradeAnalytics() { return this.tradeAnalytics ??= new TradeAnalytics(this.db); }
+  getTradeLabels() { return new TradeLabelsService(this.db, () => this.getTradeAnalytics().invalidate()); }
 
   getCollectionInsights() { return new CollectionInsights(this.db); }
 

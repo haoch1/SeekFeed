@@ -4,7 +4,7 @@ import { extractTradeInfo } from './tradeInfo';
 describe('conservative trade title extraction', () => {
     it('separates specifications from amounts, retains evidence and never expands matching content', () => {
         const value = extractTradeInfo('【出】BageVM SG 5G 7T流量 42.59刀年付 溢价100元', 'trade')!;
-        expect(value.intent).toBe('转让');
+        expect(value.intent).toBe('出售');
         expect(value.providers).toEqual(['BageVM']);
         expect(value.regions).toEqual(['SG']);
         expect(value.prices).toEqual([
@@ -15,7 +15,7 @@ describe('conservative trade title extraction', () => {
     });
     it('preserves explicit currencies, ambiguous dollar symbols, mixed prices and sold status', () => {
         expect(extractTradeInfo('已出 DMIT 香港 USD 12.50/月 EUR 9/年 HK$30 $20', 'trade')?.prices.map(p => p.currency)).toEqual(['USD', 'EUR', 'HKD', '未明确']);
-        expect(extractTradeInfo('已出 DMIT 香港', 'trade')?.intent).toBe('已结束');
+        expect(extractTradeInfo('已出 DMIT 香港', 'trade')?.intent).toBe('其他');
         expect(extractTradeInfo('求购 VMISS 日本 3核 4G 100GB', 'trade')?.prices).toEqual([]);
         expect(extractTradeInfo('DMIT 价格300元', 'info')).toBeNull();
         expect(extractTradeInfo('这是一条普通交易', 'trade')).toBeNull();

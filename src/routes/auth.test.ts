@@ -22,7 +22,7 @@ const avatar = 'data:image/png;base64,' + readFileSync(new URL('../../public/ico
 
 beforeEach(() => {
     const sqlite = new Database(':memory:');
-    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '009_account_avatar', '010_dismissed_matches', '011_forum_author_links', '012_collection_insights']) {
+    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '009_account_avatar', '010_dismissed_matches', '011_forum_author_links', '012_collection_insights', '013_trade_provider_labels']) {
         sqlite.exec(readFileSync(new URL(`../database/migrations/${name}.sql`, import.meta.url), 'utf8'));
     }
     db = new DatabaseService(sqlite);
@@ -39,6 +39,41 @@ beforeEach(() => {
     app.route('/telegram', telegramRoutes);
     app.route('/api', apiRoutes);
     app.route('/', pageRoutes);
+});
+
+describe('public trade analysis', () => {
+    it('allows public analysis and SSR navigation but never returns private match or account data', async () => {
+        const rule = db.createKeywordSub({ keyword1: 'secret-private-rule' });
+        db.createPost({ post_id: 999, title: '【出】大妈 香港 总价100元出', memo: '<img src=x onerror=alert(1)>', creator: 'Alice', category: 'trade', pub_date: new Date().toISOString(), push_status: 3, sub_id: rule.id });
+        const response = await app.request('/api/stats/trades');
+        expect(response.status).toBe(200);
+        const body = await response.json();
+        expect(body.data.totals.posts).toBe(1);
+        expect(JSON.stringify(body)).not.toMatch(/secret-private-rule|push_status|sub_id|password|bot_token|sessionId/);
+        expect((await app.request('/trades')).status).toBe(200);
+        for (const value of ['days=99', 'offset=900', 'page=0', 'page=1.5']) expect((await app.request('/api/stats/trades?' + value)).status).toBe(400);
+    });
+});
+
+describe('administrator trade labels', () => {
+    it('protects management, writes and evidence export from guests and invalid sessions', async () => {
+        db.createPost({ post_id: 999, title: '收示例商家', memo: '公开摘要', creator: 'Alice', category: 'trade', pub_date: new Date().toISOString(), push_status: 3 });
+        for (const headers of [{}, { Authorization: 'Bearer forged' }]) {
+            expect((await app.request('/api/trades/labels?export=1', { headers })).status).toBe(401);
+            expect((await app.request('/api/trades/labels', { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ postId: 999, labels: { intent: '出售' } }) })).status).toBe(401);
+            expect((await app.request('/api/trades/labels/aliases/1', { method: 'DELETE', headers })).status).toBe(401);
+        }
+        const headers = { Authorization: `Bearer ${sessionId}`, 'Content-Type': 'application/json' };
+        const payload = { postId: 999, labels: { provider: 'ExampleHost', intent: '出售' }, alias: '示例商家' };
+        expect((await app.request('/api/trades/labels', { method: 'POST', headers, body: JSON.stringify(payload) })).status).toBe(200);
+        const publicData = (await (await app.request('/api/stats/trades')).json()).data;
+        expect(publicData.records[0].fact).toMatchObject({ providers: ['ExampleHost'], intent: '出售' });
+        expect(JSON.stringify(publicData)).not.toMatch(/source_title|source_memo|events|sessionId|push_status/);
+        const exported = (await (await app.request('/api/trades/labels?export=1', { headers })).json()).data;
+        expect(exported.events).toHaveLength(2);
+        expect(exported.catalog[0].name).toBe('ExampleHost');
+        for (const invalid of [{ ...payload, labels: { intent: '转让' } }, { ...payload, labels: { madeUp: true } }, { ...payload, labels: { provider: 'x'.repeat(61) } }, { ...payload, labels: { prices: [{ amount: -1 }] } }]) expect((await app.request('/api/trades/labels', { method: 'POST', headers, body: JSON.stringify(invalid) })).status).toBe(400);
+    });
 });
 
 describe('matched post deletion', () => {

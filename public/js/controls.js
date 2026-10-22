@@ -235,7 +235,7 @@
                 }
                 menu.append(actions);
             }
-            document.body.append(menu);
+            (select.closest('dialog[open]') || document.body).append(menu);
             state.menu = menu;
             state.place = () => {
                 const rect = button.getBoundingClientRect();
@@ -275,6 +275,7 @@
         document.querySelector(`label[for="${select.id}"]`)?.addEventListener('click', e => { e.preventDefault(); button.focus(); });
         new MutationObserver(refresh).observe(select, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'hidden', 'style'] });
         select.addEventListener('change', refresh);
+        select.addEventListener('seekfeed:options', refresh);
         select.form?.addEventListener('reset', () => setTimeout(refresh));
         refresh();
     }
@@ -371,6 +372,6 @@
         button.setAttribute('aria-pressed', String(show));
         button.setAttribute('aria-label', `${show ? '隐藏' : '显示'}${button.dataset.secretLabel || (input.id === 'botToken' ? ' Bot Token' : '密码')}`);
     });
-    window.SeekFeedControls = { icon, authorLink, beginPending, pending, lockScroll, unlockScroll, chartPointer, nearChartSegment, closeSelect: close, refreshSelects: () => selects.forEach(s => s.refresh()), dismissCharts, chartInspection: (box, dismiss) => dismiss ? chartInspectors.set(box, dismiss) : chartInspectors.delete(box) };
+    window.SeekFeedControls = { icon, authorLink, enhanceSelects: root => root.querySelectorAll('select').forEach(enhance), beginPending, pending, lockScroll, unlockScroll, chartPointer, nearChartSegment, closeSelect: close, refreshSelects: () => selects.forEach(s => s.refresh()), dismissCharts, chartInspection: (box, dismiss) => dismiss ? chartInspectors.set(box, dismiss) : chartInspectors.delete(box) };
     document.addEventListener('DOMContentLoaded', () => document.querySelectorAll('select').forEach(enhance));
 })();

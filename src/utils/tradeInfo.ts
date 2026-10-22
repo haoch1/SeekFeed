@@ -4,8 +4,8 @@ export type TradeInfo = { intent?: string; providers: string[]; regions: string[
 export function extractTradeInfo(title: string, category: string): TradeInfo | null {
     if (category !== 'trade' && category !== '交易') return null;
     const text = title.normalize('NFKC');
-    const intent = /已出|已收|已售|结贴/.test(text) ? '已结束' : /求购|求收|(?:^|[\s【\[(])收/.test(text) ? '求购'
-        : /出售|转让|(?:^|[\s【\[(])出/.test(text) ? '转让' : undefined;
+    const intent = /已出|已收|已售|结贴/.test(text) ? '其他' : /求购|求收|(?:^|[\s【\[(])收/.test(text) ? '求购'
+        : /出售|转让|(?:^|[\s【\[(])出/.test(text) ? '出售' : undefined;
     const providers = ['DMIT', 'VMISS', 'BageVM', '搬瓦工', 'HostDare', 'RackNerd', 'BuyVM', 'Netcup', 'Hetzner', 'PPFlight', 'Skyline', 'Akile', 'CloudCone']
         .filter(name => new RegExp(`(?<![a-z])${name}(?![a-z])`, 'i').test(text));
     const regions = [...new Set((text.match(/香港|新加坡|日本|东京|大阪|美国|洛杉矶|圣何塞|德国|英国|韩国|台湾|\b(?:HKG|SG|SGP|JP|JPN|LAX|SJC|US|DE|UK|KR|TW)\b/gi) || []).map(value => value.toUpperCase()))];

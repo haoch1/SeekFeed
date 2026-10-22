@@ -500,11 +500,13 @@ document.addEventListener("DOMContentLoaded", function () {
     [...el('filterStatus').options].forEach(option => { option.disabled = active && Boolean(option.value) && !['1', '3'].includes(option.value); });
     el("subscribedOnlyChip").classList.toggle("active", active);
     el("subscribedOnlyChip").setAttribute("aria-pressed", String(active));
+    if (!el("feedPage").hidden) {
     el("navMatched").classList.toggle("selected", active);
     el("navLatest").classList.toggle("selected", !active);
     ["navLatest", "navMatched"].forEach(id => el(id).removeAttribute("aria-current"));
     el(active ? "navMatched" : "navLatest").setAttribute("aria-current", "page");
     el("breadcrumbCurrent").textContent = active ? "命中订阅" : "最新帖子";
+    }
     el("pageTitle").innerHTML = renderIcon(active ? "bell" : "posts") + `<span>${active ? "命中订阅" : "最新帖子"}</span>`;
   }
   function initFilters() {
@@ -1024,7 +1026,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const routeMap = {
     '/': ['hot', '热榜'], '/posts': ['feed', '最新帖子'], '/matched': ['feed', '命中订阅'],
     '/hot': ['hot', '热榜'],
-    '/subscriptions': ['subscriptions', '订阅管理'], '/statistics': ['stats', '统计信息'],
+    '/subscriptions': ['subscriptions', '订阅管理'], '/statistics': ['stats', '统计信息'], '/trades': ['trades', '交易分析'],
     '/settings/account': ['account', '账号与安全'], '/settings/rss': ['rss', 'RSS 配置'], '/settings/telegram': ['telegram', 'Telegram'],
   };
   let activePath = null;
@@ -1035,7 +1037,7 @@ document.addEventListener("DOMContentLoaded", function () {
     window.SeekFeedControls.dismissCharts();
     if (path === '/settings') path = '/settings/account';
     const [name, title] = routeMap[path] || routeMap['/'];
-    if (!isLoggedIn && !['/', '/posts', '/statistics', '/hot'].includes(path)) {
+    if (!isLoggedIn && !['/', '/posts', '/statistics', '/hot', '/trades'].includes(path)) {
       if (!activePath) {
         history.replaceState({}, '', '/hot');
         navigate('/hot', false);
@@ -1072,6 +1074,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (name === 'rss') loadRssConfig();
       if (name === 'telegram') loadTelegramConfig();
       if (name === 'stats') analytics.load();
+      if (name === 'trades') window.SeekFeedTrades.load();
       if (name === 'hot') window.SeekFeedHot.load();
       if (name === 'account') loadAccount();
       activePath = path;

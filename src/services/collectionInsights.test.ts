@@ -101,6 +101,22 @@ describe('collection observations and delivery invariants', () => {
             { bucket: '2026-10-22T05:00:00.000Z', observedAt: '2026-10-22T05:00:00.000Z', views: 110, replies: 8 },
         ]);
     });
+    it('adds recent real samples without extra collection, duplicate hourly points, future samples or lost rollbacks', () => {
+        insights.sample(1, 10, 1, '2026-10-22T02:00:00.000Z');
+        insights.sample(1, 200, 9, '2026-10-22T05:01:00.000Z');
+        sqlite.query('INSERT INTO hot_posts VALUES(?,?,?,?,?,?,?,?,?,?)').run(1, 'test', 'Alice', 'info', '情报', 250, 10, now.toISOString(), now.toISOString(), 0);
+        for (const [stamp, views] of [['2026-10-22T05:01:00.000Z', 200], ['2026-10-22T05:02:00.000Z', 180], ['2026-10-22T07:00:00.000Z', 300]] as const) sqlite.query('INSERT INTO hot_samples VALUES(?,?,?,?)').run(1, stamp, views, 9);
+        const rows = insights.history(1, 7, now) as any[];
+        expect(rows.map(r => r.views)).toEqual([10, 200, 180]);
+        expect(new Set(rows.map(r => r.observedAt)).size).toBe(rows.length);
+    });
+    it('permits at most one new unknown author every two minutes while retaining exact-name retry suppression', () => {
+        insights.sync([{ ...post(1), creator: 'Alice' }, { ...post(2), creator: 'Bob' }, { ...post(3), creator: 'Carol' }], false, now);
+        expect(insights.nextAuthor(now)).toBe(3);
+        expect(insights.nextAuthor(new Date(now.getTime() + 119999))).toBeUndefined();
+        expect(insights.nextAuthor(new Date(now.getTime() + 120000))).toBe(2);
+        expect(insights.nextAuthor(new Date(now.getTime() + 180000))).toBeUndefined();
+    });
     it('never stores raw error messages or secrets in diagnostic codes', () => {
         insights.record({ source: 'rss', startedAt: new Date().toISOString(), durationMs: 10, status: 'failed', errorCode: 'https://user:secret@example.com' });
         expect(JSON.stringify(insights.quality())).not.toContain('secret');

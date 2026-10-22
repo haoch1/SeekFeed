@@ -5,7 +5,7 @@ window.SeekFeedInsights = (() => {
     const time = value => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '暂无记录';
     const source = { rss: 'RSS', hot: '热榜', identity: '作者补全' };
     const authHeaders = () => { const token = localStorage.getItem('sessionId'); return token ? { Authorization: `Bearer ${token}` } : {}; };
-    let dialog, opener, request = 0, controller, historyResize;
+    let dialog, opener, request = 0, controller, historyResize, historyTimer;
     async function read(url) {
         controller?.abort();
         controller = new AbortController();
@@ -37,7 +37,7 @@ window.SeekFeedInsights = (() => {
         finally { box.setAttribute('aria-busy', 'false'); }
     }
     function open(title) {
-        historyResize?.disconnect();
+        historyResize?.disconnect(); clearInterval(historyTimer);
         if (!dialog) {
             dialog = document.createElement('dialog'); dialog.className = 'insight-dialog';
             dialog.setAttribute('aria-labelledby', 'insightDialogTitle');
@@ -45,7 +45,7 @@ window.SeekFeedInsights = (() => {
             document.body.append(dialog);
             dialog.querySelector('button').onclick = () => dialog.close();
             dialog.addEventListener('click', event => { if (event.target === dialog) { const rect = dialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close(); } });
-            dialog.addEventListener('close', () => { request++; controller?.abort(); historyResize?.disconnect(); window.SeekFeedControls.unlockScroll(dialog); opener?.focus({ preventScroll: true }); });
+            dialog.addEventListener('close', () => { request++; controller?.abort(); historyResize?.disconnect(); clearInterval(historyTimer); window.SeekFeedControls.unlockScroll(dialog); opener?.focus({ preventScroll: true }); });
         }
         opener = document.activeElement;
         dialog.querySelector('h2').textContent = title;
@@ -62,7 +62,7 @@ window.SeekFeedInsights = (() => {
         } catch (error) { if (current === request) body.innerHTML = '<p role="status" class="insight-note">变更记录读取失败，请重新打开。</p>'; }
     }
     function chart(points, metric, mode, availableWidth) {
-        if (!points.length) return '<div class="insight-empty">尚无互动历史。后续采集到的观察值将按小时保留。</div>';
+        if (!points.length) return '<div class="insight-empty">尚无互动历史。近 2 小时展示逐轮观察值，较早记录按小时保留。</div>';
         const width = Math.max(240, Math.min(880, availableWidth)), height = 280, left = 44, right = 36, top = 32, bottom = 42;
         const min = Date.parse(points[0].bucket), max = Math.max(min + 3600000, Date.parse(points.at(-1).bucket));
         const peak = Math.max(1, ...points.map(point => point[metric]));
@@ -82,12 +82,12 @@ window.SeekFeedInsights = (() => {
             return `<line x1="${left}" x2="${width - right}" y1="${yy}" y2="${yy}" class="insight-grid"/><text x="${left - 12}" y="${yy + 4}" text-anchor="end">${num(Math.round(peak * (4 - index) / 4))}</text>`;
         }).join('');
         const ticks = [...new Set([0, Math.floor((points.length - 1) / 2), points.length - 1])].map(index => `<text x="${x(points[index])}" y="${height - 12}" text-anchor="middle">${esc(new Date(points[index].bucket).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit' }))}</text>`).join('');
-        return `<svg class="insight-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="按小时保存的${label}，缺测时段不补零">${grid}${ticks}<g class="insight-series">${mode === 'line' ? `<path d="${path}" fill="none" stroke="currentColor" stroke-width="2"/>` : ''}${shapes}</g></svg>`;
+        return `<svg class="insight-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="真实观察到的${label}，缺测时段不补零">${grid}${ticks}<g class="insight-series">${mode === 'line' ? `<path d="${path}" fill="none" stroke="currentColor" stroke-width="2"/>` : ''}${shapes}</g></svg>`;
     }
     async function activity(id, title) {
         const body = open('互动历史'); const current = ++request;
         let metric = 'views', mode = 'line', days = '7', points = [];
-        body.innerHTML = `<p class="insight-post-title"></p><div class="insight-toolbar"><div class="insight-tabs" role="group" aria-label="互动指标"><button class="btn btn-secondary" data-metric="views" aria-pressed="true">浏览量</button><button class="btn btn-secondary" data-metric="replies" aria-pressed="false">回复量</button></div><div class="insight-tabs" role="group" aria-label="图表样式"><button class="btn btn-secondary" data-mode="bar" aria-pressed="false">柱形</button><button class="btn btn-secondary" data-mode="line" aria-pressed="true">折线</button></div><div class="insight-tabs" role="group" aria-label="历史范围"><button class="btn btn-secondary" data-days="7" aria-pressed="true">7 天</button><button class="btn btn-secondary" data-days="30" aria-pressed="false">30 天</button></div></div><div class="insight-history" aria-live="polite"></div><p class="insight-note">每小时最后一次观察到的累计值 · 仅覆盖采集到的帖子和时段 · 缺测不补零，断档不连线；计数回落按源站原值展示。</p><details class="insight-observations"><summary>查看采样明细</summary><div class="insight-table-scroll"></div></details>`;
+        body.innerHTML = `<p class="insight-post-title"></p><div class="insight-toolbar"><div class="insight-tabs" role="group" aria-label="互动指标"><button class="btn btn-secondary" data-metric="views" aria-pressed="true">浏览量</button><button class="btn btn-secondary" data-metric="replies" aria-pressed="false">回复量</button></div><div class="insight-tabs" role="group" aria-label="图表样式"><button class="btn btn-secondary" data-mode="bar" aria-pressed="false">柱形</button><button class="btn btn-secondary" data-mode="line" aria-pressed="true">折线</button></div><div class="insight-tabs" role="group" aria-label="历史范围"><button class="btn btn-secondary" data-days="7" aria-pressed="true">7 天</button><button class="btn btn-secondary" data-days="30" aria-pressed="false">30 天</button></div></div><div class="insight-history" aria-live="polite"></div><p class="insight-note">近 2 小时为逐轮观察值，较早记录为每小时最后一次观察值 · 每 30 秒从本地更新 · 缺测不补零，超过 1 小时断开；计数回落按原值展示。</p><details class="insight-observations"><summary>查看采样明细</summary><div class="insight-table-scroll"></div></details>`;
         body.querySelector('.insight-post-title').textContent = title;
         const draw = () => { const box = body.querySelector('.insight-history'); box.innerHTML = chart(points, metric, mode, box.clientWidth); };
         historyResize = new ResizeObserver(draw); historyResize.observe(body.querySelector('.insight-history'));
@@ -111,6 +111,7 @@ window.SeekFeedInsights = (() => {
             if (button.dataset.days) { days = button.dataset.days; load(); }
         };
         await load();
+        if (current === request && dialog.open) historyTimer = setInterval(() => { if (!document.hidden && dialog.open && current === request) load(); }, 30000);
     }
     function trade(info) {
         if (!info) return '';
