@@ -3,6 +3,8 @@ import { TelegramBaseService } from './base';
 import type { Post, KeywordSub } from '../../types';
 import { logger } from '../../utils/logger';
 
+const pushing = new WeakMap<object, Set<number>>();
+
 export class TelegramPushService extends TelegramBaseService {
   /**
    * 发送消息到 Telegram
@@ -21,17 +23,22 @@ export class TelegramPushService extends TelegramBaseService {
    * 推送文章到 Telegram
    */
   async pushPost(post: Post, matchedSub: KeywordSub): Promise<boolean> {
+    const active = pushing.get(this.dbService) || new Set<number>();
+    pushing.set(this.dbService, active);
+    if (active.has(post.post_id)) return false;
+    active.add(post.post_id);
     try {
       const config = this.dbService.getBaseConfig();
       if (!config || config.stop_push === 1) {
         return false;
       }
 
-      if (post.match_dismissed === 1 || this.dbService.getPostByPostId(post.post_id)?.match_dismissed === 1) {
+      const current = this.dbService.getPostByPostId(post.post_id);
+      if (!current || current.push_status === 3 || post.match_dismissed === 1 || current.match_dismissed === 1) {
         return false;
       }
 
-      const text = postMessage(post, matchedSub, this.getCategoryName(post.category));
+      const text = postMessage(current, matchedSub, this.getCategoryName(current.category));
       const success = await this.sendMessage(config.chat_id, text, true);
 
       if (success) {
@@ -49,6 +56,8 @@ export class TelegramPushService extends TelegramBaseService {
     } catch (error) {
       logger.error('推送文章失败:', error);
       return false;
+    } finally {
+      active.delete(post.post_id);
     }
   }
 

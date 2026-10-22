@@ -141,7 +141,7 @@ describe('Shared Telegram templates', () => {
         const updates: any[] = [];
         const service = new TelegramPushService({
             getBaseConfig: () => ({ chat_id: '42', stop_push: 0 }),
-            getPostByPostId: () => null,
+            getPostByPostId: () => ({ post_id: 42, title: 'VMISS <优惠> & 😀', creator: 'Tester', category: 'tech', push_status: 1 }),
             updatePostPushStatus: (...args: any[]) => updates.push(args),
         } as any, '123:test');
         const calls: any[] = [];

@@ -15,7 +15,7 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
     <Layout
       title="SeekFeed · NodeSeek 社区动态"
       description="浏览 NodeSeek 实时热榜、最新帖子与社区数据分析。"
-      scriptSrc={["/js/category-breakdown.js", "/js/keyword-statistics.js", "/js/statistics.js", "/js/hot.js", "/js/home.js"]}
+      scriptSrc={["/js/collection-insights.js", "/js/category-breakdown.js", "/js/keyword-statistics.js", "/js/statistics.js", "/js/hot.js", "/js/home.js"]}
     >
       <DashboardSurface path={path}>
 
@@ -121,6 +121,7 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
             </button>
           </div>
         </div>
+        <div class="settings-card collection-card"><div class="section-heading collection-heading"><div><h2>采集质量</h2><p>运行记录与作者补全进度。刷新记录不会触发源站请求。</p></div><button id="collectionQualityRefresh" type="button" class="icon-btn" aria-label="刷新采集记录"><Icon name="sync" /></button></div><div id="collectionQuality" aria-live="polite"><p class="insight-note">正在读取采集记录…</p></div></div>
       </section>
 
       <TelegramSettings active={path === "/settings/telegram"} />

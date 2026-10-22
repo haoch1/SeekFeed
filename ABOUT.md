@@ -23,3 +23,7 @@ SeekFeed 为独立项目，不属于 NodeSeek 官方产品。公开帖子及相�
 ## 相关文档
 
 [功能与部署入口](README.md) · [统计口径](docs/analytics.md) · [热榜规则](docs/hot-ranking.md) · [开发指南](CONTRIBUTING.md) · [MIT 许可证](LICENSE)
+
+## 采集与历史
+
+系统提供带请求预算的作者身份补全、持久采集质量记录、RSS 内容变更同步、按小时保存的互动历史及交易标题字段提取。内容更新保留已推送与已删除命中的状态，订阅规则保持精准匹配。历史与提取结果受来源覆盖及保留范围约束，具体定义与开源实现参考见 [采集与数据质量](docs/collection-insights.md)。

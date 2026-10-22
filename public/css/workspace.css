@@ -1,4 +1,65 @@
 /* ReUI-inspired shared tokens. Native Hono UI; no client framework required. */
+.collection-card { margin-top: 20px; padding: 24px 28px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); box-shadow: var(--shadow); }
+.collection-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.insight-summary { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 16px; margin: 24px 0; }
+.insight-summary > div { min-width: 0; border-right: 1px solid var(--border-light); padding-right: 12px; }
+.insight-summary > div:last-child { border: 0; }
+.insight-summary span, .insight-summary small { display: block; color: var(--text-secondary); font-size: 12px; }
+.insight-summary strong { display: block; margin: 8px 0; font-size: 24px; font-variant-numeric: tabular-nums; }
+.insight-table-scroll { max-width: 100%; overflow-x: auto; max-height: 420px; border: 1px solid var(--border-color); border-radius: 8px; }
+.insight-table { border-collapse: collapse; width: 100%; font-size: 12px; white-space: nowrap; text-align: left; }
+.insight-table th { background: var(--bg-secondary); color: var(--text-secondary); position: sticky; top: 0; font-weight: 500; }
+.insight-table td, .insight-table th { padding: 12px 14px; border-bottom: 1px solid var(--border-light); }
+.insight-state { color: var(--success); }
+.insight-state[data-state="failed"] { color: var(--danger); }
+.insight-state[data-state="partial"] { color: var(--warning); }
+.insight-dialog { margin: auto; padding: 0; width: min(1000px,calc(100% - 40px)); max-height: calc(100dvh - 48px); color: var(--text-primary); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: var(--shadow-lg); overflow: auto; }
+.insight-dialog::backdrop { background: #09090b80; }
+.insight-dialog > header { position: sticky; top: 0; z-index: 1; background: var(--bg-card); display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--border-light); padding: 18px 24px; }
+.insight-dialog h2 { font-size: 17px; }
+.insight-dialog-body { padding: 20px 24px; }
+.insight-post-title { font-size: 14px; font-weight: 600; margin-bottom: 18px; overflow-wrap: anywhere; }
+.insight-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+.insight-tabs { display: flex; padding: 3px; border: 1px solid var(--border-color); border-radius: 7px; gap: 2px; }
+.insight-tabs .btn { padding: 6px 10px; min-height: 30px; border: 1px solid transparent; background: transparent; }
+.insight-tabs [aria-pressed="true"] { background: var(--primary-alpha); color: var(--primary); border-color: var(--ring-color); }
+.insight-history { overflow-x: auto; min-height: 180px; }
+.insight-chart { display: block; width: 100%; }
+.insight-chart text { fill: var(--text-secondary); font-size: 12px; }
+.insight-grid { stroke: var(--border-color); stroke-dasharray: 4 5; }
+.insight-series { color: var(--primary); fill: var(--primary); }
+.insight-note { font-size: 12px; color: var(--text-secondary); line-height: 1.7; margin: 12px 0; }
+.insight-observations { font-size: 12px; color: var(--text-secondary); margin-top: 12px; }
+.insight-observations summary { cursor: pointer; padding: 8px 0; }
+.insight-empty { color: var(--text-secondary); padding: 60px 20px; text-align: center; }
+.insight-revision { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border-light); }
+.insight-revision h3 { font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; }
+.revision-field { display: grid; grid-template-columns: 60px 1fr 1fr; gap: 10px; margin: 10px 0; font-size: 13px; }
+.revision-field p { overflow-wrap: anywhere; white-space: pre-wrap; margin-top: 5px; }
+.revision-field small { color: var(--text-secondary); }
+.revision-before, .revision-after { background: var(--bg-secondary); padding: 12px; border: 1px solid var(--border-light); border-radius: 6px; min-width: 0; }
+.revision-after { border-color: var(--ring-color); }
+.post-revision-btn { padding: 1px 6px; font-size: 11px; color: var(--primary); background: var(--primary-alpha); border: 0; border-radius: 4px; white-space: nowrap; }
+.post-trade-info { display: flex; flex-wrap: wrap; gap: 5px; font-size: 11px; margin-top: 8px; color: var(--text-secondary); }
+.post-trade-info > span { padding: 1px 6px; border: 1px solid var(--border-light); border-radius: 4px; }
+.post-trade-info .trade-source { border-color: transparent; padding-left: 0; }
+.insight-metric { color: inherit; font: inherit; background: transparent; border: 0; padding: 4px; border-radius: 5px; justify-self: end; }
+.insight-metric:hover, .insight-metric:focus-visible { color: var(--primary); background: var(--primary-alpha); }
+@media(max-width:760px) {
+    .collection-card { padding: 18px 16px; }
+    .insight-summary { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px 12px; margin: 18px 0; }
+    .insight-summary > div:nth-child(2) { border: 0; }
+    .insight-summary strong { font-size: 21px; margin: 5px 0; }
+    .insight-dialog { width: calc(100% - 20px); max-height: calc(100dvh - 24px); }
+    .insight-dialog > header { padding: 12px 16px; }
+    .insight-dialog-body { padding: 16px; }
+    .insight-tabs .btn { font-size: 12px; padding: 5px 8px; }
+    .insight-toolbar { flex-wrap: nowrap; gap: 4px; }
+    .insight-toolbar .insight-tabs { padding: 2px; gap: 0; }
+    .insight-toolbar .btn { font-size: 11px; padding: 4px; white-space: nowrap; }
+    .revision-field { grid-template-columns: 1fr; }
+    .insight-metric { justify-self: start; }
+}
 .diagnostic-list { margin: 20px 0; font-size: 13px; }
 .diagnostic-list > div { display: flex; justify-content: space-between; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--border-color); }
 .diagnostic-list dt { color: var(--text-secondary); }

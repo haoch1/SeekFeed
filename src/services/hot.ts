@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { logger } from '../utils/logger';
 import cadence from '../config/cadence.json';
 import { linkForumPosts } from './forumAuthors';
+import { CollectionInsights } from './collectionInsights';
 
 const metric = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const postSchema = z.object({
@@ -123,7 +124,7 @@ export class HotService {
     private running = false;
     private inFlight?: Promise<boolean>;
     private lightRounds = 2;
-    constructor(private db: Database, private collectBatch: (full: boolean) => Promise<unknown> = collectWithPython) {}
+    constructor(private db: Database, private collectBatch: (full: boolean, authorPost?: number) => Promise<unknown> = collectWithPython) {}
 
     start() {
         if (this.running || process.env.HOT_COLLECT_ENABLED !== 'true') return;
@@ -153,18 +154,40 @@ export class HotService {
         return this.inFlight;
     }
     private async run() {
+        const startedAt = new Date().toISOString();
+        const insights = new CollectionInsights(this.db);
         this.db.query('UPDATE hot_collector_state SET last_attempt_at=?,next_attempt_at=? WHERE id=1')
             .run(new Date().toISOString(), new Date(Date.now() + COLLECT_INTERVAL).toISOString());
         try {
             const full = this.lightRounds >= 2;
-            this.saveBatch(await this.collectBatch(full));
+            const authorPost = insights.nextAuthor();
+            const input: any = await this.collectBatch(full, authorPost);
+            this.saveBatch(input);
+            insights.record({ source: 'hot', startedAt, durationMs: Date.now() - Date.parse(startedAt), status: 'success',
+                received: input.posts.length, accepted: input.posts.length, pages: input.pages });
+            let identityDelay = 0;
+            if (authorPost) {
+                const identity = z.object({ postId: metric.positive(), creator: z.string().min(1).max(100), authorId: metric.positive() }).safeParse(input.identity);
+                const valid = identity.success && identity.data.postId === authorPost && insights.saveAuthor(authorPost, identity.data.creator, identity.data.authorId);
+                const failure = input.identityError ? parseCollectorFailure(JSON.stringify(input.identityError)) : null;
+                insights.record({ source: 'identity', startedAt, durationMs: Number.isFinite(input.identityDurationMs) ? Math.min(125000, input.identityDurationMs) : Date.now() - Date.parse(startedAt), status: valid ? 'success' : 'failed',
+                    received: 1, accepted: Number(valid), errorCode: failure?.code || (valid ? undefined : 'identity_mismatch'), httpStatus: failure?.httpStatus });
+                if (!valid) this.db.query('UPDATE author_backfill SET result=? WHERE post_id=?').run(failure?.code || 'identity_mismatch', authorPost);
+                if (failure && (failure.httpStatus === 403 || failure.httpStatus === 429 || failure.code === 'challenge_or_empty')) {
+                    identityDelay = Math.max(10 * MINUTE, failure.retryAfterSeconds * 1000);
+                }
+            }
             this.lightRounds = full ? 0 : this.lightRounds + 1;
             this.db.query('UPDATE hot_collector_state SET next_attempt_at=? WHERE id=1')
-                .run(new Date(Date.now() + COLLECT_INTERVAL + Math.random() * 15 * 1000).toISOString());
+                .run(new Date(Date.now() + Math.max(identityDelay, COLLECT_INTERVAL) + Math.random() * 15 * 1000).toISOString());
             logger.info('热榜采集完成');
             return true;
         } catch (error) {
+            this.db.query("DELETE FROM author_backfill WHERE result='pending'").run();
             const failure = error instanceof CollectorUnavailable ? error : new CollectorUnavailable(0, error instanceof z.ZodError ? 'invalid_output' : 'collector_error');
+            const issue = error instanceof z.ZodError ? error.issues[0] : null;
+            const validationCode = issue ? `invalid_${issue.path.filter(part => typeof part === 'string').join('_')}`.slice(0, 48).toLowerCase() : undefined;
+            insights.record({ source: 'hot', startedAt, durationMs: Date.now() - Date.parse(startedAt), status: 'failed', errorCode: validationCode || failure.code, httpStatus: failure.httpStatus });
             const failures = this.state().failures + 1;
             const retryAfter = Number.isFinite(failure.retryAfterSeconds) ? Math.max(0, Math.min(86400, failure.retryAfterSeconds)) * 1000 : 0;
             const backoff = failure.transient ? Math.min(5 * MINUTE, COLLECT_INTERVAL * 2 ** Math.min(3, failures - 1))
@@ -197,6 +220,9 @@ export class HotService {
             const sample = this.db.query(`INSERT INTO hot_samples VALUES(?,?,?,?)
                 ON CONFLICT(post_id,observed_at) DO UPDATE SET views=excluded.views,replies=excluded.replies`);
             for (const row of batch.posts) sample.run(row.postId, observedAt, row.views, row.replies);
+            const insights = new CollectionInsights(this.db);
+            for (const row of batch.posts) insights.sample(row.postId, row.views, row.replies, observedAt);
+            this.db.query('DELETE FROM hot_metric_hourly WHERE bucket < ?').run(new Date(timestamp - 30 * 24 * HOUR).toISOString());
             this.db.query('DELETE FROM hot_samples WHERE julianday(observed_at) < julianday(?) - 2.0/24').run(observedAt);
             this.db.query('DELETE FROM hot_samples WHERE post_id IN (SELECT post_id FROM hot_posts WHERE julianday(observed_at) < julianday(?) - 30)').run(observedAt);
             this.db.query("DELETE FROM hot_posts WHERE julianday(observed_at) < julianday(?) - 30").run(observedAt);
@@ -253,12 +279,12 @@ export class HotService {
     }
 }
 
-async function collectWithPython(full: boolean): Promise<unknown> {
-    const child = Bun.spawn([process.env.HOT_COLLECTOR_PYTHON || 'python3', resolve('collector/collect.py'), ...(full ? [] : ['--light'])], {
+async function collectWithPython(full: boolean, authorPost?: number): Promise<unknown> {
+    const child = Bun.spawn([process.env.HOT_COLLECTOR_PYTHON || 'python3', resolve('collector/collect.py'), ...(full ? [] : ['--light']), ...(authorPost ? [`--author-post=${authorPost}`] : [])], {
         stdout: 'pipe', stderr: 'pipe', stdin: 'ignore', env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
     });
     let timedOut = false;
-    const timeout = setTimeout(() => { timedOut = true; child.kill(); }, 100000);
+    const timeout = setTimeout(() => { timedOut = true; child.kill(); }, 125000);
     try {
         const [output, errors, exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
         if (exitCode !== 0 || timedOut) throw parseCollectorFailure(errors, timedOut);

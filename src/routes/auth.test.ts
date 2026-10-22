@@ -22,7 +22,7 @@ const avatar = 'data:image/png;base64,' + readFileSync(new URL('../../public/ico
 
 beforeEach(() => {
     const sqlite = new Database(':memory:');
-    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '009_account_avatar', '010_dismissed_matches', '011_forum_author_links']) {
+    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '009_account_avatar', '010_dismissed_matches', '011_forum_author_links', '012_collection_insights']) {
         sqlite.exec(readFileSync(new URL(`../database/migrations/${name}.sql`, import.meta.url), 'utf8'));
     }
     db = new DatabaseService(sqlite);
@@ -148,6 +148,21 @@ describe('account avatar', () => {
 });
 
 describe('account settings and session expiry', () => {
+    it('keeps collection diagnostics and previous post contents private while allowing observed public counters', async () => {
+        const data = { post_id: 999, title: 'Original', memo: 'old-private-text', category: 'trade', creator: 'Alice', pub_date: new Date().toISOString() };
+        db.getCollectionInsights().sync([data], true);
+        db.getCollectionInsights().sync([{ ...data, title: 'Updated', memo: 'current-text' }], true);
+        db.getCollectionInsights().sample(999, 50, 5, new Date().toISOString());
+        for (const path of ['/api/collection/quality', '/api/posts/999/revisions']) {
+            expect((await app.request(path)).status).toBe(401);
+            expect((await app.request(path, { headers: headers() })).status).toBe(200);
+        }
+        const guest = await (await app.request('/api/posts')).json();
+        expect(JSON.stringify(guest)).not.toMatch(/old-private-text|revision_count|changed_at/);
+        const history = await (await app.request('/api/posts/999/activity')).json();
+        expect(history.data.points[0]).toMatchObject({ views: 50, replies: 5 });
+        expect(JSON.stringify(history)).not.toMatch(/sub_id|push_status|private|creator/);
+    });
     const headers = () => ({ Authorization: `Bearer ${sessionId}`, 'Content-Type': 'application/json' });
 
     it('publishes only forum fields to guests, including after an authenticated cache read', async () => {
@@ -161,11 +176,11 @@ describe('account settings and session expiry', () => {
         const publicRead = await app.request('/api/posts');
         const body = await publicRead.json();
         expect(publicRead.status).toBe(200);
-        expect(Object.keys(body.data.posts[0]).sort()).toEqual(['category', 'creator', 'memo', 'post_id', 'pub_date', 'title']);
+        expect(Object.keys(body.data.posts[0]).sort()).toEqual(['category', 'creator', 'memo', 'post_id', 'pub_date', 'title', 'tradeInfo']);
         db.db.query('INSERT INTO forum_post_authors VALUES(?,?,?,?)').run(101, 'public-author', 72038, new Date().toISOString());
         const linkedBody = await (await app.request('/api/posts')).json();
         expect(linkedBody.data.posts[0].authorId).toBe(72038);
-        expect(Object.keys(linkedBody.data.posts[0]).sort()).toEqual(['authorId', 'category', 'creator', 'memo', 'post_id', 'pub_date', 'title']);
+        expect(Object.keys(linkedBody.data.posts[0]).sort()).toEqual(['authorId', 'category', 'creator', 'memo', 'post_id', 'pub_date', 'title', 'tradeInfo']);
         expect(JSON.stringify(linkedBody)).not.toMatch(/private-rule-example|secret-author|secret-exclusion|sub_id|push_status|push_date|session_id|password/);
         const linkedAuthors = await (await app.request('/api/stats/analytics?days=-1')).json();
         expect(linkedAuthors.data.authors).toEqual([{ creator: 'public-author', count: 1, authorId: 72038 }]);
@@ -197,7 +212,7 @@ describe('account settings and session expiry', () => {
         const query = '/api/posts?search=vmsis&searchMode=fuzzy';
         const publicData = (await (await app.request(query)).json()).data;
         expect(publicData.total).toBe(3);
-        expect(Object.keys(publicData.posts[0]).sort()).toEqual(['category', 'creator', 'memo', 'post_id', 'pub_date', 'title']);
+        expect(Object.keys(publicData.posts[0]).sort()).toEqual(['category', 'creator', 'memo', 'post_id', 'pub_date', 'title', 'tradeInfo']);
         expect((await app.request(query + '&pushStatusIn=1,3')).status).toBe(401);
         const matched = (await (await app.request(query + '&pushStatusIn=1,3', { headers: headers() })).json()).data;
         expect(matched.total).toBe(2);

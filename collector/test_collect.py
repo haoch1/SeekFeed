@@ -1,5 +1,7 @@
 import unittest
-from collect import count, parse, collect, retry_after_seconds, failure_details, CollectionError, URLS
+from collect import count, parse, parse_author, collect, retry_after_seconds, failure_details, CollectionError, URLS
+import json
+import base64
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
@@ -12,6 +14,28 @@ def row(views='1,234', replies='27', inner='28', title='&lt;script&gt;'):
     <a class="info-last-comment-time"><time datetime="2026-10-20T01:00:00.000Z"></time></a></li>'''
 
 class ParserTests(unittest.TestCase):
+    def test_op_config_is_validated_without_confusing_reply_authors(self):
+        def page(data):
+            return '<script id="temp-script">' + base64.b64encode(json.dumps({'postData': data}).encode()).decode() + '</script>'
+        self.assertEqual(parse_author(page({'postId': 123, 'op': {'name': '作者', 'uid': 9}, 'comments': [{'poster': {'uid': 99}}]}), 123),
+                         {'postId': 123, 'creator': '作者', 'authorId': 9})
+        for data in [{'postId': 124, 'op': {'name': '作者', 'uid': 9}}, {'postId': 123, 'op': {'name': '作者', 'uid': True}},
+                     {'postId': 123, 'op': {'name': '', 'uid': 9}}, {'postId': 123, 'op': {'name': '作者', 'uid': 'javascript:9'}}]:
+            with self.assertRaises(ValueError):
+                parse_author(page(data), 123)
+
+    def test_backfill_uses_one_extra_request_and_does_not_retry_a_denial(self):
+        session = MagicMock()
+        session.get.side_effect = [SimpleNamespace(status_code=200, text=row()), SimpleNamespace(status_code=200, text=row()),
+                                   SimpleNamespace(status_code=403, text='private challenge', headers={'Retry-After': '1800'})]
+        with patch('curl_cffi.requests.Session', return_value=session), patch('collect.time.sleep'):
+            result = collect(light=True, author_post=456)
+        self.assertEqual(session.get.call_count, 3)
+        self.assertEqual(session.get.call_args_list[-1].args[0], 'https://www.nodeseek.com/post-456-1')
+        self.assertEqual(result['identityError'], {'error': 'http_403', 'retryAfterSeconds': 1800})
+        self.assertNotIn('private', json.dumps(result))
+        self.assertEqual(len(result['posts']), 1)
+
     def test_author_profile_ids_are_optional_and_limited_to_canonical_nodeseek_links(self):
         for href, expected in [('/space/9', 9), ('/space/72038#/discussions', 72038), ('https://www.nodeseek.com/space/12', 12), ('https://evil.test/space/9', None), ('//evil.test/space/9', None), ('/space/Alice', None), ('/space/0', None), ('/space/9007199254740992', None), ('javascript:alert(1)', None), ('', None)]:
             html = row().replace('<a>作者</a>', f'<a href="{href}">作者</a>')

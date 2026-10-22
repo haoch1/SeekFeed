@@ -104,6 +104,12 @@ apiRoutes.get('/hot', createQueryValidationMiddleware(hotQuery), c => {
     return c.json(createSuccessResponse(c.get('dbService').getHotService().ranking(period, category, sort, undefined, limit)));
 });
 
+apiRoutes.get('/posts/:id/activity', createParamValidationMiddleware(idParamSchema), c => {
+    const { id } = c.get('validatedParams');
+    const days = c.req.query('days') === '30' ? 30 : 7;
+    return c.json(createSuccessResponse({ points: c.get('dbService').getCollectionInsights().history(id, days), days }));
+});
+
 // 公开路由（无需认证）
 apiRoutes.get('/posts', createQueryValidationMiddleware(paginationSchema), async (c) => {
     try {
@@ -136,9 +142,10 @@ apiRoutes.get('/posts', createQueryValidationMiddleware(paginationSchema), async
             }
         );
 
-        const data = authenticated ? result : {
+        const enriched = { ...result, posts: dbService.decoratePosts(result.posts) };
+        const data = authenticated ? enriched : {
             ...result,
-            posts: result.posts.map(({ post_id, title, memo, category, creator, pub_date, authorId }) => ({ post_id, title, memo, category, creator, pub_date, ...(authorId ? { authorId } : {}) })),
+            posts: enriched.posts.map(({ post_id, title, memo, category, creator, pub_date, authorId, tradeInfo }) => ({ post_id, title, memo, category, creator, pub_date, tradeInfo, ...(authorId ? { authorId } : {}) })),
         };
         return c.json(createSuccessResponse(data));
     } catch (error) {
@@ -211,6 +218,12 @@ apiRoutes.get('/stats/keywords', createQueryValidationMiddleware(keywordAnalytic
 
 // 应用Session中间件到所有后续API路由
 apiRoutes.use('*', requireSession);
+
+apiRoutes.get('/collection/quality', c => c.json(createSuccessResponse(c.get('dbService').getCollectionInsights().quality())));
+apiRoutes.get('/posts/:id/revisions', createParamValidationMiddleware(idParamSchema), c => {
+    const { id } = c.get('validatedParams');
+    return c.json(createSuccessResponse(c.get('dbService').getCollectionInsights().revisions(id)));
+});
 
 apiRoutes.delete('/matched-posts/:id', createParamValidationMiddleware(idParamSchema), c => {
     const { id } = c.get('validatedParams');

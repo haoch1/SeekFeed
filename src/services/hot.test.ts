@@ -10,7 +10,7 @@ const batch = (posts = [post(1)], date = now) => ({ posts, pages: 4, collectedAt
 const publish = (id: number, date: string) => db.query("INSERT INTO posts(post_id,title,memo,category,creator,pub_date) VALUES(?,'title','','tech','alice',?)").run(id, date);
 beforeEach(() => {
     db = new Database(':memory:');
-    for (const name of ['001_initial', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '011_forum_author_links']) db.exec(readFileSync(new URL(`../database/migrations/${name}.sql`, import.meta.url), 'utf8'));
+    for (const name of ['001_initial', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '011_forum_author_links', '012_collection_insights']) db.exec(readFileSync(new URL(`../database/migrations/${name}.sql`, import.meta.url), 'utf8'));
 });
 afterEach(() => db.close());
 

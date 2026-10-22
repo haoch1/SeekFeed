@@ -12,6 +12,7 @@
 | 帖子 | RSS 定时采集、手动刷新、包含或容错搜索、分类与作者筛选、分页；最新帖子与命中订阅分别保存筛选条件；命中帖子支持单条删除 |
 | 订阅 | 最多三个关键词组合、正则、作者、分类、屏蔽词；新增、编辑、暂停、恢复与删除 |
 | 统计 | 发帖趋势、分类结构、作者贡献、活跃时段、热门标题词、分类联动和 CSV 导出 |
+| 采集分析 | 作者 ID 渐进补全、采集质量记录、帖子变更同步与版本查看、30 天互动历史、交易标题信息提取 |
 | 作者主页 | 热榜、帖子列表及作者榜支持在新标签页打开已确认的 NodeSeek 用户主页；未确认或存在同名歧义时保留作者文本 |
 | 关键词分析 | 指定日期的发帖数量及占比、1／3／6 小时分布、近七天趋势、最多三个词独立对比、共同命中、分类与作者明细 |
 | Telegram | Bot 绑定、Webhook 或 Polling、持久化待发送队列、失败重试、命令交互及热榜切换 |
@@ -121,6 +122,8 @@ RSS 地址、间隔、代理与 Telegram Token、接收账号在设置页管理�
 
 默认 RSS 抓取间隔为 30 秒，订阅匹配与推送在每轮同步后执行。前台页面中，帖子列表每 5 秒更新，热榜与统计图表每 15 秒更新，已提交且展开的关键词分析每 30 秒更新。页面轮询读取本地数据库，不额外触发源站采集；页面不可见时暂停自动更新。刷新周期集中定义于 `src/config/cadence.json`，已保存的 RSS 自定义间隔优先于默认值。
 
+采集质量、身份补全、变更同步、互动历史与交易提取的定义、保留策略和权限见 [采集与数据质量](docs/collection-insights.md)。
+
 ## 参考项目与资源
 
 以下来源用于功能调研、交互设计或算法对照。设计参考不表示直接引入其运行时、完整页面或排名公式；第三方图标的实际使用及许可另行列明。
@@ -138,6 +141,10 @@ RSS 地址、间隔、代理与 Telegram Token、接收账号在设置页管理�
 | [DailyHotApi NodeSeek](https://github.com/imsyy/DailyHotApi/blob/master/src/routes/nodeseek.ts) | RSS 动态与热榜数据源能力的边界对照；未使用其热榜接口 |
 | [Reddit 排序源码](https://github.com/reddit-archive/reddit/blob/master/r2/r2/lib/db/_sorts.pyx) · [Arc news](https://github.com/arclanguage/anarki/blob/master/apps/news/news.arc) | 热榜与时间范围榜的算法思路对照；SeekFeed 使用独立的浏览／回复增长权重 |
 | [Lucide](https://lucide.dev/) | 实际使用的功能图标，许可见 [lucide.txt](licenses/lucide.txt)；品牌 S 标识为本项目资源 |
+| [Miniflux](https://github.com/miniflux/v2/blob/main/internal/storage/entry.go) | 条目内容更新与用户状态分离、保留原发布时间 |
+| [changedetection.io](https://github.com/dgtlmoon/changedetection.io/blob/master/changedetectionio/model/Watch.py) | 变更版本、时间记录与历史保留策略 |
+| [GoatCounter](https://github.com/arp242/goatcounter/blob/main/hit_list.go) | 小时聚合与限定时间范围查询；未复用访问量指标 |
+| [price-parser](https://github.com/scrapinghub/price-parser/blob/master/price_parser/parser.py) | 金额原文与币种歧义的处理；未引入运行时依赖 |
 
 参考来源的细节分别记录于 [界面规范](docs/style-guide.md)、[优化记录](docs/OPTIMIZATION.md) 与 [热榜规则](docs/hot-ranking.md)。未采用的主题预览不属于当前界面的实现来源。
 

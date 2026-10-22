@@ -1,5 +1,6 @@
 """Fetch public NodeSeek list metrics. stdout is a single validated JSON document."""
 import json
+import base64
 import re
 import random
 import sys
@@ -103,11 +104,35 @@ def parse(html):
         raise ValueError('unexpected_markup')
     return posts
 
-def collect(light=False):
+def parse_author(html, post_id):
+    # NodeSeek's own page configuration identifies the OP, independent of replies.
+    # Schema/selector verified against SeekMate's extractPostPageConfig parser.
+    soup = BeautifulSoup(html, 'html.parser')
+    script = soup.select_one('#temp-script')
+    if not script:
+        raise ValueError('unexpected_markup')
+    try:
+        config = json.loads(base64.b64decode(script.get_text(strip=True), validate=True).decode('utf-8'))
+        data = config['postData']
+        op = data['op']
+        uid = op['uid']
+        if isinstance(uid, str) and re.fullmatch(r'[1-9]\d{0,15}', uid):
+            uid = int(uid)
+        if data['postId'] != post_id or type(uid) is not int or not 0 < uid <= 2**53 - 1 or not isinstance(op['name'], str) or not 0 < len(op['name'].strip()) <= 100:
+            raise ValueError('unexpected_markup')
+        return {'postId': post_id, 'creator': op['name'].strip(), 'authorId': uid}
+    except (KeyError, TypeError, ValueError, UnicodeError):
+        raise ValueError('unexpected_markup')
+
+
+def collect(light=False, author_post=None):
     from curl_cffi import requests
     session = requests.Session(impersonate='chrome')
     posts = {}
     urls = URLS[:2] if light else URLS
+    identity = None
+    identity_error = None
+    identity_duration = 0
     try:
         for index, url in enumerate(urls):
             if index:
@@ -122,13 +147,31 @@ def collect(light=False):
                     post['views'] = max(previous['views'], post['views'])
                     post['replies'] = max(previous['replies'], post['replies'])
                 posts[post['postId']] = post
+        if author_post:
+            identity_start = time.monotonic()
+            known = posts.get(author_post)
+            if known and known.get('authorId'):
+                identity = {'postId': author_post, 'creator': known['author'], 'authorId': known['authorId']}
+            else:
+                time.sleep(random.uniform(2, 3))
+                try:
+                    response = session.get(f'https://www.nodeseek.com/post-{author_post}-1', timeout=20)
+                    if response.status_code != 200:
+                        raise CollectionError('http_' + str(response.status_code), retry_after_seconds(response.headers.get('Retry-After')))
+                    identity = parse_author(response.text, author_post)
+                except Exception as error:
+                    identity_error = failure_details(error)
+            identity_duration = round((time.monotonic() - identity_start) * 1000)
     finally:
         session.close()
-    return {'posts': list(posts.values()), 'collectedAt': datetime.now(timezone.utc).isoformat(), 'pages': len(urls)}
+    return {'posts': list(posts.values()), 'collectedAt': datetime.now(timezone.utc).isoformat(), 'pages': len(urls),
+            'identity': identity, 'identityError': identity_error, 'identityDurationMs': identity_duration}
 
 if __name__ == '__main__':
     try:
-        print(json.dumps(collect(light='--light' in sys.argv), ensure_ascii=False))
+        argument = next((value.split('=', 1)[1] for value in sys.argv if value.startswith('--author-post=')), '')
+        author_post = int(argument) if re.fullmatch(r'[1-9]\d{0,15}', argument) else None
+        print(json.dumps(collect(light='--light' in sys.argv, author_post=author_post), ensure_ascii=False))
     except Exception as error:
         # Do not log headers, cookies, response pages or transport exceptions.
         print(json.dumps(failure_details(error)), file=sys.stderr)

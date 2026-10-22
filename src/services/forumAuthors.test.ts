@@ -18,18 +18,18 @@ function post(id: number, creator = 'Alice') {
 }
 beforeEach(() => {
     db = new Database(':memory:');
-    for (const file of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '010_dismissed_matches', '011_forum_author_links']) {
+    for (const file of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '010_dismissed_matches', '011_forum_author_links', '012_collection_insights']) {
         db.exec(readFileSync(new URL(`../database/migrations/${file}.sql`, import.meta.url), 'utf8'));
     }
 });
 afterEach(() => db.close());
 
 describe('verified public forum profiles', () => {
-    it('requires evidence for the same post and exact author, without guessing from a similar name', () => {
+    it('prefers direct evidence and fills historical posts only from an unambiguous exact name', () => {
         evidence(1, 'Alice', 9);
         evidence(2, 'Bob', 12);
         const rows = [{ post_id: 1, creator: 'Alice' }, { post_id: 2, creator: 'Alice' }, { post_id: 3, creator: 'Alice' }, { post_id: 1, creator: 'alice' }];
-        expect(linkForumPosts(db, rows, identity)).toEqual([{ ...rows[0], authorId: 9 }, ...rows.slice(1)]);
+        expect(linkForumPosts(db, rows, identity)).toEqual([{ ...rows[0], authorId: 9 }, rows[1], { ...rows[2], authorId: 9 }, rows[3]]);
         expect(rows[0]).not.toHaveProperty('authorId');
         expect(linkForumPosts(db, [], identity)).toEqual([]);
     });
@@ -62,7 +62,7 @@ describe('verified public forum profiles', () => {
         const service = new DatabaseService(db);
         const feed = service.getPostsWithPagination(1, 10);
         expect(feed.posts.find(row => row.post_id === 1)?.authorId).toBe(9);
-        expect(feed.posts.find(row => row.post_id === 2)).not.toHaveProperty('authorId');
+        expect(feed.posts.find(row => row.post_id === 2)?.authorId).toBe(9);
         expect(feed.total).toBe(2);
         expect(getAnalytics(db, -1, 480, now).authors).toEqual([{ creator: 'Alice', count: 2, matched: 2, authorId: 9 }]);
         expect(getKeywordAnalytics(db, ['DMIT'], '2026-10-22', 480, 'title', now).series[0].topAuthors).toEqual([{ creator: 'Alice', count: 2, authorId: 9 }]);

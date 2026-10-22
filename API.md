@@ -60,7 +60,7 @@ API、认证响应禁止共享缓存。客户端不得将私有响应交由 Serv
 | `pushStatusNot` | 0–3，需认证 |
 | `subId` | 正整数，需认证 |
 
-响应 `data` 包含 `posts`、`total`、`page`、`totalPages`。访客帖子字段仅包含 `post_id`、`title`、`memo`、`category`、`creator`、`pub_date`，不包含命中规则及推送状态。
+响应 `data` 包含 `posts`、`total`、`page`、`totalPages`。访客帖子字段仅包含 `post_id`、`title`、`memo`、`category`、`creator`、`pub_date`、`tradeInfo` 及可选 `authorId`，不包含命中规则及推送状态。
 
 `DELETE /api/matched-posts/:id` 需要有效会话，`:id` 为论坛帖子 ID。该接口将已命中帖子从命中订阅列表中持久移除，并停止后续自动推送；原始帖子、推送历史及已发送的 Telegram 消息保留。重复删除返回成功，非命中帖子或不存在的 ID 返回 `404`。命中状态及订阅筛选结果均排除已移除帖子，公开帖子列表不受影响。
 
@@ -150,3 +150,13 @@ Webhook 使用公网 HTTPS 地址；Polling 与 Webhook 为互斥连接方式。
 ## 状态码
 
 `200` 为成功，`201` 为新增成功，`400` 为输入不合法，`401` 为认证无效，`404` 为资源不存在，`409` 为功能状态冲突，`413` 为请求过大，`500` 为执行失败，`503` 为依赖服务未就绪。
+
+## 采集分析与历史
+
+| 方法与路径 | 认证 | 响应与行为 |
+| --- | --- | --- |
+| `GET /api/collection/quality` | 管理员 | `summary` 为近 24 小时分来源摘要，`recent` 为最近 30 条采集记录，`authors` 为名称覆盖，`retention` 为保留上限；只读本地数据库 |
+| `GET /api/posts/:id/revisions` | 管理员 | 最近 30 天内最多 20 个变更；每条包含 `observedAt`、`before`、`after`，均为内容字段 |
+| `GET /api/posts/:id/activity?days=7` | 公开 | `points` 为真实小时观察值，含 `bucket`、`observedAt`、`views`、`replies`；`days=30` 查看 30 天，其余值使用 7 天 |
+
+`:id` 为论坛帖子编号。不存在观察记录时返回空数组。公开帖子不返回旧版本内容、变更计数或私有推送字段；认证帖子增加 `changed_at` 和 `revision_count`，交易标题提取位于 `tradeInfo`。金额以字符串保存，`currency=未明确` 不代表美元。保留策略、提取规则及幂等边界见 [采集与数据质量](docs/collection-insights.md)。

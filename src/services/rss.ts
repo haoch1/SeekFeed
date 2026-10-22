@@ -120,7 +120,7 @@ export class RSSService {
       const rssConfig = this.getRSSConfig();
       const proxy = this.getProxy();
       if (proxy) {
-        logger.rss(`使用代理: ${proxy}`);
+        logger.rss('使用已配置的 RSS 代理');
       }
 
       controller = new AbortController();
@@ -159,11 +159,6 @@ export class RSSService {
 
       const response = await fetch(rssConfig.url, fetchOptions);
 
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = undefined;
-      }
-
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -171,6 +166,8 @@ export class RSSService {
       const xmlText = await response.text();
 
       const items = this.parseRSSXML(xmlText);
+      clearTimeout(timeoutId);
+      timeoutId = undefined;
 
       if (!items || items.length === 0) {
         return [];
@@ -258,18 +255,10 @@ export class RSSService {
     // 清洗创建者
     const creator = item.creator ? item.creator.trim() : "";
 
-    // 格式化发布时间
-    let pubDate: string;
-    try {
-      const date = new Date(item.pubDate);
-      if (isNaN(date.getTime())) {
-        pubDate = new Date().toISOString();
-      } else {
-        pubDate = date.toISOString();
-      }
-    } catch (error) {
-      pubDate = new Date().toISOString();
-    }
+    // Invalid publication dates must not masquerade as new posts.
+    const date = new Date(item.pubDate);
+    if (!title || !creator || !Number.isSafeInteger(postId) || !Number.isFinite(date.getTime()) || date.getTime() > Date.now() + 300000) return null;
+    const pubDate = date.toISOString();
 
     return {
       post_id: postId,
@@ -289,76 +278,24 @@ export class RSSService {
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const startedAt = new Date().toISOString();
       try {
         if (attempt > 1) logger.rssDebug(`第 ${attempt} 次尝试...`);
 
         const rssItems = await this.fetchAndParseRSS();
 
-        let processed = 0;
-        let newPosts = 0;
-        let errors = 0;
-
-        // 第一步：批量解析所有RSS项目
-        const parsedPosts: ParsedPost[] = [];
-        const postIds: number[] = [];
-
-        for (const item of rssItems) {
-          try {
-            processed++;
-
-            const parsedPost = this.cleanAndFormatData(item);
-            if (!parsedPost) {
-              errors++;
-              continue;
-            }
-
-            parsedPosts.push(parsedPost);
-            postIds.push(parsedPost.post_id);
-          } catch (error) {
-            errors++;
-            logger.debug(`解析单条 RSS 数据失败: ${error}`);
-          }
-        }
-
-        // 第二步：批量查询已存在的文章
-        const existingPosts = this.dbService.getPostsByPostIds(postIds);
-
-        // 第三步：筛选出需要创建的新文章
-        const newPostsToCreate = parsedPosts.filter((parsedPost) => !existingPosts.has(parsedPost.post_id));
-
-        // 第四步：批量创建新文章
-        if (newPostsToCreate.length > 0) {
-          try {
-            // 检查是否有订阅（关键词订阅）
-            const subscriptions = this.dbService.getAllKeywordSubs();
-            const hasSubscriptions = subscriptions.length > 0;
-            
-
-            
-            const postsWithDefaults = newPostsToCreate.map((post) => ({
-              ...post,
-              push_status: hasSubscriptions ? 0 : 2, // 有订阅则未推送，无订阅则无需推送
-            }));
-
-            const createdCount =
-              this.dbService.batchCreatePosts(postsWithDefaults);
-            newPosts = createdCount;
-
-            logger.rss(`新增 ${createdCount} 篇文章`);
-          } catch (error) {
-            errors += newPostsToCreate.length;
-            logger.error('批量创建文章失败', error);
-            throw error;
-          }
-        }
-
-        return {
-          new: newPosts,
-          updated: 0, // RSS 服务不更新现有文章
-          skipped: processed - newPosts - errors,
-        };
+        const parsedPosts = rssItems.map(item => this.cleanAndFormatData(item)).filter((post): post is ParsedPost => post !== null);
+        const invalid = rssItems.length - parsedPosts.length;
+        const result = this.dbService.syncRSSPosts(parsedPosts);
+        this.dbService.getCollectionInsights().record({ source: 'rss', startedAt, durationMs: Date.now() - Date.parse(startedAt),
+          status: invalid ? 'partial' : 'success', received: rssItems.length, accepted: parsedPosts.length,
+          inserted: result.new, updated: result.updated, invalid });
+        return result;
       } catch (error) {
         lastError = error as Error;
+        const httpStatus = Number(String(error).match(/HTTP (\d{3})/)?.[1]) || undefined;
+        this.dbService.getCollectionInsights().record({ source: 'rss', startedAt, durationMs: Date.now() - Date.parse(startedAt),
+          status: 'failed', errorCode: httpStatus ? 'http_error' : /超时|timeout/i.test(String(error)) ? 'network_timeout' : 'fetch_or_parse_error', httpStatus });
         logger.warn(`第 ${attempt} 次尝试失败`);
 
         if (attempt < maxRetries) {
@@ -417,7 +354,7 @@ export class RSSService {
     try {
       const proxy = this.getProxy();
       if (proxy) {
-        logger.rss(`测试连接使用代理: ${proxy}`);
+        logger.rss('使用已配置的 RSS 代理测试连接');
       }
 
       const controller = new AbortController();

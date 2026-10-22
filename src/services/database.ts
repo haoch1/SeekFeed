@@ -7,6 +7,8 @@ import { getAnalytics } from './analytics';
 import { HotService } from './hot';
 import { getKeywordAnalytics } from './keywordAnalytics';
 import { createFuzzyPostSearch } from '../utils/postSearch';
+import { CollectionInsights } from './collectionInsights';
+import { extractTradeInfo } from '../utils/tradeInfo';
 import { linkForumPosts } from './forumAuthors';
 
 export class DatabaseService {
@@ -14,6 +16,14 @@ export class DatabaseService {
   private queryCache: Map<string, { data: any; timestamp: number; ttl: number }>;
   private readonly CACHE_TTL = 60000; // 1分钟缓存
   private hotService?: HotService;
+
+  getCollectionInsights() { return new CollectionInsights(this.db); }
+
+  syncRSSPosts(posts: import('../types').ParsedPost[]) {
+    const result = this.getCollectionInsights().sync(posts, this.getAllKeywordSubs().length > 0);
+    if (result.new || result.updated) this.clearCacheByPattern('posts');
+    return result;
+  }
 
   getHotService(): HotService { return this.hotService ??= new HotService(this.db); }
 
@@ -297,6 +307,10 @@ export class DatabaseService {
     this.clearCacheByPattern('Stats');
     
     return insertedCount;
+  }
+
+  decoratePosts(posts: Post[]) {
+    return this.getCollectionInsights().decorate(posts).map(post => ({ ...post, tradeInfo: extractTradeInfo(post.title, post.category) }));
   }
 
   getPostByPostId(postId: number): Post | null {
