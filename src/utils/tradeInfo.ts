@@ -14,6 +14,11 @@ export function extractTradeInfo(title: string, category: string): TradeInfo | n
     const pattern = new RegExp(`((?:USD|CNY|RMB|EUR|GBP|HKD|SGD|CAD|AUD|US\\$|HK\\$|S\\$|[$¥￥€£])\\s*${amount}|${amount}\\s*(?:USD|CNY|RMB|EUR|GBP|HKD|SGD|CAD|AUD|元|块|刀|美元|美金|人民币|欧元|英镑|港币|新币|[$¥￥€£]))`, 'gi');
     for (const match of text.matchAll(pattern)) {
         const raw = match[0], number = match[2] || match[3];
+        const preceding = text[match.index! - 1] || '';
+        const following = text.slice(match.index! + raw.length);
+        // Reject partial numeric tokens, including unsupported comma-decimal locales.
+        // A title such as 1,99€ must never silently become 99€.
+        if (/[\d.,]/.test(preceding) || /^[.,]\d/.test(following)) continue;
         const after = text.slice(match.index! + raw.length, match.index! + raw.length + 8);
         const before = text.slice(Math.max(0, match.index! - 4), match.index!);
         const period = /^(?:\s|\/)*(?:月|mo\b|month)/i.test(after) ? '月' : /^(?:\s|\/)*(?:年|yr\b|year)/i.test(after) ? '年'

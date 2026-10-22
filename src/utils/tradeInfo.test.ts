@@ -20,4 +20,9 @@ describe('conservative trade title extraction', () => {
         expect(extractTradeInfo('DMIT 价格300元', 'info')).toBeNull();
         expect(extractTradeInfo('这是一条普通交易', 'trade')).toBeNull();
     });
+    it('never extracts a partial amount from unsupported separators or an oversized number', () => {
+        expect(extractTradeInfo('【出】DMIT EUR 1.234,56 1,99€ 1,234.56USD', 'trade')?.prices)
+            .toEqual([{ text: '1,234.56USD', amount: '1234.56', currency: 'USD', period: undefined, kind: '金额' }]);
+        expect(extractTradeInfo('【出】DMIT 123456789012345元', 'trade')?.prices).toEqual([]);
+    });
 });
