@@ -84,15 +84,15 @@ window.SeekFeedInsights = (() => {
         const x = point => left + ((point.start - values[0].start) / interval + .5) * slot;
         const peak = Math.max(1, ...values.map(point => point[metric]));
         const magnitude = 10 ** Math.floor(Math.log10(peak / 4));
-        const step = Math.max(1, [1, 2, 2.5, 5, 10].map(value => value * magnitude).find(value => value >= peak / 4) || magnitude * 10);
-        const ceiling = step * 4;
+        const step = Math.max(1, Math.ceil([1, 2, 2.5, 5, 10].map(value => value * magnitude).find(value => value >= peak / 4) || magnitude * 10));
+        const gridSteps = Math.ceil(peak / step), ceiling = step * gridSteps;
         const y = point => height - bottom - point[metric] / ceiling * (height - top - bottom);
         const label = metric === 'views' ? '浏览量' : '回复量';
         const clock = timestamp => new Date(timestamp).toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
         const date = timestamp => new Date(timestamp).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
         const period = point => {
             const start = Math.max(first, point.start), end = Math.min(last, point.start + interval);
-            if (start === end) return `${date(first) === date(last) ? '' : date(end) + ' '}${clock(end)}`;
+            if (date(start) === date(end) && clock(start) === clock(end)) return `${date(first) === date(last) ? '' : date(end) + ' '}${clock(end)}`;
             if (minutes >= 1440) return date(start) === date(end) ? date(start) : `${date(start)}–${date(end)}`;
             return `${date(first) === date(last) ? '' : date(start) + ' '}${clock(start)}–${date(start) === date(end) ? '' : date(end) + ' '}${clock(end)}`;
         };
@@ -115,21 +115,23 @@ window.SeekFeedInsights = (() => {
             const shape = mode === 'bar' ? `<rect class="insight-bar" x="${px - barWidth / 2}" y="${py}" width="${barWidth}" height="${Math.max(1, height - bottom - py)}" rx="4"><title>${title}</title></rect>` : `<circle class="insight-point" cx="${px}" cy="${py}" r="4"><title>${title}</title></circle>`;
             return `${shape}<g class="analytics-bar-label"><rect x="${px - labelWidth / 2}" y="${py - 27}" width="${labelWidth}" height="20" rx="5"/><text class="analytics-bar-value" x="${px}" y="${py - 17}" dominant-baseline="central" text-anchor="middle">${num(point[metric])}</text></g>`;
         }).join('');
-        const grid = Array.from({ length: 5 }, (_, index) => {
-            const yy = top + index * (height - top - bottom) / 4;
-            return `<line x1="${left}" x2="${width - right}" y1="${yy}" y2="${yy}" class="insight-grid"/><text x="${left - 10}" y="${yy + 4}" text-anchor="end">${num(Math.round(ceiling * (4 - index) / 4))}</text>`;
+        const grid = Array.from({ length: gridSteps + 1 }, (_, index) => {
+            const yy = top + index * (height - top - bottom) / gridSteps;
+            return `<line x1="${left}" x2="${width - right}" y1="${yy}" y2="${yy}" class="insight-grid"/><text x="${left - 10}" y="${yy + 4}" text-anchor="end">${num(step * (gridSteps - index))}</text>`;
         }).join('');
         const tickCount = Math.min(values.length, Math.max(2, Math.floor(plotWidth / (date(first) !== date(last) ? 155 : 108))));
         const tickIndices = [...new Set(Array.from({ length: tickCount }, (_, i) => Math.round(i * (values.length - 1) / Math.max(1, tickCount - 1))))];
         const ticks = tickIndices.map((index, position) => `<text class="insight-time-tick" x="${position === 0 ? left : position === tickIndices.length - 1 ? width - right : x(values[index])}" y="${height - 14}" text-anchor="${tickIndices.length === 1 ? 'start' : position === 0 ? 'start' : position === tickIndices.length - 1 ? 'end' : 'middle'}">${esc(period(values[index]))}</text>`).join('');
         const unit = minutes >= 1440 ? `${minutes / 1440} 天` : minutes >= 60 ? `${minutes / 60} 小时` : `${minutes} 分钟`;
-        const range = `${date(first)} ${clock(first)}–${date(first) === date(last) ? '' : date(last) + ' '}${clock(last)}`;
-        return `<div class="insight-chart-summary"><div><strong>${num(values.at(-1)[metric])}</strong><span>${label}</span></div><span>${esc(range)} · 每 ${unit}</span></div><svg class="insight-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="按时间段取最后一次${label}，仅显示已采集时段，缺测不补零">${grid}${ticks}<g class="insight-series">${lines}${shapes}</g></svg>`;
+        const sameDay = date(first) === date(last), sameMinute = sameDay && clock(first) === clock(last);
+        const rangeTimes = `${clock(first)}${sameMinute ? '' : '–' + (sameDay ? '' : date(last) + ' ') + clock(last)}`;
+        const range = `${date(first)} ${rangeTimes}`;
+        return `<div class="insight-chart-summary"><div class="insight-current"><span class="insight-current-label">${label}</span><strong>${num(values.at(-1)[metric])}</strong></div><div class="insight-chart-context"><span class="insight-range${sameDay && date(last) === date(Date.now()) ? ' is-today' : ''}" title="${esc(range)}"><span class="insight-range-date">${esc(date(first))} </span>${esc(rangeTimes)}</span><span class="insight-interval">${unit.replace(' ', '')}/段</span></div></div><svg class="insight-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="按时间段取最后一次${label}，仅显示已采集时段，缺测不补零">${grid}${ticks}<g class="insight-series">${lines}${shapes}</g></svg>`;
     }
-    async function activity(id, title) {
+    async function activity(id, title, initialMetric = 'views') {
         const body = open('互动历史'); const current = ++request;
-        let metric = 'views', mode = 'line', days = '7', points = [];
-        body.innerHTML = `<p class="insight-post-title"></p><div class="insight-toolbar"><div class="insight-tabs" role="group" aria-label="互动指标"><button class="btn btn-secondary" data-metric="views" aria-pressed="true">浏览量</button><button class="btn btn-secondary" data-metric="replies" aria-pressed="false">回复量</button></div><div class="insight-tabs" role="group" aria-label="图表样式"><button class="btn btn-secondary" data-mode="bar" aria-pressed="false">柱形</button><button class="btn btn-secondary" data-mode="line" aria-pressed="true">折线</button></div><div class="insight-tabs" role="group" aria-label="历史范围"><button class="btn btn-secondary" data-days="7" aria-pressed="true">7 天</button><button class="btn btn-secondary" data-days="30" aria-pressed="false">30 天</button></div></div><div class="insight-history" aria-live="polite"></div><p class="insight-note">按时间段取最后一次累计值，间隔随范围自动调整 · 仅显示已采集时段 · 缺测不补零，超过 1 小时断开 · 每 30 秒读取本地数据。</p><details class="insight-observations"><summary>查看原始采样明细</summary><div class="insight-table-scroll"></div></details>`;
+        let metric = initialMetric === 'replies' ? 'replies' : 'views', mode = 'line', days = '7', points = [];
+        body.innerHTML = `<p class="insight-post-title"></p><div class="insight-toolbar"><div class="insight-tabs" role="group" aria-label="互动指标"><button class="btn btn-secondary" data-metric="views" aria-pressed="${metric === 'views'}">浏览量</button><button class="btn btn-secondary" data-metric="replies" aria-pressed="${metric === 'replies'}">回复量</button></div><div class="insight-tabs" role="group" aria-label="图表样式"><button class="btn btn-secondary" data-mode="bar" aria-pressed="false">柱形</button><button class="btn btn-secondary" data-mode="line" aria-pressed="true">折线</button></div><div class="insight-tabs" role="group" aria-label="历史范围"><button class="btn btn-secondary" data-days="7" aria-pressed="true">7 天</button><button class="btn btn-secondary" data-days="30" aria-pressed="false">30 天</button></div></div><div class="insight-history" aria-live="polite"></div><p class="insight-note">按时间段取最后一次累计值，间隔随范围自动调整 · 仅显示已采集时段 · 缺测不补零，超过 1 小时断开 · 每 30 秒读取本地数据。</p><details class="insight-observations"><summary>查看原始采样明细</summary><div class="insight-table-scroll"></div></details>`;
         body.querySelector('.insight-post-title').textContent = title;
         const draw = () => { const box = body.querySelector('.insight-history'); box.innerHTML = chart(points, metric, mode, box.clientWidth); };
         historyResize = new ResizeObserver(draw); historyResize.observe(body.querySelector('.insight-history'));
@@ -159,7 +161,7 @@ window.SeekFeedInsights = (() => {
         const revision = event.target.closest('[data-post-revisions]');
         if (revision) revisions(Number(revision.dataset.postRevisions));
         const history = event.target.closest('[data-post-activity]');
-        if (history) activity(Number(history.dataset.postActivity), history.closest('.hot-row')?.querySelector('.hot-post-title')?.textContent || '');
+        if (history) activity(Number(history.dataset.postActivity), history.closest('.hot-row')?.querySelector('.hot-post-title')?.textContent || '', history.dataset.activityMetric);
     });
     return { quality };
 })();

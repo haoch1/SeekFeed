@@ -16,7 +16,7 @@ window.SeekFeedHot = (() => {
       let row = existing.get(key);
       if (!row) {
         row = document.createElement('li'); row.className = 'hot-row'; row.dataset.postId = key;
-        row.innerHTML = `<span class="hot-rank"></span><div class="hot-post"><a class="hot-post-title" target="_blank" rel="noopener noreferrer"></a><div class="hot-post-meta"><span class="hot-category"></span><span class="hot-author"></span></div></div><button type="button" class="hot-number hot-views insight-metric" data-post-activity="${Number(post.postId)}">${icon('eye')}<span></span></button><button type="button" class="hot-number hot-replies insight-metric" data-post-activity="${Number(post.postId)}">${icon('message')}<span></span></button><span class="hot-number hot-heat"></span>`;
+        row.innerHTML = `<span class="hot-rank"></span><div class="hot-post"><a class="hot-post-title" target="_blank" rel="noopener noreferrer"></a><div class="hot-post-meta"><span class="hot-category"></span><span class="hot-author"></span></div></div><button type="button" class="hot-number hot-views insight-metric" data-post-activity="${Number(post.postId)}" data-activity-metric="views">${icon('eye')}<span></span></button><button type="button" class="hot-number hot-replies insight-metric" data-post-activity="${Number(post.postId)}" data-activity-metric="replies">${icon('message')}<span></span></button><span class="hot-number hot-heat"></span>`;
         row.querySelector('a').href = `https://www.nodeseek.com/post-${Number(post.postId)}-1`;
       }
       const text = (selector, value) => { const node = row.querySelector(selector); if (node.textContent !== value) node.textContent = value; };
