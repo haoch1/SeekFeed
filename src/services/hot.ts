@@ -13,7 +13,9 @@ const postSchema = z.object({
     category: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/), categoryLabel: z.string().min(1).max(50),
     views: metric, replies: metric, lastActiveAt: z.string().datetime({ offset: true }), pinned: z.boolean(),
 });
-const batchSchema = z.object({ posts: z.array(postSchema).min(1).max(250), collectedAt: z.string().datetime({ offset: true }), pages: z.union([z.literal(2), z.literal(4)]) });
+// Four existing list pages can contain over 250 distinct rows. Keep a hard bound
+// without rejecting normal batches or adding any upstream requests.
+const batchSchema = z.object({ posts: z.array(postSchema).min(1).max(500), collectedAt: z.string().datetime({ offset: true }), pages: z.union([z.literal(2), z.literal(4)]) });
 export type HotBatch = z.infer<typeof batchSchema>;
 export type HotPeriod = 'live' | 'day' | 'week';
 export type HotSort = 'heat' | 'views' | 'replies';

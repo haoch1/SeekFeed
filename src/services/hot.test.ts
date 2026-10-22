@@ -55,6 +55,15 @@ describe('independent hot ranking', () => {
         }
         expect(service.ranking('live', '', 'heat', now).posts[0].views).toBe(222);
     });
+    it('accepts a complete four-page batch above 250 rows and retains an atomic upper bound', () => {
+        const service = new HotService(db);
+        const rows = Array.from({ length: 300 }, (_, index) => post(index + 1));
+        service.saveBatch({ ...batch(rows, now), pages: 4 }, now);
+        expect(db.query('SELECT COUNT(*) AS count FROM hot_posts').get()).toEqual({ count: 300 });
+        expect(db.query('SELECT COUNT(*) AS count FROM hot_samples').get()).toEqual({ count: 300 });
+        expect(() => service.saveBatch({ ...batch(Array.from({ length: 501 }, (_, index) => post(index + 1)), now), pages: 4 }, now)).toThrow();
+        expect(db.query('SELECT COUNT(*) AS count FROM hot_posts').get()).toEqual({ count: 300 });
+    });
     it('shares concurrent collection, reports failures without leaking transport details, retains good stale results and enforces cooldown', async () => {
         let calls = 0;
         const service = new HotService(db, async () => { calls++; await Bun.sleep(5); throw new Error('secret cookie transport'); });
