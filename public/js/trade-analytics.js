@@ -18,7 +18,7 @@ window.SeekFeedTrades = (() => {
     }
     function facets(id, rows, key) {
         const peak = Math.max(1, ...rows.map(r => r.count));
-        el(id).innerHTML = rows.slice(0, key === 'provider' ? 10 : 8).map(row => `<button type="button" class="trade-facet${state[key] === row.name ? ' selected' : ''}" data-facet="${key}" data-value="${esc(row.name)}" aria-pressed="${state[key] === row.name}"><span class="trade-facet-label">${esc(row.name)}</span><span class="trade-bar-track"><i style="width:${row.count / peak * 100}%"></i></span><strong>${num(row.count)}</strong>${key === 'provider' ? `<small>转 ${num(row.sell)} / 收 ${num(row.buy)}</small>` : ''}</button>`).join('') || '<p class="trade-empty">当前筛选下暂无记录</p>';
+        el(id).innerHTML = rows.slice(0, key === 'provider' ? 10 : 8).map(row => `<button type="button" class="trade-facet${state[key] === row.name ? ' selected' : ''}" data-facet="${key}" data-value="${esc(row.name)}" aria-pressed="${state[key] === row.name}"><span class="trade-facet-label">${esc(row.name)}</span><span class="trade-bar-track"><i style="width:${row.count / peak * 100}%"></i></span><strong>${num(row.count)}</strong>${key === 'provider' ? `<small>出售 ${num(row.sell)} / 求购 ${num(row.buy)}</small>` : ''}</button>`).join('') || '<p class="trade-empty">当前筛选下暂无记录</p>';
     }
     function drawTrend() {
         if (!data) return;
@@ -31,8 +31,8 @@ window.SeekFeedTrades = (() => {
         const series = ['sell', 'buy', 'other'];
         const value = (r, k) => k === 'other' ? r.count - r.sell - r.buy : r[k];
         const shapes = style === 'bar' ? rows.map((r, i) => {
-            let base = 0; return series.map((key, j) => { const n = value(r, key), yy = y(base + n), h = n / max * (height - top - bottom); base += n; return `<rect class="trade-series-${j}" x="${x(i) - Math.min(36, step * .55) / 2}" y="${yy}" width="${Math.min(36, step * .55)}" height="${h}"><title>${esc(r.date)} · ${['出售', '求购', '其余'][j]} ${num(n)} 帖</title></rect>`; }).join('');
-        }).join('') : series.map((key, j) => `<path class="trade-line trade-series-${j}" d="${rows.map((r, i) => `${i ? 'L' : 'M'}${x(i)},${y(value(r, key))}`).join(' ')}"/>${rows.map((r, i) => `<circle class="trade-series-${j}" cx="${x(i)}" cy="${y(value(r, key))}" r="3.5"><title>${esc(r.date)} · ${['出售', '求购', '其余'][j]} ${num(value(r, key))} 帖</title></circle>`).join('')}`).join('');
+            let base = 0; return series.map((key, j) => { const n = value(r, key), yy = y(base + n), h = n / max * (height - top - bottom); base += n; return `<rect class="trade-series-${j}" x="${x(i) - Math.min(36, step * .55) / 2}" y="${yy}" width="${Math.min(36, step * .55)}" height="${h}"><title>${esc(r.date)} · ${['出售', '求购', '其他'][j]} ${num(n)} 帖</title></rect>`; }).join('');
+        }).join('') : series.map((key, j) => `<path class="trade-line trade-series-${j}" d="${rows.map((r, i) => `${i ? 'L' : 'M'}${x(i)},${y(value(r, key))}`).join(' ')}"/>${rows.map((r, i) => `<circle class="trade-series-${j}" cx="${x(i)}" cy="${y(value(r, key))}" r="3.5"><title>${esc(r.date)} · ${['出售', '求购', '其他'][j]} ${num(value(r, key))} 帖</title></circle>`).join('')}`).join('');
         box.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="交易供求${style === 'bar' ? '柱形' : '折线'}图">${grid}${ticks}${shapes}</svg>`;
     }
     function render() {
