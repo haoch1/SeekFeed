@@ -116,6 +116,8 @@ describe('collection observations and delivery invariants', () => {
         expect(await service.refresh()).toBe(true);
         const state = sqlite.query('SELECT * FROM hot_collector_state').get() as any;
         expect(Date.parse(state.next_attempt_at) - Date.now()).toBeGreaterThanOrEqual(1799000);
+        const backfill = sqlite.query('SELECT next_attempt_at FROM author_backfill_state').get() as any;
+        expect(Date.parse(backfill.next_attempt_at) - Date.now()).toBeGreaterThanOrEqual(6 * 3600000 - 1000);
         expect(sqlite.query('SELECT COUNT(*) AS count FROM hot_posts').get()).toEqual({ count: 1 });
         expect(insights.quality().recent[0]).toMatchObject({ source: 'identity', status: 'failed', http_status: 429 });
         expect(await service.refresh()).toBe(false);

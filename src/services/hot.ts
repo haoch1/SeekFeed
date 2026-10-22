@@ -175,6 +175,9 @@ export class HotService {
                 if (!valid) this.db.query('UPDATE author_backfill SET result=? WHERE post_id=?').run(failure?.code || 'identity_mismatch', authorPost);
                 if (failure && (failure.httpStatus === 403 || failure.httpStatus === 429 || failure.code === 'challenge_or_empty')) {
                     identityDelay = Math.max(10 * MINUTE, failure.retryAfterSeconds * 1000);
+                    // Do not let successive historical lookups repeatedly stall a healthy list collector.
+                    this.db.query('UPDATE author_backfill_state SET next_attempt_at=? WHERE id=1')
+                        .run(new Date(Date.now() + Math.max(6 * HOUR, identityDelay)).toISOString());
                 }
             }
             this.lightRounds = full ? 0 : this.lightRounds + 1;
