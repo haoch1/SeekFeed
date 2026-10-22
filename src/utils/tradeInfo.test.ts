@@ -24,5 +24,6 @@ describe('conservative trade title extraction', () => {
         expect(extractTradeInfo('【出】DMIT EUR 1.234,56 1,99€ 1,234.56USD', 'trade')?.prices)
             .toEqual([{ text: '1,234.56USD', amount: '1234.56', currency: 'USD', period: undefined, kind: '金额' }]);
         expect(extractTradeInfo('【出】DMIT 123456789012345元', 'trade')?.prices).toEqual([]);
+        expect(extractTradeInfo('【出】DMIT VPS$5', 'trade')?.prices).toEqual([]);
     });
 });

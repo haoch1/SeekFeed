@@ -18,7 +18,7 @@ export function extractTradeInfo(title: string, category: string): TradeInfo | n
         const following = text.slice(match.index! + raw.length);
         // Reject partial numeric tokens, including unsupported comma-decimal locales.
         // A title such as 1,99€ must never silently become 99€.
-        if (/[\d.,]/.test(preceding) || /^[.,]\d/.test(following)) continue;
+        if (/[\d.,]/.test(preceding) || /^[.,]\d/.test(following) || (/^[a-z]/i.test(raw) && /[a-z]/i.test(preceding))) continue;
         const after = text.slice(match.index! + raw.length, match.index! + raw.length + 8);
         const before = text.slice(Math.max(0, match.index! - 4), match.index!);
         const period = /^(?:\s|\/)*(?:月|mo\b|month)/i.test(after) ? '月' : /^(?:\s|\/)*(?:年|yr\b|year)/i.test(after) ? '年'
