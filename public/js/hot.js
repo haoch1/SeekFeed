@@ -16,14 +16,19 @@ window.SeekFeedHot = (() => {
       let row = existing.get(key);
       if (!row) {
         row = document.createElement('li'); row.className = 'hot-row'; row.dataset.postId = key;
-        row.innerHTML = `<span class="hot-rank"></span><div class="hot-post"><a target="_blank" rel="noopener noreferrer"></a><div class="hot-post-meta"><span class="hot-category"></span><span class="hot-author"></span></div></div><span class="hot-number hot-views">${icon('eye')}<span></span></span><span class="hot-number hot-replies">${icon('message')}<span></span></span><span class="hot-number hot-heat"></span>`;
+        row.innerHTML = `<span class="hot-rank"></span><div class="hot-post"><a class="hot-post-title" target="_blank" rel="noopener noreferrer"></a><div class="hot-post-meta"><span class="hot-category"></span><span class="hot-author"></span></div></div><span class="hot-number hot-views">${icon('eye')}<span></span></span><span class="hot-number hot-replies">${icon('message')}<span></span></span><span class="hot-number hot-heat"></span>`;
         row.querySelector('a').href = `https://www.nodeseek.com/post-${Number(post.postId)}-1`;
       }
       const text = (selector, value) => { const node = row.querySelector(selector); if (node.textContent !== value) node.textContent = value; };
       text('.hot-rank', String(index + 1).padStart(2, '0'));
       row.querySelector('.hot-rank').classList.toggle('top-rank', index < 3);
       row.querySelector('.hot-rank').setAttribute('aria-label', `第 ${index + 1} 名`);
-      text('a', post.title); text('.hot-category', post.categoryLabel); text('.hot-author', post.author);
+      text('.hot-post-title', post.title); text('.hot-category', post.categoryLabel);
+      const authorSignature = JSON.stringify([post.author, post.authorId]);
+      if (row.dataset.authorSignature !== authorSignature) {
+        row.querySelector('.hot-author').outerHTML = window.SeekFeedControls.authorLink(post.author, post.authorId, 'hot-author');
+        row.dataset.authorSignature = authorSignature;
+      }
       const views = post.views, replies = post.replies;
       const heat = String(Math.round(post.heat * 40));
       text('.hot-views span', number(views)); text('.hot-replies span', number(replies)); text('.hot-heat', heat);

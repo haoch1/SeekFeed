@@ -90,8 +90,11 @@ def parse(html):
                 continue
         except ValueError:
             continue
+        profile = re.fullmatch(r'(?:https://www\.nodeseek\.com)?/space/([1-9]\d*)/?(?:#[^\s]*)?', author.get('href', ''))
+        author_id = int(profile[1]) if profile and len(profile[1]) <= 16 else None
         posts.append({'postId': int(match[1]), 'title': link.get_text(' ', strip=True)[:500],
                       'author': author.get_text(' ', strip=True)[:100], 'category': slug[1],
+                      'authorId': author_id if author_id and author_id <= 2**53 - 1 else None,
                       'categoryLabel': category.get_text(' ', strip=True)[:50],
                       'views': views, 'replies': replies, 'lastActiveAt': date.isoformat(),
                       'pinned': bool(row.select('.post-title [title="置顶"], .iconpark-icon.pined'))})

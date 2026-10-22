@@ -7,6 +7,7 @@ import { getAnalytics } from './analytics';
 import { HotService } from './hot';
 import { getKeywordAnalytics } from './keywordAnalytics';
 import { createFuzzyPostSearch } from '../utils/postSearch';
+import { linkForumPosts } from './forumAuthors';
 
 export class DatabaseService {
   private static instance: DatabaseService | undefined;
@@ -493,7 +494,7 @@ export class DatabaseService {
     const totalPages = Math.ceil(total / limit);
     
     return {
-      posts,
+      posts: linkForumPosts(this.db, posts, row => ({ postId: row.post_id, creator: row.creator })),
       total,
       page,
       totalPages

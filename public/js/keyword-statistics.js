@@ -101,7 +101,7 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
     function renderAuthors(series) {
         const rows = series.topAuthors.slice(0, Number(el('keywordAuthorLimit').value));
         el('keywordAuthors').scrollTop = 0;
-        el('keywordAuthors').innerHTML = rows.length ? rows.map((row, index) => `<div class="keyword-rank-row"><span class="keyword-rank">${String(index + 1).padStart(2, '0')}</span><span class="keyword-author-name" title="${esc(row.creator)}">${esc(row.creator)}</span><span><strong>${number(row.count)}<small>篇</small></strong><small>${percent(row.count, series.total)}</small></span></div>`).join('') : '<p class="keyword-no-data">暂无作者记录</p>';
+        el('keywordAuthors').innerHTML = rows.length ? rows.map((row, index) => `<div class="keyword-rank-row"><span class="keyword-rank">${String(index + 1).padStart(2, '0')}</span>${window.SeekFeedControls.authorLink(row.creator, row.authorId, 'keyword-author-name')}<span><strong>${number(row.count)}<small>篇</small></strong><small>${percent(row.count, series.total)}</small></span></div>`).join('') : '<p class="keyword-no-data">暂无作者记录</p>';
     }
     function renderCategoryChart(series) {
         window.SeekFeedCategoryBreakdown(el('keywordCategories'), series.categories, series.total, { escapeHtml: esc, getCategoryName });

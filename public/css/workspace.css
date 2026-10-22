@@ -115,6 +115,12 @@ button svg, a.icon-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
 .icon-btn { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-secondary); background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 0; text-decoration: none; cursor: pointer; }
 .icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 .header-tooltip-trigger { position: relative; }
+.forum-author-link { color: inherit; text-decoration: none; text-underline-offset: 3px; border-radius: 3px; }
+.forum-author-link:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; color: var(--primary); text-decoration: underline; }
+@media (hover: hover) { .forum-author-link:hover { color: var(--primary); text-decoration: underline; } }
+.author-profile-tooltip { position: fixed; z-index: 1000; max-width: calc(100vw - 16px); padding: 6px 9px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-elevated); color: var(--text-primary); box-shadow: var(--shadow); font-size: 11px; line-height: 1.5; pointer-events: none; }
+.author-profile-tooltip[hidden] { display: none; }
+@media (pointer: coarse) { .forum-author-link { display: inline-block; min-height: 28px; line-height: 28px; max-width: 100%; } }
 .github-link > svg { width: 19px; height: 19px; }
 .header-tooltip { position: absolute; right: 0; top: calc(100% + 8px); z-index: 1; white-space: nowrap; padding: 6px 9px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-elevated); color: var(--text-primary); box-shadow: var(--shadow); font-size: 11px; pointer-events: none; opacity: 0; }
 .header-tooltip-trigger:focus-visible .header-tooltip { opacity: 1; }
@@ -204,16 +210,16 @@ html:not([data-auth="session"]) [data-auth-only], html[data-auth="session"] [dat
 .post-title a:hover { color: var(--primary); }
 .post-memo { font-size: 12px; color: var(--text-secondary); margin: 0 0 7px; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 .post-meta { display: flex; align-items: center; justify-content: flex-start; gap: 10px; font-size: 11px; color: var(--text-secondary); flex-wrap: wrap; margin: 0; }
-.post-meta > span + span::before { content: '·'; margin-right: 10px; color: var(--text-muted); }
+.post-meta > :is(span, a) + :is(span, a)::before { content: '·'; margin-right: 10px; color: var(--text-muted); }
 .post-meta > span.post-sub-tags::before { content: none; }
-.post-category { background: var(--bg-hover); color: var(--text-secondary); padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 400; line-height: 1.5; }
+.post-category { background: var(--bg-hover); color: color-mix(in srgb, var(--text-secondary) 90%, var(--text-primary)); padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 400; line-height: 1.5; }
 .post-sub-tags { display: inline-flex; gap: 4px; flex-wrap: wrap; }
 .tag, .post-sub-tags .tag { display: inline-flex; max-width: 100%; overflow-wrap: anywhere; border-radius: 4px; font-size: 11px; padding: 2px 6px; line-height: 1.35; background: var(--bg-hover); color: var(--text-secondary); }
 .tag.tag-blue { color: var(--primary); background: var(--primary-alpha); }
 .post-actions { display: flex; align-items: center; gap: 18px; flex-shrink: 0; }
 .delivery-status { display: inline-flex; gap: 7px; align-items: center; font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
 .delivery-status::before { content: ''; display: inline-block; }
-.delivery-status[data-status="3"] { color: var(--success); }
+.delivery-status[data-status="3"] { color: color-mix(in srgb, var(--success) 70%, var(--text-primary)); }
 .delivery-status[data-status="3"]::before { background: var(--success); }
 .delivery-status[data-status="1"] { color: var(--warning); }
 .delivery-status[data-status="1"]::before { background: var(--warning); }
@@ -309,7 +315,7 @@ html:not([data-auth="session"]) [data-auth-only], html[data-auth="session"] [dat
     .post-actions { flex-direction: column; align-items: flex-end; gap: 6px; padding-top: 4px; }
     .delivery-status { font-size: 10px; gap: 4px; }
     .post-meta { gap: 7px; font-size: 10px; }
-    .post-meta > span + span::before { margin-right: 7px; }
+    .post-meta > :is(span, a) + :is(span, a)::before { margin-right: 7px; }
     .post-date { max-width: 130px; }
     .post-sub-tags { width: 100%; }
     .pagination-wrapper { flex-wrap: wrap; padding: 12px; }
@@ -440,8 +446,8 @@ button:disabled { pointer-events: none; }
 .post-title { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; width: 100%; }
 .post-memo { min-height: 18px; }
 .post-meta { flex-wrap: nowrap; height: 18px; overflow: hidden; }
-.post-meta > span { flex-shrink: 0; }
-.post-meta > span:nth-child(2) { flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.post-meta > :is(span, a) { flex-shrink: 0; }
+.post-meta > :is(span, a):nth-child(2) { flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .post-sub-tags { flex-wrap: nowrap; overflow: hidden; }
 .posts-list[aria-busy="true"] { cursor: progress; }
 .posts-list { overflow-anchor: none; }
@@ -506,7 +512,7 @@ button:disabled { pointer-events: none; }
     .post-actions:has(.delete-matched) .post-action-buttons { gap: 0; }
     .post-actions:has(.delete-matched) .icon-btn { width: 44px; height: 44px; }
     .post-meta { gap: 6px; }
-    .post-meta > span + span::before { margin-right: 6px; }
+    .post-meta > :is(span, a) + :is(span, a)::before { margin-right: 6px; }
     .post-date { font-size: 9px; }
     .post-sub-tags { display: none; }
     .pagination-wrapper { flex-direction: column; gap: 10px; align-items: center; }
@@ -660,3 +666,5 @@ button:disabled { pointer-events: none; }
 .subscription-controls { flex-wrap: wrap; }
 .subscription-item.is-editing { background: var(--primary-alpha); box-shadow: inset 3px 0 var(--primary); }
 #addSubForm { scroll-margin-top: 80px; }
+
+@media (pointer: coarse) { .post-meta { height: 28px; } }

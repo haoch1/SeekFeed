@@ -12,6 +12,12 @@ def row(views='1,234', replies='27', inner='28', title='&lt;script&gt;'):
     <a class="info-last-comment-time"><time datetime="2026-10-20T01:00:00.000Z"></time></a></li>'''
 
 class ParserTests(unittest.TestCase):
+    def test_author_profile_ids_are_optional_and_limited_to_canonical_nodeseek_links(self):
+        for href, expected in [('/space/9', 9), ('/space/72038#/discussions', 72038), ('https://www.nodeseek.com/space/12', 12), ('https://evil.test/space/9', None), ('//evil.test/space/9', None), ('/space/Alice', None), ('/space/0', None), ('/space/9007199254740992', None), ('javascript:alert(1)', None), ('', None)]:
+            html = row().replace('<a>作者</a>', f'<a href="{href}">作者</a>')
+            self.assertEqual(parse(html)[0]['authorId'], expected)
+            self.assertEqual(parse(html)[0]['author'], '作者')
+
     def test_exact_counts_and_op_exclusion(self):
         result = parse(row())[0]
         self.assertEqual(result['views'], 1234)

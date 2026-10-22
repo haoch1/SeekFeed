@@ -28,6 +28,7 @@ export interface Post {
   memo: string;
   category: string;
   creator: string;
+  authorId?: number; // Verified public NodeSeek profile ID; unrelated to local sessions.
   push_status: number; // 0=待处理, 1=已匹配但未推送, 2=未匹配, 3=已匹配且已推送成功
   match_dismissed?: number; // 1=已从命中订阅移除，不再自动推送
   sub_id?: number;

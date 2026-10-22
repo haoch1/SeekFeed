@@ -4,6 +4,41 @@
     const icon = name => `<svg data-icon="${name}" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths[name] || paths.info || ''}</svg>`;
     const selects = new Map();
     const chartInspectors = new Map();
+    const escapeText = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+    function authorLink(name, authorId, className = '') {
+        const text = escapeText(name), classes = escapeText(className);
+        return Number.isSafeInteger(authorId) && authorId > 0
+            ? `<a class="forum-author-link ${classes}" data-author-profile href="https://www.nodeseek.com/space/${authorId}" target="_blank" rel="noopener noreferrer" aria-label="${text}的 NodeSeek 用户主页（新窗口打开）">${text}</a>`
+            : `<span class="${classes}">${text}</span>`;
+    }
+    // A body-level hint stays visible inside clipped lists and scrolling panels.
+    const authorHint = document.createElement('div');
+    authorHint.id = 'forumAuthorHint'; authorHint.className = 'author-profile-tooltip';
+    authorHint.setAttribute('role', 'tooltip'); authorHint.textContent = '查看用户主页'; authorHint.hidden = true;
+    document.body.appendChild(authorHint);
+    let hintedAuthor;
+    function hideAuthorHint() {
+        hintedAuthor?.removeAttribute('aria-describedby'); hintedAuthor = null; authorHint.hidden = true;
+    }
+    function showAuthorHint(link) {
+        hideAuthorHint(); hintedAuthor = link; link.setAttribute('aria-describedby', authorHint.id); authorHint.hidden = false;
+        const rect = link.getBoundingClientRect();
+        authorHint.style.left = `${Math.max(8, Math.min(innerWidth - authorHint.offsetWidth - 8, rect.left))}px`;
+        const below = rect.bottom + 6;
+        authorHint.style.top = `${below + authorHint.offsetHeight < innerHeight - 8 ? below : Math.max(8, rect.top - authorHint.offsetHeight - 6)}px`;
+    }
+    document.addEventListener('pointerover', event => {
+        const link = event.target.closest('[data-author-profile]');
+        if (event.pointerType === 'mouse' && link && !link.contains(event.relatedTarget)) showAuthorHint(link);
+    });
+    document.addEventListener('pointerout', event => { if (hintedAuthor?.contains(event.target) && !hintedAuthor.contains(event.relatedTarget)) hideAuthorHint(); });
+    document.addEventListener('focusin', event => { const link = event.target.closest('[data-author-profile]'); if (link?.matches(':focus-visible')) showAuthorHint(link); });
+    document.addEventListener('focusout', hideAuthorHint);
+    document.addEventListener('pointerdown', hideAuthorHint);
+    document.addEventListener('scroll', hideAuthorHint, true);
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') hideAuthorHint(); });
+    window.addEventListener('resize', hideAuthorHint);
+    new MutationObserver(() => { if (hintedAuthor && !hintedAuthor.isConnected) hideAuthorHint(); }).observe(document.body, { childList: true, subtree: true });
     // SVG coordinates only: captions, axis surroundings and native scrollbars
     // must never act as a data point, including when a focused chart is scrolled.
     function chartPointer(event, svg) {
@@ -336,6 +371,6 @@
         button.setAttribute('aria-pressed', String(show));
         button.setAttribute('aria-label', `${show ? '隐藏' : '显示'}${button.dataset.secretLabel || (input.id === 'botToken' ? ' Bot Token' : '密码')}`);
     });
-    window.SeekFeedControls = { icon, beginPending, pending, lockScroll, unlockScroll, chartPointer, nearChartSegment, closeSelect: close, refreshSelects: () => selects.forEach(s => s.refresh()), dismissCharts, chartInspection: (box, dismiss) => dismiss ? chartInspectors.set(box, dismiss) : chartInspectors.delete(box) };
+    window.SeekFeedControls = { icon, authorLink, beginPending, pending, lockScroll, unlockScroll, chartPointer, nearChartSegment, closeSelect: close, refreshSelects: () => selects.forEach(s => s.refresh()), dismissCharts, chartInspection: (box, dismiss) => dismiss ? chartInspectors.set(box, dismiss) : chartInspectors.delete(box) };
     document.addEventListener('DOMContentLoaded', () => document.querySelectorAll('select').forEach(enhance));
 })();

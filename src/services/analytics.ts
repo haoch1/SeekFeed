@@ -1,4 +1,5 @@
 import type { Database } from 'bun:sqlite';
+import { linkForumAuthors } from './forumAuthors';
 
 const DAY = 86400000;
 const HOUR = 3600000;
@@ -93,5 +94,5 @@ export function getAnalytics(db: Database, days: number, offset: number, now = n
             samples: number; average: number | null; median: number | null; p90: number | null;
             underMinute: number; underFive: number; underFifteen: number; overFifteen: number;
         };
-    return { period: { days, offset, from, to, category, stepDays, calendarDays: Math.round((midnight - start) / DAY) + 1, hourly: days === -1 }, totals, trend, categories, availableCategories, authors, authorDistribution, activity, subscriptions, ranking, ruleStats, topics, delivery };
+    return { period: { days, offset, from, to, category, stepDays, calendarDays: Math.round((midnight - start) / DAY) + 1, hourly: days === -1 }, totals, trend, categories, availableCategories, authors: linkForumAuthors(db, authors), authorDistribution, activity, subscriptions, ranking, ruleStats, topics, delivery };
 }

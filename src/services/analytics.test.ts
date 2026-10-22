@@ -12,7 +12,7 @@ function post(date: string, status = 2, category = 'tech', creator = 'alice', su
 }
 beforeEach(() => {
     db = new Database(':memory:');
-    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '010_dismissed_matches']) {
+    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '010_dismissed_matches', '011_forum_author_links']) {
         db.exec(readFileSync(new URL(`../database/migrations/${name}.sql`, import.meta.url), 'utf8'));
     }
 });

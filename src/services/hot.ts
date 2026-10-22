@@ -3,10 +3,12 @@ import { z } from 'zod';
 import { resolve } from 'node:path';
 import { logger } from '../utils/logger';
 import cadence from '../config/cadence.json';
+import { linkForumPosts } from './forumAuthors';
 
 const metric = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const postSchema = z.object({
     postId: metric.positive(), title: z.string().min(1).max(500), author: z.string().min(1).max(100),
+    authorId: metric.positive().nullable().optional(),
     category: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/), categoryLabel: z.string().min(1).max(50),
     views: metric, replies: metric, lastActiveAt: z.string().datetime({ offset: true }), pinned: z.boolean(),
 });
@@ -187,6 +189,11 @@ export class HotService {
                 last_active_at=excluded.last_active_at,observed_at=excluded.observed_at,pinned=excluded.pinned`);
             for (const row of batch.posts) insert.run(row.postId, row.title, row.author, row.category, row.categoryLabel,
                 row.views, row.replies, row.lastActiveAt, observedAt, Number(row.pinned));
+            const identity = this.db.query(`INSERT INTO forum_post_authors(post_id, creator, author_id, observed_at) VALUES(?,?,?,?)
+                ON CONFLICT(post_id) DO UPDATE SET creator=excluded.creator,author_id=excluded.author_id,observed_at=excluded.observed_at`);
+            for (const row of batch.posts) {
+                if (row.authorId) identity.run(row.postId, row.author.trim(), row.authorId, observedAt);
+            }
             const sample = this.db.query(`INSERT INTO hot_samples VALUES(?,?,?,?)
                 ON CONFLICT(post_id,observed_at) DO UPDATE SET views=excluded.views,replies=excluded.replies`);
             for (const row of batch.posts) sample.run(row.postId, observedAt, row.views, row.replies);
@@ -239,7 +246,7 @@ export class HotService {
             }];
         }).sort((a, b) => (sort === 'heat' ? b.heat - a.heat : b[sort] - a[sort]) || b.postId - a.postId);
         const warmingUp = live && cold > 0 && ranked.length === 0;
-        return { posts: ranked.slice(0, limit), total: ranked.length, categories, period, sort, limit,
+        return { posts: linkForumPosts(this.db, ranked.slice(0, limit), row => ({ postId: row.postId, creator: row.author })), total: ranked.length, categories, period, sort, limit,
             updatedAt: state.last_success_at, stale: !state.last_success_at || now.getTime() - Date.parse(state.last_success_at) > 15 * MINUTE,
             error: state.last_error, busy: Boolean(this.inFlight), enabled: process.env.HOT_COLLECT_ENABLED === 'true',
             coverage: state.batch_size, pages: state.pages, intervalSeconds: cadence.hotCollectIntervalSeconds, nextAttemptAt: state.next_attempt_at, warmingUp };

@@ -167,7 +167,7 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
         if (!currentData) return;
         const rows = currentData.authors.slice(0, Number(el('analyticsAuthorLimit').value));
         el('analyticsAuthorList').scrollTop = 0;
-        el('analyticsAuthorList').innerHTML = rows.length ? rows.map((row, index) => `<div class="analytics-author-row"><span class="analytics-rank">${String(index + 1).padStart(2, '0')}</span><span class="analytics-avatar">${esc(Array.from(row.creator)[0])}</span><span class="analytics-author-name" title="${esc(row.creator)}">${esc(row.creator)}</span><strong>${number(row.count)}<small>篇</small></strong></div>`).join('') : empty('所选时段暂无作者');
+        el('analyticsAuthorList').innerHTML = rows.length ? rows.map((row, index) => `<div class="analytics-author-row"><span class="analytics-rank">${String(index + 1).padStart(2, '0')}</span><span class="analytics-avatar">${esc(Array.from(row.creator)[0])}</span>${window.SeekFeedControls.authorLink(row.creator, row.authorId, 'analytics-author-name')}<strong>${number(row.count)}<small>篇</small></strong></div>`).join('') : empty('所选时段暂无作者');
     }
     function renderAuthorDistribution(data) {
         const names = ['1 篇', '2–4 篇', '5–9 篇', '10 篇及以上'];
