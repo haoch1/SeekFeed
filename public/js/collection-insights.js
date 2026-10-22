@@ -68,9 +68,10 @@ window.SeekFeedInsights = (() => {
         const observations = points.map(point => ({ ...point, timestamp: Date.parse(point.observedAt) }))
             .filter(point => Number.isFinite(point.timestamp)).sort((a, b) => a.timestamp - b.timestamp);
         if (!observations.length) return '<div class="insight-empty">尚无有效采样。</div>';
-        const first = observations[0].timestamp, last = observations.at(-1).timestamp, span = last - first;
-        const target = width < 500 ? 10 : 20;
-        const minutes = [5, 15, 30, 60, 180, 360, 720, 1440, 2880, 10080].find(value => span / (value * 60000) <= target) || 10080;
+        const first = observations[0].timestamp, last = observations.at(-1).timestamp;
+        const labelWidth = Math.max(28, num(Math.max(1, ...observations.map(point => Math.max(point.views, point.replies)))).length * 7 + 14);
+        const target = Math.max(1, Math.min(width < 500 ? 6 : 18, Math.floor((width - left - right) / (labelWidth + 10))));
+        const minutes = [5, 15, 30, 60, 180, 360, 720, 1440, 2880, 10080, 20160, 43200, 86400].find(value => Math.floor(last / (value * 60000)) - Math.floor(first / (value * 60000)) + 1 <= target) || 86400;
         const interval = minutes * 60000, grouped = new Map();
         let continuity = 0;
         for (const [index, point] of observations.entries()) {
@@ -111,7 +112,8 @@ window.SeekFeedInsights = (() => {
         const shapes = values.map(point => {
             const px = x(point), py = y(point), barWidth = Math.min(42, slot * .6);
             const title = esc(`${date(point.timestamp)} ${period(point)} · ${label} ${num(point[metric])} · 最后采样 ${clock(point.timestamp)}`);
-            return mode === 'bar' ? `<rect class="insight-bar" x="${px - barWidth / 2}" y="${py}" width="${barWidth}" height="${Math.max(1, height - bottom - py)}" rx="4"><title>${title}</title></rect>` : `<circle class="insight-point" cx="${px}" cy="${py}" r="4"><title>${title}</title></circle>`;
+            const shape = mode === 'bar' ? `<rect class="insight-bar" x="${px - barWidth / 2}" y="${py}" width="${barWidth}" height="${Math.max(1, height - bottom - py)}" rx="4"><title>${title}</title></rect>` : `<circle class="insight-point" cx="${px}" cy="${py}" r="4"><title>${title}</title></circle>`;
+            return `${shape}<g class="analytics-bar-label"><rect x="${px - labelWidth / 2}" y="${py - 27}" width="${labelWidth}" height="20" rx="5"/><text class="analytics-bar-value" x="${px}" y="${py - 17}" dominant-baseline="central" text-anchor="middle">${num(point[metric])}</text></g>`;
         }).join('');
         const grid = Array.from({ length: 5 }, (_, index) => {
             const yy = top + index * (height - top - bottom) / 4;
