@@ -22,7 +22,7 @@ const avatar = 'data:image/png;base64,' + readFileSync(new URL('../../public/ico
 
 beforeEach(() => {
     const sqlite = new Database(':memory:');
-    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '009_account_avatar', '010_dismissed_matches', '011_forum_author_links', '012_collection_insights', '014_remove_trade_analysis']) {
+    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '009_account_avatar', '010_dismissed_matches', '011_forum_author_links', '012_collection_insights', '014_remove_trade_analysis', '015_remove_post_history']) {
         sqlite.exec(readFileSync(new URL(`../database/migrations/${name}.sql`, import.meta.url), 'utf8'));
     }
     db = new DatabaseService(sqlite);
@@ -148,20 +148,20 @@ describe('account avatar', () => {
 });
 
 describe('account settings and session expiry', () => {
-    it('keeps collection diagnostics and previous post contents private while allowing observed public counters', async () => {
+    it('keeps collection diagnostics private and only returns the latest post contents', async () => {
         const data = { post_id: 999, title: 'Original', memo: 'old-private-text', category: 'trade', creator: 'Alice', pub_date: new Date().toISOString() };
         db.getCollectionInsights().sync([data], true);
         db.getCollectionInsights().sync([{ ...data, title: 'Updated', memo: 'current-text' }], true);
-        db.getCollectionInsights().sample(999, 50, 5, new Date().toISOString());
-        for (const path of ['/api/collection/quality', '/api/posts/999/revisions']) {
-            expect((await app.request(path)).status).toBe(401);
-            expect((await app.request(path, { headers: headers() })).status).toBe(200);
+        expect((await app.request('/api/collection/quality')).status).toBe(401);
+        expect((await app.request('/api/collection/quality', { headers: headers() })).status).toBe(200);
+        for (const path of ['/api/posts/999/revisions', '/api/posts/999/activity']) {
+            expect((await app.request(path, { headers: headers() })).status).toBe(404);
         }
-        const guest = await (await app.request('/api/posts')).json();
-        expect(JSON.stringify(guest)).not.toMatch(/old-private-text|revision_count|changed_at/);
-        const history = await (await app.request('/api/posts/999/activity')).json();
-        expect(history.data.points[0]).toMatchObject({ views: 50, replies: 5 });
-        expect(JSON.stringify(history)).not.toMatch(/sub_id|push_status|private|creator/);
+        for (const requestHeaders of [{}, headers()]) {
+            const result = await (await app.request('/api/posts', { headers: requestHeaders })).json();
+            expect(result.data.posts[0]).toMatchObject({ title: 'Updated', memo: 'current-text' });
+            expect(JSON.stringify(result)).not.toMatch(/old-private-text|revision_count|changed_at/);
+        }
     });
     const headers = () => ({ Authorization: `Bearer ${sessionId}`, 'Content-Type': 'application/json' });
 

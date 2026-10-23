@@ -10,6 +10,8 @@ import { DatabaseMigrator } from './database/migrate';
 import { logger } from './utils/logger';
 import { getScheduler } from './services/runtime';
 import { requireSession } from './middleware/session';
+import { ASSET_VERSION } from './config/assets';
+import cadence from './config/cadence.json';
 
 // 导入路由
 import { authRoutes } from './routes/auth';
@@ -29,6 +31,21 @@ type Variables = {
 }
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+app.use('*', async (c, next) => {
+  await next();
+  if (c.res.headers.get('Content-Type')?.includes('text/html')) c.header('Cache-Control', 'no-store');
+});
+for (const path of ['/css/*', '/js/*']) app.use(path, async (c, next) => {
+  await next();
+  c.header('Cache-Control', c.res.status === 200 && c.req.query('v') === ASSET_VERSION
+    ? 'public, max-age=31536000, immutable' : 'no-cache, must-revalidate');
+});
+app.use('/sw.js', async (c, next) => {
+  await next();
+  c.header('Cache-Control', 'no-cache, must-revalidate');
+});
+app.get('/api/app-version', c => c.json({ version: ASSET_VERSION }, 200, { 'Cache-Control': 'no-store' }));
 
 // 静态文件服务
 app.use('/css/*', serveStatic({ root: './public' }));
@@ -181,7 +198,7 @@ app.route('/', pageRoutes);
 // 默认 RSS 配置
 const DEFAULT_RSS_CONFIG = {
   url: 'https://rss.nodeseek.com/',
-  intervalSeconds: 60,
+  intervalSeconds: cadence.rssIntervalSeconds,
   proxy: null as string | null,
 };
 

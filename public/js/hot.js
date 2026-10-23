@@ -16,7 +16,7 @@ window.SeekFeedHot = (() => {
       let row = existing.get(key);
       if (!row) {
         row = document.createElement('li'); row.className = 'hot-row'; row.dataset.postId = key;
-        row.innerHTML = `<span class="hot-rank"></span><div class="hot-post"><a class="hot-post-title" target="_blank" rel="noopener noreferrer"></a><div class="hot-post-meta"><span class="hot-category"></span><span class="hot-author"></span></div></div><button type="button" class="hot-number hot-views insight-metric" data-post-activity="${Number(post.postId)}" data-activity-metric="views">${icon('eye')}<span></span></button><button type="button" class="hot-number hot-replies insight-metric" data-post-activity="${Number(post.postId)}" data-activity-metric="replies">${icon('message')}<span></span></button><span class="hot-number hot-heat"></span>`;
+        row.innerHTML = `<span class="hot-rank"></span><div class="hot-post"><a class="hot-post-title" target="_blank" rel="noopener noreferrer"></a><div class="hot-post-meta"><span class="hot-category"></span><span class="hot-author"></span></div></div><span class="hot-number hot-views">${icon('eye')}<span></span></span><span class="hot-number hot-replies">${icon('message')}<span></span></span><span class="hot-number hot-heat"></span>`;
         row.querySelector('a').href = `https://www.nodeseek.com/post-${Number(post.postId)}-1`;
       }
       const text = (selector, value) => { const node = row.querySelector(selector); if (node.textContent !== value) node.textContent = value; };
@@ -32,8 +32,8 @@ window.SeekFeedHot = (() => {
       const views = post.views, replies = post.replies;
       const heat = String(Math.round(post.heat * 40));
       text('.hot-views span', number(views)); text('.hot-replies span', number(replies)); text('.hot-heat', heat);
-      row.querySelector('.hot-views').setAttribute('aria-label', `浏览量 ${number(views)}，查看互动历史`);
-      row.querySelector('.hot-replies').setAttribute('aria-label', `回复量 ${number(replies)}，查看互动历史`);
+      row.querySelector('.hot-views').setAttribute('aria-label', `浏览量 ${number(views)}`);
+      row.querySelector('.hot-replies').setAttribute('aria-label', `回复量 ${number(replies)}`);
       row.querySelector('.hot-heat').setAttribute('aria-label', `热度 ${heat}`);
       keep.add(row);
       if (list.children[index] !== row) list.insertBefore(row, list.children[index] || null);

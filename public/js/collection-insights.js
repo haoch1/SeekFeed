@@ -1,23 +1,10 @@
-/* Read-only collection diagnostics and observed forum history. */
+/* Read-only collection diagnostics. */
 window.SeekFeedInsights = (() => {
     const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
     const num = value => new Intl.NumberFormat('zh-CN').format(value || 0);
     const time = value => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '暂无记录';
     const source = { rss: 'RSS', hot: '热榜', identity: '作者补全' };
     const authHeaders = () => { const token = localStorage.getItem('sessionId'); return token ? { Authorization: `Bearer ${token}` } : {}; };
-    let dialog, opener, request = 0, controller, historyResize, historyTimer;
-    async function read(url) {
-        controller?.abort();
-        controller = new AbortController();
-        const current = controller;
-        const timer = setTimeout(() => current.abort(), 15000);
-        try {
-            const response = await fetch(url, { signal: current.signal, cache: 'no-store', headers: authHeaders() });
-            const result = await response.json();
-            if (!response.ok || !result.success) throw new Error('读取失败');
-            return result.data;
-        } finally { clearTimeout(timer); }
-    }
     async function quality() {
         const box = document.getElementById('collectionQuality');
         if (!box || box.closest('section').hidden) return;
@@ -36,132 +23,5 @@ window.SeekFeedInsights = (() => {
         } catch { box.innerHTML = '<p class="insight-note" role="status">采集记录读取失败，请重新加载。</p>'; }
         finally { box.setAttribute('aria-busy', 'false'); }
     }
-    function open(title) {
-        historyResize?.disconnect(); clearInterval(historyTimer);
-        if (!dialog) {
-            dialog = document.createElement('dialog'); dialog.className = 'insight-dialog';
-            dialog.setAttribute('aria-labelledby', 'insightDialogTitle');
-            dialog.innerHTML = `<header><h2 id="insightDialogTitle"></h2><button type="button" class="icon-btn" aria-label="关闭详情">${window.SeekFeedControls.icon('close')}</button></header><div class="insight-dialog-body"></div>`;
-            document.body.append(dialog);
-            dialog.querySelector('button').onclick = () => dialog.close();
-            dialog.addEventListener('click', event => { if (event.target === dialog) { const rect = dialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close(); } });
-            dialog.addEventListener('close', () => { request++; controller?.abort(); historyResize?.disconnect(); clearInterval(historyTimer); window.SeekFeedControls.unlockScroll(dialog); opener?.focus({ preventScroll: true }); });
-        }
-        opener = document.activeElement;
-        dialog.querySelector('h2').textContent = title;
-        dialog.querySelector('.insight-dialog-body').innerHTML = '<p class="insight-note" role="status">正在读取…</p>';
-        if (!dialog.open) { window.SeekFeedControls.dismissCharts(); dialog.showModal(); window.SeekFeedControls.lockScroll(dialog); }
-        return dialog.querySelector('.insight-dialog-body');
-    }
-    async function revisions(id) {
-        const body = open('帖子变更'); const current = ++request;
-        try {
-            const data = await read(`/api/posts/${id}/revisions`);
-            if (current !== request || !dialog.open) return;
-            body.innerHTML = '<p class="insight-note">仅展示 RSS 已观察到的内容变化，保留最近 30 天、最多 20 个版本。</p>' + (data.map(row => `<section class="insight-revision"><h3>${esc(time(row.observedAt))}</h3>${Object.keys(row.after).filter(key => row.before[key] !== row.after[key]).map(key => `<div class="revision-field"><strong>${({ title: '标题', memo: '摘要', category: '分类', creator: '作者' })[key] || esc(key)}</strong><div class="revision-before"><small>更新前</small><p>${esc(row.before[key]) || '（空）'}</p></div><div class="revision-after"><small>更新后</small><p>${esc(row.after[key]) || '（空）'}</p></div></div>`).join('')}</section>`).join('') || '<p class="insight-note">尚无已记录的变更。</p>');
-        } catch (error) { if (current === request) body.innerHTML = '<p role="status" class="insight-note">变更记录读取失败，请重新打开。</p>'; }
-    }
-    function chart(points, metric, mode, availableWidth) {
-        if (!points.length) return '<div class="insight-empty">尚无互动历史。近 2 小时展示逐轮观察值，较早记录按小时保留。</div>';
-        const width = Math.max(220, availableWidth), height = width < 500 ? 260 : 300;
-        const left = width < 500 ? 39 : 50, right = 16, top = 28, bottom = 44;
-        const observations = points.map(point => ({ ...point, timestamp: Date.parse(point.observedAt) }))
-            .filter(point => Number.isFinite(point.timestamp)).sort((a, b) => a.timestamp - b.timestamp);
-        if (!observations.length) return '<div class="insight-empty">尚无有效采样。</div>';
-        const first = observations[0].timestamp, last = observations.at(-1).timestamp;
-        const labelWidth = Math.max(28, num(Math.max(1, ...observations.map(point => Math.max(point.views, point.replies)))).length * 7 + 14);
-        const target = Math.max(1, Math.min(width < 500 ? 6 : 18, Math.floor((width - left - right) / (labelWidth + 10))));
-        const minutes = [5, 15, 30, 60, 180, 360, 720, 1440, 2880, 10080, 20160, 43200, 86400].find(value => Math.floor(last / (value * 60000)) - Math.floor(first / (value * 60000)) + 1 <= target) || 86400;
-        const interval = minutes * 60000, grouped = new Map();
-        let continuity = 0;
-        for (const [index, point] of observations.entries()) {
-            if (index && point.timestamp - observations[index - 1].timestamp > 3600000) continuity++;
-            const bucket = Math.floor(point.timestamp / interval) * interval;
-            grouped.set(bucket, { ...point, start: bucket, continuity });
-        }
-        const values = [...grouped.values()], count = Math.floor((values.at(-1).start - values[0].start) / interval) + 1;
-        const plotWidth = width - left - right, slot = plotWidth / count;
-        const x = point => left + ((point.start - values[0].start) / interval + .5) * slot;
-        const peak = Math.max(1, ...values.map(point => point[metric]));
-        const magnitude = 10 ** Math.floor(Math.log10(peak / 4));
-        const step = Math.max(1, Math.ceil([1, 2, 2.5, 5, 10].map(value => value * magnitude).find(value => value >= peak / 4) || magnitude * 10));
-        const gridSteps = Math.ceil(peak / step), ceiling = step * gridSteps;
-        const y = point => height - bottom - point[metric] / ceiling * (height - top - bottom);
-        const label = metric === 'views' ? '浏览量' : '回复量';
-        const clock = timestamp => new Date(timestamp).toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
-        const date = timestamp => new Date(timestamp).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
-        const period = point => {
-            const start = Math.max(first, point.start), end = Math.min(last, point.start + interval);
-            if (date(start) === date(end) && clock(start) === clock(end)) return `${date(first) === date(last) ? '' : date(end) + ' '}${clock(end)}`;
-            if (minutes >= 1440) return date(start) === date(end) ? date(start) : `${date(start)}–${date(end)}`;
-            return `${date(first) === date(last) ? '' : date(start) + ' '}${clock(start)}–${date(start) === date(end) ? '' : date(end) + ' '}${clock(end)}`;
-        };
-        const segments = [];
-        let segment = [];
-        values.forEach((point, index) => {
-            if (index && point.continuity !== values[index - 1].continuity) {
-                segments.push(segment); segment = [];
-            }
-            segment.push(point);
-        });
-        segments.push(segment);
-        const lines = mode === 'line' ? segments.map(segment => {
-            const path = segment.map((point, index) => `${index ? 'L' : 'M'}${x(point)},${y(point)}`).join(' ');
-            return `<path class="insight-area" d="${path} L${x(segment.at(-1))},${height - bottom} L${x(segment[0])},${height - bottom} Z"/><path class="insight-line" d="${path}"/>`;
-        }).join('') : '';
-        const shapes = values.map(point => {
-            const px = x(point), py = y(point), barWidth = Math.min(42, slot * .6);
-            const title = esc(`${date(point.timestamp)} ${period(point)} · ${label} ${num(point[metric])} · 最后采样 ${clock(point.timestamp)}`);
-            const shape = mode === 'bar' ? `<rect class="insight-bar" x="${px - barWidth / 2}" y="${py}" width="${barWidth}" height="${Math.max(1, height - bottom - py)}" rx="4"><title>${title}</title></rect>` : `<circle class="insight-point" cx="${px}" cy="${py}" r="4"><title>${title}</title></circle>`;
-            return `${shape}<g class="analytics-bar-label"><rect x="${px - labelWidth / 2}" y="${py - 27}" width="${labelWidth}" height="20" rx="5"/><text class="analytics-bar-value" x="${px}" y="${py - 17}" dominant-baseline="central" text-anchor="middle">${num(point[metric])}</text></g>`;
-        }).join('');
-        const grid = Array.from({ length: gridSteps + 1 }, (_, index) => {
-            const yy = top + index * (height - top - bottom) / gridSteps;
-            return `<line x1="${left}" x2="${width - right}" y1="${yy}" y2="${yy}" class="insight-grid"/><text x="${left - 10}" y="${yy + 4}" text-anchor="end">${num(step * (gridSteps - index))}</text>`;
-        }).join('');
-        const tickCount = Math.min(values.length, Math.max(2, Math.floor(plotWidth / (date(first) !== date(last) ? 155 : 108))));
-        const tickIndices = [...new Set(Array.from({ length: tickCount }, (_, i) => Math.round(i * (values.length - 1) / Math.max(1, tickCount - 1))))];
-        const ticks = tickIndices.map((index, position) => `<text class="insight-time-tick" x="${position === 0 ? left : position === tickIndices.length - 1 ? width - right : x(values[index])}" y="${height - 14}" text-anchor="${tickIndices.length === 1 ? 'start' : position === 0 ? 'start' : position === tickIndices.length - 1 ? 'end' : 'middle'}">${esc(period(values[index]))}</text>`).join('');
-        const unit = minutes >= 1440 ? `${minutes / 1440} 天` : minutes >= 60 ? `${minutes / 60} 小时` : `${minutes} 分钟`;
-        const sameDay = date(first) === date(last), sameMinute = sameDay && clock(first) === clock(last);
-        const rangeTimes = `${clock(first)}${sameMinute ? '' : '–' + (sameDay ? '' : date(last) + ' ') + clock(last)}`;
-        const range = `${date(first)} ${rangeTimes}`;
-        return `<div class="insight-chart-summary"><div class="insight-current"><span class="insight-current-label">${label}</span><strong>${num(values.at(-1)[metric])}</strong></div><div class="insight-chart-context"><span class="insight-range${sameDay && date(last) === date(Date.now()) ? ' is-today' : ''}" title="${esc(range)}"><span class="insight-range-date">${esc(date(first))} </span>${esc(rangeTimes)}</span><span class="insight-interval">${unit.replace(' ', '')}/段</span></div></div><svg class="insight-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="按时间段取最后一次${label}，仅显示已采集时段，缺测不补零">${grid}${ticks}<g class="insight-series">${lines}${shapes}</g></svg>`;
-    }
-    async function activity(id, title, initialMetric = 'views') {
-        const body = open('互动历史'); const current = ++request;
-        let metric = initialMetric === 'replies' ? 'replies' : 'views', mode = 'line', days = '7', points = [];
-        body.innerHTML = `<p class="insight-post-title"></p><div class="insight-toolbar"><div class="insight-tabs" role="group" aria-label="互动指标"><button class="btn btn-secondary" data-metric="views" aria-pressed="${metric === 'views'}">浏览量</button><button class="btn btn-secondary" data-metric="replies" aria-pressed="${metric === 'replies'}">回复量</button></div><div class="insight-tabs" role="group" aria-label="图表样式"><button class="btn btn-secondary" data-mode="bar" aria-pressed="false">柱形</button><button class="btn btn-secondary" data-mode="line" aria-pressed="true">折线</button></div><div class="insight-tabs" role="group" aria-label="历史范围"><button class="btn btn-secondary" data-days="7" aria-pressed="true">7 天</button><button class="btn btn-secondary" data-days="30" aria-pressed="false">30 天</button></div></div><div class="insight-history" aria-live="polite"></div><p class="insight-note">按时间段取最后一次累计值，间隔随范围自动调整 · 仅显示已采集时段 · 缺测不补零，超过 1 小时断开 · 每 30 秒读取本地数据。</p><details class="insight-observations"><summary>查看原始采样明细</summary><div class="insight-table-scroll"></div></details>`;
-        body.querySelector('.insight-post-title').textContent = title;
-        const draw = () => { const box = body.querySelector('.insight-history'); box.innerHTML = chart(points, metric, mode, box.clientWidth); };
-        historyResize = new ResizeObserver(draw); historyResize.observe(body.querySelector('.insight-history'));
-        let loadId = 0;
-        const load = async () => {
-            const turn = ++loadId;
-            body.querySelector('.insight-history').setAttribute('aria-busy', 'true');
-            try {
-                const data = await read(`/api/posts/${id}/activity?days=${days}`);
-                if (current !== request || turn !== loadId || !dialog.open) return;
-                points = data.points; draw();
-                body.querySelector('.insight-observations .insight-table-scroll').innerHTML = `<table class="insight-table"><thead><tr><th>观察时间</th><th>浏览量</th><th>回复量</th></tr></thead><tbody>${[...points].reverse().map(point => `<tr><td>${esc(time(point.observedAt))}</td><td>${num(point.views)}</td><td>${num(point.replies)}</td></tr>`).join('') || '<tr><td colspan="3">尚无观察记录</td></tr>'}</tbody></table>`;
-            } catch { if (current === request && turn === loadId) body.querySelector('.insight-history').innerHTML = '<p class="insight-note">读取失败，请切换范围重试。</p>'; }
-            finally { if (current === request && turn === loadId) body.querySelector('.insight-history').setAttribute('aria-busy', 'false'); }
-        };
-        body.querySelector('.insight-toolbar').onclick = event => {
-            const button = event.target.closest('button'); if (!button) return;
-            button.parentElement.querySelectorAll('button').forEach(node => node.setAttribute('aria-pressed', String(node === button)));
-            if (button.dataset.metric) { metric = button.dataset.metric; draw(); }
-            if (button.dataset.mode) { mode = button.dataset.mode; draw(); }
-            if (button.dataset.days) { days = button.dataset.days; load(); }
-        };
-        await load();
-        if (current === request && dialog.open) historyTimer = setInterval(() => { if (!document.hidden && dialog.open && current === request) load(); }, 30000);
-    }
-    document.addEventListener('click', event => {
-        const revision = event.target.closest('[data-post-revisions]');
-        if (revision) revisions(Number(revision.dataset.postRevisions));
-        const history = event.target.closest('[data-post-activity]');
-        if (history) activity(Number(history.dataset.postActivity), history.closest('.hot-row')?.querySelector('.hot-post-title')?.textContent || '', history.dataset.activityMetric);
-    });
     return { quality };
 })();

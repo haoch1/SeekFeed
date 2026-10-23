@@ -309,10 +309,6 @@ export class DatabaseService {
     return insertedCount;
   }
 
-  decoratePosts(posts: Post[]) {
-    return this.getCollectionInsights().decorate(posts);
-  }
-
   getPostByPostId(postId: number): Post | null {
     const stmt = this.db.query('SELECT * FROM posts WHERE post_id = ?');
     return stmt.get(postId) as Post | null;

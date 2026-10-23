@@ -1,8 +1,7 @@
 // Only static assets are cached. Sessions and configuration never enter CacheStorage.
-const STATIC_CACHE = 'seekfeed-static-v2';
+const STATIC_CACHE = 'seekfeed-static-v3';
 const STATIC_ASSETS = [
-    '/css/skeleton.css', '/css/charts.css', '/css/workspace.css',
-    '/js/controls.js', '/js/home.js', '/js/init.js', '/js/pwa-register.js', '/js/pwa-check.js', '/manifest.json',
+    '/manifest.json',
     '/icons/seekfeed.svg', '/icons/ui.svg', '/icons/seekfeed-192.png', '/icons/seekfeed-512.png',
 ];
 self.addEventListener('install', event => {

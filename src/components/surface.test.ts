@@ -2,12 +2,20 @@ import { describe, expect, it } from 'bun:test';
 import { HomePage } from './HomePage';
 import { readFileSync } from 'node:fs';
 import cadence from '../config/cadence.json';
+import { ASSET_VERSION } from '../config/assets';
 
 describe('server rendered workspace', () => {
+    it('uses one release fingerprint for every stylesheet and external script', () => {
+        const html = HomePage({ path: '/hot' }).toString();
+        expect(html).toContain(`name="seekfeed-version" content="${ASSET_VERSION}"`);
+        const urls = [...html.matchAll(/(?:href|src)="(\/(?:css|js)\/[^\"]+)"/g)].map(match => match[1]);
+        expect(urls.length).toBeGreaterThan(8);
+        expect(urls.every(url => url.endsWith(`?v=${ASSET_VERSION}`))).toBe(true);
+    });
     it('provides the shared refresh policy before browser workflows initialize', () => {
         const html = HomePage({ path: '/settings/rss' }).toString();
         expect(html).toContain(`window.SeekFeedCadence = ${JSON.stringify(cadence)};`);
-        expect(html.indexOf('window.SeekFeedCadence =')).toBeLessThan(html.indexOf('src="/js/home.js"'));
+        expect(html.indexOf('window.SeekFeedCadence =')).toBeLessThan(html.indexOf('src="/js/home.js?'));
         expect(html).toContain('默认 30 秒');
         expect(cadence).toEqual({ rssIntervalSeconds: 30, hotCollectIntervalSeconds: 60, feedRefreshMs: 5000, hotRefreshMs: 15000, analyticsRefreshMs: 15000, keywordRefreshMs: 30000 });
     });
@@ -25,7 +33,7 @@ describe('server rendered workspace', () => {
         const render = html.indexOf('window.SeekFeedIdentity.render();');
         expect(bootstrap).toBeLessThan(html.indexOf('<body>'));
         expect(render).toBeGreaterThan(html.indexOf('id="accountLabel"'));
-        expect(render).toBeLessThan(html.indexOf('src="/js/controls.js"'));
+        expect(render).toBeLessThan(html.indexOf('src="/js/controls.js?'));
         expect(html).not.toMatch(/<img[^>]+src="\/icons\/seekfeed\.svg"/);
         const logo = readFileSync(new URL('../../public/icons/seekfeed.svg', import.meta.url), 'utf8');
         expect(html).toContain(logo.match(/<path d="([^"]+)"/)![1]);

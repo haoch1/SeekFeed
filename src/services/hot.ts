@@ -225,9 +225,6 @@ export class HotService {
             const sample = this.db.query(`INSERT INTO hot_samples VALUES(?,?,?,?)
                 ON CONFLICT(post_id,observed_at) DO UPDATE SET views=excluded.views,replies=excluded.replies`);
             for (const row of batch.posts) sample.run(row.postId, observedAt, row.views, row.replies);
-            const insights = new CollectionInsights(this.db);
-            for (const row of batch.posts) insights.sample(row.postId, row.views, row.replies, observedAt);
-            this.db.query('DELETE FROM hot_metric_hourly WHERE bucket < ?').run(new Date(timestamp - 30 * 24 * HOUR).toISOString());
             this.db.query('DELETE FROM hot_samples WHERE julianday(observed_at) < julianday(?) - 2.0/24').run(observedAt);
             this.db.query('DELETE FROM hot_samples WHERE post_id IN (SELECT post_id FROM hot_posts WHERE julianday(observed_at) < julianday(?) - 30)').run(observedAt);
             this.db.query("DELETE FROM hot_posts WHERE julianday(observed_at) < julianday(?) - 30").run(observedAt);

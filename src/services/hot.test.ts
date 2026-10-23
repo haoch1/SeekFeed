@@ -15,6 +15,27 @@ beforeEach(() => {
 afterEach(() => db.close());
 
 describe('independent hot ranking', () => {
+    it('removes optional history idempotently without changing heat inputs or ranking', () => {
+        const service = new HotService(db);
+        publish(1, '2026-10-20T03:00:00Z');
+        const earlier = new Date(now.getTime() - 10 * 60000);
+        service.saveBatch(batch([post(1, { views: 100, replies: 1 })], earlier), earlier);
+        service.saveBatch(batch([post(1, { views: 500, replies: 30 })]), now);
+        db.exec(`CREATE TABLE hot_metric_hourly(value TEXT); INSERT INTO hot_metric_hourly VALUES('legacy');
+            CREATE TABLE post_revisions(value TEXT); INSERT INTO post_revisions VALUES('legacy');
+            CREATE TABLE post_observations(value TEXT); INSERT INTO post_observations VALUES('legacy');`);
+        const tables = ['posts', 'hot_posts', 'hot_samples', 'hot_collector_state', 'forum_post_authors', 'collection_runs', 'keywords_sub'];
+        const before = tables.map(table => db.query(`SELECT * FROM ${table}`).all());
+        const ranking = service.ranking('live', '', 'heat', now);
+        expect(ranking.posts[0].growthViews).toBe(400);
+        const removal = readFileSync(new URL('../database/migrations/015_remove_post_history.sql', import.meta.url), 'utf8');
+        db.exec(removal); db.exec(removal);
+        expect(db.query("SELECT name FROM sqlite_master WHERE name IN ('hot_metric_hourly','post_revisions','post_observations')").all()).toEqual([]);
+        expect(tables.map(table => db.query(`SELECT * FROM ${table}`).all())).toEqual(before);
+        expect(service.ranking('live', '', 'heat', now)).toEqual(ranking);
+        service.saveBatch(batch([post(1, { views: 600, replies: 40 })], new Date(now.getTime() + 60000)), new Date(now.getTime() + 60000));
+        expect(db.query('SELECT views FROM hot_posts WHERE post_id=1').get()).toEqual({ views: 600 });
+    });
     it('uses confirmed recent publication, excludes bumped old/unknown/pinned posts and keeps deterministic ties', () => {
         const service = new HotService(db);
         for (const id of [1, 2, 4]) publish(id, '2026-10-20T04:50:00Z');

@@ -16,7 +16,7 @@ const post = (id: number, title = 'DMIT 补货'): ParsedPost => ({ post_id: id, 
 beforeAll(async () => { await loadEnvConfig(); });
 beforeEach(() => {
     sqlite = new Database(':memory:');
-    for (const file of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '010_dismissed_matches', '011_forum_author_links', '012_collection_insights']) {
+    for (const file of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '010_dismissed_matches', '011_forum_author_links', '012_collection_insights', '015_remove_post_history']) {
         sqlite.exec(readFileSync(new URL(`../database/migrations/${file}.sql`, import.meta.url), 'utf8'));
     }
     db = new DatabaseService(sqlite); insights = new CollectionInsights(sqlite);
@@ -27,12 +27,11 @@ afterEach(() => db.close());
 describe('collection observations and delivery invariants', () => {
     it('removes retired analysis metadata idempotently while preserving forum data and subscriptions', () => {
         const rule = db.createKeywordSub({ keyword1: 'DMIT' });
-        insights.sync([post(1)], true, now);
-        insights.sample(1, 100, 5, now.toISOString());
+        insights.sync([post(1)], true);
         insights.record({ source: 'rss', startedAt: now.toISOString(), durationMs: 20, status: 'success', received: 1 });
         const tables = ['trade_annotations', 'trade_label_events', 'trade_provider_aliases', 'trade_providers'];
         for (const table of tables) sqlite.exec(`CREATE TABLE ${table}(value TEXT); INSERT INTO ${table} VALUES('legacy label')`);
-        const retained = ['base_config', 'keywords_sub', 'posts', 'hot_metric_hourly', 'collection_runs'];
+        const retained = ['base_config', 'keywords_sub', 'posts', 'collection_runs'];
         const before = retained.map(table => sqlite.query(`SELECT * FROM ${table}`).all());
         const removal = readFileSync(new URL('../database/migrations/014_remove_trade_analysis.sql', import.meta.url), 'utf8');
         sqlite.exec(removal);
@@ -40,27 +39,26 @@ describe('collection observations and delivery invariants', () => {
         expect(sqlite.query("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'trade_%'").all()).toEqual([]);
         expect(retained.map(table => sqlite.query(`SELECT * FROM ${table}`).all())).toEqual(before);
         expect(db.getAllKeywordSubs()[0].id).toBe(rule.id);
-        expect(db.decoratePosts([db.getPostByPostId(1)!])[0]).not.toHaveProperty('tradeInfo');
+        expect(db.getPostsWithPagination(1, 10).posts[0]).not.toHaveProperty('tradeInfo');
     });
-    it('updates meaningful content atomically, preserves dates, records bounded revisions and ignores duplicate entries', () => {
-        expect(insights.sync([post(1), post(1)], true, now)).toEqual({ new: 1, updated: 0, skipped: 1 });
+    it('updates current content atomically without historical writes, preserves dates and ignores duplicate entries', () => {
+        expect(insights.sync([post(1), post(1)], true)).toEqual({ new: 1, updated: 0, skipped: 1 });
         const original = db.getPostByPostId(1)!;
-        expect(insights.sync([{ ...post(1), pub_date: '2026-10-22T07:00:00Z' }], true, now).updated).toBe(0);
-        for (let i = 0; i < 25; i++) insights.sync([post(1, `DMIT 修订 ${i}`)], true, now);
+        expect(insights.sync([{ ...post(1), pub_date: '2026-10-22T07:00:00Z' }], true).updated).toBe(0);
+        for (let i = 0; i < 25; i++) insights.sync([post(1, `DMIT 修订 ${i}`)], true);
         expect(db.getPostByPostId(1)?.pub_date).toBe(original.pub_date);
         expect(db.getPostByPostId(1)?.created_at).toBe(original.created_at);
-        expect(insights.revisions(1)).toHaveLength(20);
-        expect(insights.revisions(1)[0].after.title).toBe('DMIT 修订 24');
-        expect(insights.decorate([post(1)])[0]).toMatchObject({ revision_count: 25, changed_at: now.toISOString() });
+        expect(db.getPostByPostId(1)?.title).toBe('DMIT 修订 24');
+        expect(sqlite.query("SELECT name FROM sqlite_master WHERE name IN ('post_revisions','post_observations','hot_metric_hourly')").all()).toEqual([]);
     });
     it('never requeues sent or dismissed records, but rechecks newly matching edited posts with the exact matcher', async () => {
         const sub = db.createKeywordSub({ keyword1: 'DMIT', keyword2: '补货' });
-        insights.sync([post(1), post(2), post(3, '其他')], true, now);
+        insights.sync([post(1), post(2), post(3, '其他')], true);
         db.updatePostPushStatus(1, 3, sub.id, now.toISOString());
         db.updatePostPushStatus(2, 1, sub.id);
         db.dismissMatchedPost(2);
         db.updatePostPushStatus(3, 2);
-        insights.sync([post(1, 'DMIT 补货更新'), post(2, 'DMIT 补货更新'), post(3, 'dmit 补货')], true, now);
+        insights.sync([post(1, 'DMIT 补货更新'), post(2, 'DMIT 补货更新'), post(3, 'dmit 补货')], true);
         expect(db.getPostByPostId(1)).toMatchObject({ push_status: 3, push_date: now.toISOString(), sub_id: sub.id });
         expect(db.getPostByPostId(2)).toMatchObject({ push_status: 1, match_dismissed: 1 });
         expect(db.getUnpushedPosts().map(p => p.post_id)).toEqual([3]);
@@ -71,7 +69,7 @@ describe('collection observations and delivery invariants', () => {
     });
     it('rejects stale sent copies and overlapping sends before calling Telegram', async () => {
         const sub = db.createKeywordSub({ keyword1: 'DMIT' });
-        insights.sync([post(1)], true, now); db.updatePostPushStatus(1, 1, sub.id);
+        insights.sync([post(1)], true); db.updatePostPushStatus(1, 1, sub.id);
         const stale = db.getPostByPostId(1)!;
         const service = new TelegramPushService(db, '123456:TEST_ONLY');
         let release!: (value: boolean) => void;
@@ -98,7 +96,7 @@ describe('collection observations and delivery invariants', () => {
         } finally { fetch.mockRestore(); }
     });
     it('rate limits persistent backfill, checks exact OP identity and keeps mismatched data unlinked', () => {
-        insights.sync([post(1), post(2)], false, now);
+        insights.sync([post(1), post(2)], false);
         const chosen = insights.nextAuthor(now)!;
         expect(chosen).toBe(2);
         expect(insights.nextAuthor(new Date(now.getTime() + 60000))).toBeUndefined();
@@ -108,27 +106,8 @@ describe('collection observations and delivery invariants', () => {
         expect(db.getPostsWithPagination(1, 10).posts.map(p => p.authorId)).toEqual([42, 42]);
         expect(insights.nextAuthor(new Date(now.getTime() + 8 * 86400000))).toBeUndefined();
     });
-    it('stores the last actual hourly counter, accepts rollbacks and preserves missing hours', () => {
-        insights.sample(1, 100, 5, '2026-10-22T03:05:00.000Z');
-        insights.sample(1, 80, 4, '2026-10-22T03:55:00.000Z');
-        insights.sample(1, 200, 9, '2026-10-22T03:30:00.000Z');
-        insights.sample(1, 110, 8, '2026-10-22T05:00:00.000Z');
-        expect(insights.history(1, 7, now)).toEqual([
-            { bucket: '2026-10-22T03:00:00.000Z', observedAt: '2026-10-22T03:55:00.000Z', views: 80, replies: 4 },
-            { bucket: '2026-10-22T05:00:00.000Z', observedAt: '2026-10-22T05:00:00.000Z', views: 110, replies: 8 },
-        ]);
-    });
-    it('adds recent real samples without extra collection, duplicate hourly points, future samples or lost rollbacks', () => {
-        insights.sample(1, 10, 1, '2026-10-22T02:00:00.000Z');
-        insights.sample(1, 200, 9, '2026-10-22T05:01:00.000Z');
-        sqlite.query('INSERT INTO hot_posts VALUES(?,?,?,?,?,?,?,?,?,?)').run(1, 'test', 'Alice', 'info', '情报', 250, 10, now.toISOString(), now.toISOString(), 0);
-        for (const [stamp, views] of [['2026-10-22T05:01:00.000Z', 200], ['2026-10-22T05:02:00.000Z', 180], ['2026-10-22T07:00:00.000Z', 300]] as const) sqlite.query('INSERT INTO hot_samples VALUES(?,?,?,?)').run(1, stamp, views, 9);
-        const rows = insights.history(1, 7, now) as any[];
-        expect(rows.map(r => r.views)).toEqual([10, 200, 180]);
-        expect(new Set(rows.map(r => r.observedAt)).size).toBe(rows.length);
-    });
     it('permits at most one new unknown author every two minutes while retaining exact-name retry suppression', () => {
-        insights.sync([{ ...post(1), creator: 'Alice' }, { ...post(2), creator: 'Bob' }, { ...post(3), creator: 'Carol' }], false, now);
+        insights.sync([{ ...post(1), creator: 'Alice' }, { ...post(2), creator: 'Bob' }, { ...post(3), creator: 'Carol' }], false);
         expect(insights.nextAuthor(now)).toBe(3);
         expect(insights.nextAuthor(new Date(now.getTime() + 119999))).toBeUndefined();
         expect(insights.nextAuthor(new Date(now.getTime() + 120000))).toBe(2);
@@ -155,12 +134,11 @@ describe('collection observations and delivery invariants', () => {
         expect(insights.quality().recent[0]).toMatchObject({ source: 'identity', status: 'failed', http_status: 429 });
         expect(await service.refresh()).toBe(false);
     });
-    it('rolls back content and history together if a write fails', () => {
-        insights.sync([post(1)], false, now);
+    it('rolls back the content batch if a write fails', () => {
+        insights.sync([post(1)], false);
         sqlite.exec("CREATE TRIGGER reject_update BEFORE UPDATE ON posts BEGIN SELECT RAISE(ABORT,'test write failure'); END");
-        expect(() => insights.sync([post(2), post(1, 'changed')], true, now)).toThrow();
+        expect(() => insights.sync([post(2), post(1, 'changed')], true)).toThrow();
         expect(db.getPostByPostId(2)).toBeNull();
         expect(db.getPostByPostId(1)?.title).toBe('DMIT 补货');
-        expect(insights.revisions(1)).toEqual([]);
     });
 });

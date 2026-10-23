@@ -117,6 +117,8 @@ GET /api/stats/keywords?q=DMIT&compare1=Claude&date=2026-10-20&offset=480&scope=
 
 ## 配置与监控
 
+`GET /api/app-version` 为公开只读接口，返回 `{ "version": "<16 位发布标识>" }`，响应禁止缓存。页面恢复到前台时通过该接口判断是否需要加载新版本，不触发源站采集。
+
 下表均需认证。
 
 | 方法与路径 | 行为 |
@@ -151,12 +153,8 @@ Webhook 使用公网 HTTPS 地址；Polling 与 Webhook 为互斥连接方式。
 
 `200` 为成功，`201` 为新增成功，`400` 为输入不合法，`401` 为认证无效，`404` 为资源不存在，`409` 为功能状态冲突，`413` 为请求过大，`500` 为执行失败，`503` 为依赖服务未就绪。
 
-## 采集分析与历史
+## 采集质量
 
 | 方法与路径 | 认证 | 响应与行为 |
 | --- | --- | --- |
 | `GET /api/collection/quality` | 管理员 | `summary` 为近 24 小时分来源摘要，`recent` 为最近 30 条采集记录，`authors` 为名称覆盖，`retention` 为保留上限；只读本地数据库 |
-| `GET /api/posts/:id/revisions` | 管理员 | 最近 30 天内最多 20 个变更；每条包含 `observedAt`、`before`、`after`，均为内容字段 |
-| `GET /api/posts/:id/activity?days=7` | 公开 | `points` 为近 2 小时逐轮及较早小时真实观察值，含 `bucket`、`observedAt`、`views`、`replies`；`days=30` 查看 30 天，其余值使用 7 天 |
-
-`:id` 为论坛帖子编号。不存在观察记录时返回空数组。公开帖子不返回旧版本内容、变更计数或私有推送字段；认证帖子增加 `changed_at` 和 `revision_count`。保留策略及幂等边界见 [采集与数据质量](docs/collection-insights.md)。

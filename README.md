@@ -122,7 +122,7 @@ RSS 地址、间隔、代理与 Telegram Token、接收账号在设置页管理�
 
 默认 RSS 抓取间隔为 30 秒，订阅匹配与推送在每轮同步后执行。前台页面中，帖子列表每 5 秒更新，热榜与统计图表每 15 秒更新，已提交且展开的关键词分析每 30 秒更新。页面轮询读取本地数据库，不额外触发源站采集；页面不可见时暂停自动更新。刷新周期集中定义于 `src/config/cadence.json`，已保存的 RSS 自定义间隔优先于默认值。
 
-采集质量、身份补全、变更同步、互动历史的定义、保留策略和权限见 [采集与数据质量](docs/collection-insights.md)。
+采集质量、身份补全与当前内容同步的定义、保留策略和权限见 [采集与数据质量](docs/collection-insights.md)。
 
 ## 参考项目与资源
 
@@ -142,8 +142,6 @@ RSS 地址、间隔、代理与 Telegram Token、接收账号在设置页管理�
 | [Reddit 排序源码](https://github.com/reddit-archive/reddit/blob/master/r2/r2/lib/db/_sorts.pyx) · [Arc news](https://github.com/arclanguage/anarki/blob/master/apps/news/news.arc) | 热榜与时间范围榜的算法思路对照；SeekFeed 使用独立的浏览／回复增长权重 |
 | [Lucide](https://lucide.dev/) | 实际使用的功能图标，许可见 [lucide.txt](licenses/lucide.txt)；品牌 S 标识为本项目资源 |
 | [Miniflux](https://github.com/miniflux/v2/blob/main/internal/storage/entry.go) | 条目内容更新与用户状态分离、保留原发布时间 |
-| [changedetection.io](https://github.com/dgtlmoon/changedetection.io/blob/master/changedetectionio/model/Watch.py) | 变更版本、时间记录与历史保留策略 |
-| [GoatCounter](https://github.com/arp242/goatcounter/blob/main/hit_list.go) | 小时聚合与限定时间范围查询；未复用访问量指标 |
 
 参考来源的细节分别记录于 [界面规范](docs/style-guide.md)、[优化记录](docs/OPTIMIZATION.md) 与 [热榜规则](docs/hot-ranking.md)。未采用的主题预览不属于当前界面的实现来源。
 
