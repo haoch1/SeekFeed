@@ -60,10 +60,15 @@ export function heatScore(views: number, replies: number): number {
     return Math.log1p(Math.max(0, views)) + 3 * Math.log1p(Math.max(0, replies));
 }
 
+export function dayStart(timestamp: number): number {
+    const local = new Date(timestamp + 8 * HOUR);
+    return Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) - 8 * HOUR;
+}
+
 export function weekStart(timestamp: number): number {
     const local = new Date(timestamp + 8 * HOUR);
     const daysSinceMonday = (local.getUTCDay() + 6) % 7;
-    return Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() - daysSinceMonday) - 8 * HOUR;
+    return dayStart(timestamp) - daysSinceMonday * 24 * HOUR;
 }
 
 type HotSample = { post_id: number; observed_at: string; views: number; replies: number };
@@ -242,7 +247,9 @@ export class HotService {
         const categories = Array.from(new Map(rows.map(r => [r.category, r.category_label])).entries())
             .map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'));
         const live = period === 'live';
-        const cohortStart = period === 'week' ? weekStart(reference) : reference - 24 * HOUR;
+        // Calendar periods advance at Beijing midnight even when collection is delayed.
+        const cohortStart = live ? reference - 24 * HOUR
+            : period === 'week' ? weekStart(now.getTime()) : dayStart(now.getTime());
         const samples = this.db.query(`SELECT * FROM hot_samples WHERE julianday(observed_at) BETWEEN julianday(?) - 75.0/1440 AND julianday(?) ORDER BY observed_at`)
             .all(new Date(reference).toISOString(), new Date(reference).toISOString()) as HotSample[];
         const histories = new Map<number, typeof samples>();

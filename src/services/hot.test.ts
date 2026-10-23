@@ -1,7 +1,7 @@
 import { beforeEach, afterEach, describe, expect, it } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { readFileSync } from 'node:fs';
-import { HotService, heatScore, weekStart, liveActivity, CollectorUnavailable, parseCollectorFailure } from './hot';
+import { HotService, heatScore, dayStart, weekStart, liveActivity, CollectorUnavailable, parseCollectorFailure } from './hot';
 
 let db: Database;
 const now = new Date('2026-10-20T05:00:00Z');
@@ -203,19 +203,65 @@ describe('independent hot ranking', () => {
         expect(result.heat).toBeGreaterThan(0);
         expect(result.heat).toBeLessThan(heatScore(10,1));
     });
-    it('uses a rolling 24-hour day and the current Beijing calendar week, including Monday and Sunday boundaries', () => {
+    it('starts calendar days and weeks at Beijing midnight independent of the server timezone', () => {
         for (const [instant, expected] of [
-            ['2026-10-18T15:59:59Z','2026-10-11T16:00:00Z'],
+            ['2026-10-19T15:59:59.999Z', '2026-10-18T16:00:00Z'],
+            ['2026-10-19T16:00:00Z', '2026-10-19T16:00:00Z'],
+            ['2026-10-20T00:00:00Z', '2026-10-19T16:00:00Z'],
+            ['2027-01-01T00:00:00+08:00', '2026-12-31T16:00:00Z'],
+            ['2028-02-29T23:59:59+08:00', '2028-02-28T16:00:00Z'],
+            ['2028-03-01T00:00:00+08:00', '2028-02-29T16:00:00Z'],
+        ]) expect(new Date(dayStart(Date.parse(instant))).toISOString()).toBe(new Date(expected).toISOString());
+        for (const [instant, expected] of [
+            ['2026-10-18T15:59:59.999Z','2026-10-11T16:00:00Z'],
             ['2026-10-18T16:00:00Z','2026-10-18T16:00:00Z'],
             ['2026-11-01T15:59:59Z','2026-10-25T16:00:00Z'],
             ['2026-11-01T16:00:00Z','2026-11-01T16:00:00Z'],
+            ['2027-01-01T00:00:00+08:00','2026-12-27T16:00:00Z'],
         ]) expect(new Date(weekStart(Date.parse(instant))).toISOString()).toBe(new Date(expected).toISOString());
+    });
+    it('includes today from 00:00 and this week from Monday 00:00, excluding yesterday and last Sunday', () => {
         const service = new HotService(db);
-        const dates = ['2026-10-19T05:00:00Z','2026-10-19T04:59:59Z','2026-10-18T16:00:00Z','2026-10-18T15:59:59Z','2026-10-20T05:00:01Z'];
+        const dates = ['2026-10-19T16:00:00Z','2026-10-19T15:59:59.999Z','2026-10-18T16:00:00Z','2026-10-18T15:59:59.999Z','2026-10-20T05:00:01Z',now.toISOString()];
         dates.forEach((date,i) => publish(i+1,date));
         service.saveBatch(batch(dates.map((_,i) => post(i+1))),now);
-        expect(service.ranking('day', '', 'heat', now).posts.map(p => p.postId)).toEqual([1]);
-        expect(service.ranking('week', '', 'heat', now).posts.map(p => p.postId)).toEqual([3,2,1]);
+        for (const sort of ['heat', 'views', 'replies'] as const) {
+            expect(service.ranking('day', '', sort, now).posts.map(p => p.postId)).toEqual([6,1]);
+            expect(service.ranking('week', '', sort, now).posts.map(p => p.postId)).toEqual([6,3,2,1]);
+            expect(service.ranking('day', 'tech', sort, now).posts.map(p => p.postId)).toEqual([6,1]);
+        }
+    });
+    it('advances calendar periods during delayed collection and keeps live scores fixed', () => {
+        const service = new HotService(db);
+        const collected = new Date('2026-10-18T15:59:59.999Z'); // Sunday 23:59:59.999 Beijing.
+        publish(1, '2026-10-18T15:50:00Z');
+        service.saveBatch(batch([post(1)], collected), collected);
+        const live = service.ranking('live', '', 'heat', collected);
+        expect(live.posts).toHaveLength(1);
+        expect(service.ranking('day', '', 'heat', collected).posts).toHaveLength(1);
+        expect(service.ranking('week', '', 'heat', collected).posts).toHaveLength(1);
+        for (const current of ['2026-10-18T16:00:00Z', '2026-10-18T16:20:00Z']) {
+            const next = new Date(current);
+            expect(service.ranking('day', '', 'heat', next).posts).toEqual([]);
+            expect(service.ranking('week', '', 'heat', next).posts).toEqual([]);
+            expect(service.ranking('live', '', 'heat', next).posts).toEqual(live.posts);
+        }
+        publish(2, '2026-10-18T16:00:00Z');
+        const resumed = new Date('2026-10-18T16:21:00Z');
+        service.saveBatch(batch([post(1), post(2)], resumed), resumed);
+        expect(service.ranking('day', '', 'heat', resumed).posts.map(p => p.postId)).toEqual([2]);
+        expect(service.ranking('week', '', 'heat', resumed).posts.map(p => p.postId)).toEqual([2]);
+    });
+    it('resets the daily cohort at midnight while retaining the current week', () => {
+        const service = new HotService(db);
+        const collected = new Date('2026-10-20T15:59:59.999Z'); // Tuesday 23:59:59.999 Beijing.
+        publish(1, '2026-10-19T16:00:00Z');
+        publish(2, '2026-10-18T16:00:00Z');
+        service.saveBatch(batch([post(1), post(2)], collected), collected);
+        expect(service.ranking('day', '', 'heat', collected).posts.map(p => p.postId)).toEqual([1]);
+        const next = new Date('2026-10-20T16:00:00Z');
+        expect(service.ranking('day', '', 'heat', next).posts).toEqual([]);
+        expect(service.ranking('week', '', 'heat', next).posts.map(p => p.postId)).toEqual([2,1]);
     });
 
     it('promotes a fresh burst over an equal cooling burst and removes inactive posts without rotating active leaders arbitrarily', () => {
