@@ -3,7 +3,7 @@ import os
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
-from browser import BrowserSession, browser_status, allowed_url
+from browser import BrowserSession, browser_status, allowed_url, public_list_url
 from collect import CollectionError, URLS
 from test_collect import row
 
@@ -16,6 +16,10 @@ class BrowserTests(unittest.TestCase):
                     'https://www.nodeseek.com/?url=http://internal/', 'https://www.nodeseek.com/post-1-2',
                     'https://www.nodeseek.com/post-0-1', 'file:///etc/passwd', 'chrome://settings']:
             self.assertFalse(allowed_url(url))
+        self.assertTrue(public_list_url('https://www.nodeseek.com/page-100?sortBy=postTime'))
+        self.assertFalse(allowed_url('https://www.nodeseek.com/page-100?sortBy=postTime'))
+        self.assertFalse(public_list_url('https://www.nodeseek.com/account'))
+        self.assertFalse(public_list_url('https://www.nodeseek.com/page-100?url=https://evil.test/'))
 
     def test_debugger_host_is_fixed_to_private_endpoint_and_never_exports_cookies(self):
         response = MagicMock()
@@ -32,6 +36,7 @@ class BrowserTests(unittest.TestCase):
     def test_navigation_waits_for_new_document_after_execution_context_is_destroyed(self):
         session = BrowserSession.__new__(BrowserSession)
         session.document = {'status': 200, 'headers': {}}
+        session.frame_id = 'main'
         methods = []
         def call(method, params=None):
             methods.append(method)
@@ -52,14 +57,33 @@ class BrowserTests(unittest.TestCase):
 
     def test_challenge_stops_without_retries_or_automatic_interaction(self):
         session = BrowserSession.__new__(BrowserSession)
+        session.frame_id = 'main'
         session.call = MagicMock(return_value={'loaderId': 'new'})
         def snapshot():
             session.document = {'status': 403, 'headers': {'cf-mitigated': 'challenge'}}
             return {'url': URLS[0], 'title': 'Just a moment...', 'ready': 'complete', 'html': 'PRIVATE'}
         session.snapshot = snapshot
-        with self.assertRaisesRegex(CollectionError, '^verification_required$'):
-            session.get(URLS[0])
+        with self.assertRaisesRegex(CollectionError, '^verification_required$'), patch('browser.time.sleep'):
+            session.get(URLS[0], timeout=0.001)
         self.assertEqual([c.args[0] for c in session.call.call_args_list], ['Network.enable', 'Page.navigate'])
+
+    def test_transient_interstitial_can_finish_within_one_passively_observed_navigation(self):
+        session = BrowserSession.__new__(BrowserSession)
+        session.frame_id = 'main'
+        def call(method, params=None):
+            return {'loaderId': 'challenge'} if method == 'Page.navigate' else {'frameTree': {'frame': {'loaderId': 'actual-document'}}}
+        session.call = MagicMock(side_effect=call)
+        snapshots = iter([{'url': URLS[0], 'title': 'Just a moment...', 'ready': 'complete', 'html': 'challenge'},
+            {'url': URLS[0], 'title': 'NodeSeek', 'ready': 'complete', 'html': row()}])
+        def snapshot():
+            data = next(snapshots)
+            session.document = {'status': 200, 'headers': {}}
+            session.document_loader = 'actual-document'
+            return data
+        session.snapshot = snapshot
+        with patch('browser.time.sleep'):
+            self.assertEqual(session.get(URLS[0]).status_code, 200)
+        self.assertEqual(sum(c.args[0] == 'Page.navigate' for c in session.call.call_args_list), 1)
 
     def test_status_is_read_only_and_requires_a_real_parsable_list(self):
         session = MagicMock()

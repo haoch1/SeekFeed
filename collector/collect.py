@@ -11,10 +11,8 @@ from email.utils import parsedate_to_datetime
 from bs4 import BeautifulSoup
 
 URLS = [
-    'https://www.nodeseek.com/',
+    'https://www.nodeseek.com/?sortBy=replyTime',
     'https://www.nodeseek.com/?sortBy=postTime',
-    'https://www.nodeseek.com/page-2',
-    'https://www.nodeseek.com/page-2?sortBy=postTime',
 ]
 
 class CollectionError(ValueError):
@@ -26,7 +24,7 @@ class CollectionError(ValueError):
 def failure_details(error):
     # Preserve a bounded reason code, never transport messages, URLs or response bodies.
     reason = str(error) if isinstance(error, ValueError) else ''
-    if reason not in ('challenge_or_empty', 'unexpected_markup', 'verification_required', 'browser_unavailable') and not re.fullmatch(r'http_[1-5]\d\d', reason):
+    if reason not in ('challenge_or_empty', 'unexpected_markup', 'unexpected_sort', 'verification_required', 'browser_unavailable') and not re.fullmatch(r'http_[1-5]\d\d', reason):
         code = getattr(error, 'code', None)
         if code == 28:
             reason = 'network_timeout'
@@ -73,11 +71,15 @@ def metric(row, selector, unit):
             return max(0, value - 1) if unit == 'comments' and candidate is not node else value
     return count(node.get_text('', strip=True))
 
-def parse(html):
+def parse(html, expected_sort=None):
     soup = BeautifulSoup(html, 'html.parser')
     rows = soup.select('.post-list-item')
     if not rows:
         raise ValueError('challenge_or_empty')
+    # The default sort can inherit a persistent session preference. A successful
+    # HTTP response alone does not prove that both requested lists were read.
+    if expected_sort and not soup.select_one(f'.sorter [data-sort="{expected_sort}"].selected'):
+        raise ValueError('unexpected_sort')
     posts = []
     for row in rows:
         link = row.select_one('.post-title a')
@@ -137,7 +139,7 @@ def collect(light=False, author_post=None, session_factory=None):
     else:
         session = session_factory()
     posts = {}
-    urls = URLS[:2] if light else URLS
+    urls = URLS
     identity = None
     identity_error = None
     identity_duration = 0
@@ -150,7 +152,8 @@ def collect(light=False, author_post=None, session_factory=None):
                 raise CollectionError('verification_required' if session_factory else 'challenge_or_empty')
             if response.status_code != 200:
                 raise CollectionError('http_' + str(response.status_code), retry_after_seconds(header(response, 'Retry-After')))
-            for post in parse(response.text):
+            expected_sort = 'postTime' if 'sortBy=postTime' in url else 'replyTime'
+            for post in parse(response.text, expected_sort):
                 # A later page can repeat a pinned/bumped row with older cached counts.
                 previous = posts.get(post['postId'])
                 if previous:

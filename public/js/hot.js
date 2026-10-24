@@ -54,7 +54,8 @@ window.SeekFeedHot = (() => {
     sort.options[1].textContent = '浏览量最多';
     sort.options[2].textContent = '回复量最多';
     window.SeekFeedControls.refreshSelects();
-    const freshness = data.updatedAt ? `更新于 ${new Date(data.updatedAt).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'})}` : '等待首次采集';
+    const freshness = (data.updatedAt ? `最近采集 ${new Date(data.updatedAt).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'})}` : '等待首次采集')
+      + (data.period === 'live' ? '' : ' · 基于已收录帖子，计数截至各帖最后采样');
     if (el('hotFreshness').textContent !== freshness) el('hotFreshness').textContent = freshness;
     el('hotError').hidden = !data.error && (!data.stale || !data.updatedAt);
     el('hotError').textContent = data.error || '采集延迟，当前显示上次保存的榜单。';

@@ -114,7 +114,7 @@ bun run start
 | `TRUST_PROXY` | `false` | 可信代理 IP 转发开关，部署要求见 Docker 文档 |
 | `RSS_CHECK_ENABLED` | `true` | RSS 自动监控开关 |
 | `RSS_TIMEOUT` | `30000` | RSS 请求超时，单位毫秒 |
-| `HOT_COLLECT_ENABLED` | Docker 为 `true`，本地未配置时关闭 | 基础间隔 120 秒，第二页每 10 分钟补扫，验证时暂停 |
+| `HOT_COLLECT_ENABLED` | Docker 为 `true`，本地未配置时关闭 | 基础间隔 60 秒，两种排序各取首页，验证时暂停 |
 | `HOT_BROWSER_ENDPOINT`、`HOT_BROWSER_GUI_URL` | 生产 Compose 已配置 | 私有网络中的浏览器 CDP 与人工验证界面地址，不映射公网端口 |
 | `HOT_COLLECTOR_PYTHON` | Docker 已配置，本地 `python3` | 热榜采集 Python 路径 |
 | `TELEGRAM_WEBHOOK_URL` | 未设置 | 可选的公网 HTTPS Webhook 地址 |
@@ -138,12 +138,13 @@ RSS 地址、间隔、代理与 Telegram Token、接收账号在设置页管理�
 | [nodeseek-keywords](https://github.com/n-AChegYag/nodeseek-keywords) | 订阅暂停、发送上限、失败重试及 RSS 异常处理的功能对照 |
 | [nodeseek-rss-telegram-bot](https://github.com/AI-XMLY/nodeseek-rss-telegram-bot) | 组合关键词、排除规则与独立订阅开关的功能对照 |
 | [NodeSeekRSSMonitor](https://github.com/Seameee/NodeSeekRSSMonitor) | 关键词和分类监控、备用源及部署架构调研；未引入其 Workers／D1 架构 |
-| [SeekMate parser](https://github.com/mrzhiin/seekmate/blob/main/lib/parser/parser.ts) | NodeSeek 公开列表的字段语义与置顶标记解析对照 |
+| [SeekMate parser](https://github.com/mrzhiin/seekmate/blob/main/lib/parser/parser.ts) · [分页查询](https://github.com/mrzhiin/seekmate/blob/main/hooks/services/useInfinitePostsQuery.ts) | NodeSeek 公开列表的字段语义、置顶标记、显式排序与分页契约对照 |
 | [DailyHotApi NodeSeek](https://github.com/imsyy/DailyHotApi/blob/master/src/routes/nodeseek.ts) | RSS 动态与热榜数据源能力的边界对照；未使用其热榜接口 |
 | [Reddit 排序源码](https://github.com/reddit-archive/reddit/blob/master/r2/r2/lib/db/_sorts.pyx) · [Arc news](https://github.com/arclanguage/anarki/blob/master/apps/news/news.arc) | 热榜与时间范围榜的算法思路对照；SeekFeed 使用独立的浏览／回复增长权重 |
 | [Lucide](https://lucide.dev/) | 实际使用的功能图标，许可见 [lucide.txt](licenses/lucide.txt)；品牌 S 标识为本项目资源 |
 | [jlesage/docker-chromium](https://github.com/jlesage/docker-chromium) | 实际使用的持久 Chromium 侧车容器；通过受认证的入口提供人工验证 |
 | [Nodyssey 会话架构](https://github.com/5151561/nodyssey/blob/main/docs/architecture.md) | 浏览器保留真实会话、人工验证期间暂停请求、完成后显式恢复的设计对照 |
+| [Scrapy](https://github.com/scrapy/scrapy) · [Discourse TopTopic](https://github.com/discourse/discourse/blob/main/app/models/top_topic.rb) | 分页任务、限速与周期统计覆盖的方案调研；当前未采用深分页巡检，也未引入对应运行时 |
 | [Miniflux](https://github.com/miniflux/v2/blob/main/internal/storage/entry.go) | 条目内容更新与用户状态分离、保留原发布时间 |
 
 参考来源的细节分别记录于 [界面规范](docs/style-guide.md)、[优化记录](docs/OPTIMIZATION.md) 与 [热榜规则](docs/hot-ranking.md)。未采用的主题预览不属于当前界面的实现来源。

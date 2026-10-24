@@ -74,7 +74,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 768M
+          memory: 1280M
           cpus: '0.75'
 
 volumes:

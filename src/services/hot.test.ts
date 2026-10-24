@@ -370,26 +370,25 @@ describe('independent hot ranking', () => {
         expect(await service.refresh()).toBe(false);
     });
 
-    it('paces fast scans, performs a full scan after ten elapsed minutes, and persists the cooldown across restarts', async () => {
+    it('paces fast scans, always reads only first pages, and persists the cooldown across restarts', async () => {
         const modes: boolean[] = [];
         const service = new HotService(db, async full => { modes.push(full); return { ...batch([post(1)], new Date()), pages: full ? 4 : 2 }; });
         for (let i = 0; i < 4; i++) {
             db.query('UPDATE hot_collector_state SET next_attempt_at=NULL,last_attempt_at=NULL WHERE id=1').run();
             expect(await service.refresh()).toBe(true);
             const state = db.query('SELECT next_attempt_at FROM hot_collector_state').get() as any;
-            expect(Date.parse(state.next_attempt_at) - Date.now()).toBeGreaterThan(119000);
-            expect(Date.parse(state.next_attempt_at) - Date.now()).toBeLessThanOrEqual(135000);
-            expect(service.ranking().intervalSeconds).toBe(120);
-            expect(Date.parse(state.next_attempt_at) - Date.now()).toBeLessThanOrEqual(135000);
+            expect(Date.parse(state.next_attempt_at) - Date.now()).toBeGreaterThan(59000);
+            expect(Date.parse(state.next_attempt_at) - Date.now()).toBeLessThanOrEqual(75000);
+            expect(service.ranking().intervalSeconds).toBe(60);
             expect(await service.refresh()).toBe(false);
             const restarted = new HotService(db, async () => { throw new Error('must not collect'); });
             expect(await restarted.refresh()).toBe(false);
         }
-        expect(modes).toEqual([true, false, false, false]);
+        expect(modes).toEqual([false, false, false, false]);
         db.query('UPDATE hot_collector_state SET next_attempt_at=NULL,last_attempt_at=NULL,last_full_at=?').run(new Date(Date.now() - 601000).toISOString());
         const restarted = new HotService(db, async full => { modes.push(full); return { ...batch([post(1)], new Date()), pages: full ? 4 : 2 }; });
         expect(await restarted.refresh()).toBe(true);
-        expect(modes.at(-1)).toBe(true);
+        expect(modes.at(-1)).toBe(false);
     });
 
     it('respects upstream Retry-After and progressively backs off failures even for manual triggers', async () => {
@@ -410,7 +409,7 @@ describe('independent hot ranking', () => {
             db.query('UPDATE hot_collector_state SET failures=0,last_error=NULL,next_attempt_at=NULL,last_attempt_at=NULL WHERE id=1').run();
             let broken = true, calls = 0;
             const service = new HotService(db, async () => { calls++; if (broken) throw failure; return batch([post(1)], new Date()); });
-            for (const seconds of [120, 240, 300, 300]) {
+            for (const seconds of [60, 120, 240, 300]) {
                 db.query('UPDATE hot_collector_state SET next_attempt_at=NULL,last_attempt_at=NULL WHERE id=1').run();
                 expect(await service.refresh()).toBe(false);
                 const state = db.query('SELECT next_attempt_at,last_error FROM hot_collector_state').get() as any;
@@ -439,6 +438,7 @@ describe('independent hot ranking', () => {
     it('accepts only bounded diagnostic codes without exposing subprocess output or transport secrets', () => {
         expect(parseCollectorFailure('{"error":"http_429","retryAfterSeconds":1800}')).toMatchObject({ code: 'http_error', httpStatus: 429, retryAfterSeconds: 1800, transient: false });
         expect(parseCollectorFailure('{"error":"network_timeout"}')).toMatchObject({ code: 'network_timeout', transient: true });
+        expect(parseCollectorFailure('{"error":"unexpected_sort"}')).toMatchObject({ code: 'unexpected_sort', transient: false });
         expect(parseCollectorFailure('', true)).toMatchObject({ code: 'network_timeout', transient: true });
         for (const stderr of ['COOKIE_TOKEN_SECRET', 'null', '{"error":"COOKIE_TOKEN_SECRET","retryAfterSeconds":-1}', 'A'.repeat(16001)]) {
             const failure = parseCollectorFailure(stderr);

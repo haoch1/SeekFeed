@@ -5,12 +5,32 @@ SeekFeed 自行采集 NodeSeek 公开列表，不接入第三方热榜服务。
 ## 采集与存储
 
 - 生产 Compose 使用固定版本的 Chromium 侧车与持久配置卷；Python 通过私有 CDP 连接读取公开列表，不导出浏览器 Cookie，不修改浏览器指纹。未配置浏览器的本地环境可使用原有 HTTP 适配器。
-- 基础间隔为 120 秒，采集最近回复和最新发布的第一页；距离上次成功完整扫描满 10 分钟后，在下一轮补扫两种排序的第二页。首次为完整扫描。完整扫描时间、采集冷却与人工验证暂停状态写入数据库，重启不会重置频率。页面间随机等待 2～3 秒，每轮完成后另加 0～15 秒抖动，实际间隔包含本轮耗时。
-- 单实例不重叠采集。网络超时、连接故障、浏览器不可用及 HTTP 5xx 按 120、240、300、300 秒退避；普通 HTTP 403、429、结构异常及其他错误按 10、20、40、60 分钟退避。遵守更长的 `Retry-After`（最长 24 小时）。明确检测到浏览器验证页时立即暂停，不自动重试或解决验证，保留上次榜单。
+- 基础间隔为 60 秒，仅采集最近回复和最新发布各自的第一页，不执行第二页补扫或深分页巡检。采集冷却与人工验证暂停状态写入数据库，重启不会重置频率。页面间随机等待 2～3 秒，每轮完成后另加 0～15 秒抖动，实际间隔包含本轮耗时。
+- 单实例不重叠采集。网络超时、连接故障、浏览器不可用及 HTTP 5xx 按 60、120、240、300 秒退避；普通 HTTP 403、429、结构异常及其他错误按 10、20、40、60 分钟退避。遵守更长的 `Retry-After`（最长 24 小时）。单次页面加载最多等待 20 秒，仅被动读取页面状态；验证页在等待结束后仍未恢复时暂停，不发起第二次导航、不点击验证或调用解题服务，保留上次榜单。
 - 登录用户通过“RSS 配置 → 热榜采集 → 人工验证”进入同一服务器浏览器。打开入口前暂停采集，进入帖子列表后点击“恢复采集”；服务端确认页面可解析后恢复调度，仍遵守最小采集间隔及源站明确要求的等待时间。入口使用 15 分钟有效、HttpOnly、SameSite=Strict 的路径受限 Cookie，并持续校验原账号会话；退出、到期或重新打开入口后旧连接失效。CDP 与浏览器界面均不直接公开。
 - 采集子进程仅传递经过白名单校验的错误类别与等待时间。页面状态与日志分别显示网络超时、连接异常、HTTP 状态、TLS 校验错误或页面解析异常；不记录 Cookie、响应页面、代理凭据或原始传输异常。
 - `hot_posts` 保存每帖最后一次观察到的计数，30 天未再次观察到的热榜记录自动清理；`hot_samples` 保存最近 2 小时的计数样本，用于计算增长。升级时以已有最后一次计数作为初始基线。原有 RSS 历史和订阅不受影响。
 - 计数优先读取完整数值属性，回复数不包含主帖。未知计数不会写成 0。
+- 两种排序均显式传入 `sortBy=replyTime` 或 `sortBy=postTime`，并核对响应 HTML 中 `.sorter [data-sort].selected` 的实际值。排序缺失或不一致时拒绝整轮写入，不根据默认 URL 推断排序，不因存在持久会话而信任原偏好。
+
+## 覆盖范围审查（2026-10-24）
+
+当前仅采集两种排序各自首页，无法持续刷新整个日榜或周榜。帖子退出所采集列表后，`hot_posts` 中的计数停留在最后观察值；全局采集成功时间不能代表每条记录均已刷新。现阶段的日榜、周榜属于已采集样本内的排行，不能表述为全站完整实时榜。
+
+US-RAK 原始 RSS 检查返回 20 条记录，条目字段为 `title`、`description`、`dc:creator`、`category`、`link`、`pubDate` 和 `guid`，不包含浏览量或回复量。RSS 仅用于内容发现和发布时间确认。
+
+| 参考实现 | 源码核查结果 | 适用边界 |
+| --- | --- | --- |
+| [DailyHotApi NodeSeek](https://github.com/imsyy/DailyHotApi/blob/master/src/routes/nodeseek.ts) | 读取 RSS，`hot` 为 `undefined` | 无法补充互动计数 |
+| [hotToday NodeSeek](https://github.com/datehoer/hotToday/blob/main/nodeseek/nodeseek.py) | 读取首页，`hotScore` 固定为 0 | 无完整日榜、周榜依据 |
+| [SeekMate 分页查询](https://github.com/mrzhiin/seekmate/blob/main/hooks/services/useInfinitePostsQuery.ts) | 显式传入排序，按 `hasNext` 逐页读取 | 可参考真实分页与排序契约 |
+| [Nodyssey 列表解析](https://github.com/5151561/nodyssey/blob/main/shared/src/commonMain/kotlin/io/github/nodyssey/core/html/PostListParser.kt) | 解析每页实际记录、计数及下一页状态 | 不提供第三方完整周榜接口 |
+| [Discourse TopTopic](https://github.com/discourse/discourse/blob/main/app/models/top_topic.rb) · [日榜任务](https://github.com/discourse/discourse/blob/main/app/jobs/scheduled/top_refresh_today.rb) · [较长周期任务](https://github.com/discourse/discourse/blob/main/app/jobs/scheduled/top_refresh_older.rb) | 基于完整站内数据更新周期统计，不同周期采用不同刷新频率 | 可参考覆盖与刷新职责分离；其滚动时间窗口不符合本项目的日历边界要求 |
+| [Scrapy 持久任务](https://github.com/scrapy/scrapy/blob/master/docs/topics/jobs.rst) · [AutoThrottle](https://github.com/scrapy/scrapy/blob/master/scrapy/extensions/throttle.py) | 持久化待采集队列、去重与断点状态，按响应延迟调整请求间隔，错误响应不导致加速 | 可参考低并发分页任务与失败恢复；不能据此保证免于源站风控 |
+
+当前采用首页采样方案，不引入完整范围巡检或复杂任务队列。日榜和周榜仅在已收录、已取得计数的帖子内，按日历发布时间筛选并排序；帖子退出采集列表后继续保留最后观察值，重新出现时更新。界面明确标注该取数范围，不将最近一次采集成功时间表述为所有历史帖子均已更新。
+
+深入分页验证中，第 100 页仍有本周帖子且无下一页，证明单纯遍历主列表也不足以保证覆盖整个日历周。因此不将“增加页数”视为完整周榜保证。
 
 ## 排名
 
@@ -30,7 +50,7 @@ SeekFeed 自行采集 NodeSeek 公开列表，不接入第三方热榜服务。
 
 榜单覆盖已采集的公开帖子，不代表全站完整排行。热度在每次采集成功时计算，页面轮询不重新计算分值。页面每 15 秒静默检查，按帖子 ID 保留节点，仅更新变化的文字和顺序；阅读中保留可见帖子的屏幕位置，更新期间保持已有内容。网页与 Telegram 在正常状态下仅显示更新时间。
 
-降频不调整浏览／回复权重或 15 分钟半衰期。相同持续增长在 60 秒和 120 秒采样下积分结果一致；10 分钟补扫仍处于 15 分钟有效窗口，长时间中断仍按缺测处理。
+采集间隔变化不调整浏览／回复权重或 15 分钟半衰期。相同持续增长在 60 秒和 120 秒采样下积分结果一致；长时间中断仍按缺测处理。
 
 ## 开源实现对照
 

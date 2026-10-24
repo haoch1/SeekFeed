@@ -13,8 +13,7 @@ const postSchema = z.object({
     category: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/), categoryLabel: z.string().min(1).max(50),
     views: metric, replies: metric, lastActiveAt: z.string().datetime({ offset: true }), pinned: z.boolean(),
 });
-// Four existing list pages can contain over 250 distinct rows. Keep a hard bound
-// without rejecting normal batches or adding any upstream requests.
+// Retain the bounded legacy batch contract; the collector reads two first pages.
 const batchSchema = z.object({ posts: z.array(postSchema).min(1).max(500), collectedAt: z.string().datetime({ offset: true }), pages: z.union([z.literal(2), z.literal(4)]) });
 export type HotBatch = z.infer<typeof batchSchema>;
 export type HotPeriod = 'live' | 'day' | 'week';
@@ -23,7 +22,7 @@ const MINUTE = 60000;
 const HOUR = 60 * MINUTE;
 const COLLECT_INTERVAL = cadence.hotCollectIntervalSeconds * 1000;
 
-type CollectorFailureCode = 'collector_error' | 'network_timeout' | 'network_error' | 'tls_error' | 'http_error' | 'challenge_or_empty' | 'unexpected_markup' | 'invalid_output' | 'verification_required' | 'browser_unavailable';
+type CollectorFailureCode = 'collector_error' | 'network_timeout' | 'network_error' | 'tls_error' | 'http_error' | 'challenge_or_empty' | 'unexpected_markup' | 'unexpected_sort' | 'invalid_output' | 'verification_required' | 'browser_unavailable';
 
 export class CollectorUnavailable extends Error {
     constructor(public retryAfterSeconds = 0, public code: CollectorFailureCode = 'collector_error', public httpStatus?: number) {
@@ -35,6 +34,7 @@ export class CollectorUnavailable extends Error {
             collector_error: '采集进程异常', network_timeout: '采集网络超时', network_error: '采集网络连接异常',
             tls_error: '采集 TLS 校验失败', challenge_or_empty: '源站返回验证页或空页面',
             unexpected_markup: '源站页面结构异常', invalid_output: '采集结果校验失败',
+            unexpected_sort: '源站返回的帖子排序与请求不一致',
             verification_required: '需要人工完成浏览器验证，采集已暂停', browser_unavailable: '采集浏览器暂不可用',
         }[this.code];
     }
@@ -52,7 +52,7 @@ export function parseCollectorFailure(stderr: string, timedOut = false): Collect
         const retryAfter = parsedRetry.success ? parsedRetry.data : 0;
         const http = typeof payload.error === 'string' && /^http_[1-5]\d\d$/.test(payload.error) ? Number(payload.error.slice(5)) : undefined;
         if (http) return new CollectorUnavailable(retryAfter, 'http_error', http);
-        const code = z.enum(['network_timeout', 'network_error', 'tls_error', 'challenge_or_empty', 'unexpected_markup', 'verification_required', 'browser_unavailable']).safeParse(payload.error);
+        const code = z.enum(['network_timeout', 'network_error', 'tls_error', 'challenge_or_empty', 'unexpected_markup', 'unexpected_sort', 'verification_required', 'browser_unavailable']).safeParse(payload.error);
         return new CollectorUnavailable(retryAfter, code.success ? code.data : 'collector_error');
     } catch { return new CollectorUnavailable(); }
 }
@@ -169,10 +169,8 @@ export class HotService {
         this.db.query('UPDATE hot_collector_state SET last_attempt_at=?,next_attempt_at=? WHERE id=1')
             .run(new Date().toISOString(), new Date(Date.now() + COLLECT_INTERVAL).toISOString());
         try {
-            const lastFull = this.state().last_full_at;
-            const full = !lastFull || Date.now() - Date.parse(lastFull) >= cadence.hotFullScanIntervalSeconds * 1000;
             const authorPost = insights.nextAuthor();
-            const input: any = await this.collectBatch(full, authorPost);
+            const input: any = await this.collectBatch(false, authorPost);
             this.saveBatch(input);
             insights.record({ source: 'hot', startedAt, durationMs: Date.now() - Date.parse(startedAt), status: 'success',
                 received: input.posts.length, accepted: input.posts.length, pages: input.pages });
@@ -238,8 +236,8 @@ export class HotService {
     collectionStatus() {
         const state = this.state();
         return { configured: Boolean(process.env.HOT_BROWSER_ENDPOINT), enabled: process.env.HOT_COLLECT_ENABLED === 'true', verificationRequired: Boolean(state.verification_required),
-            intervalSeconds: cadence.hotCollectIntervalSeconds, fullScanIntervalSeconds: cadence.hotFullScanIntervalSeconds,
-            lastSuccessAt: state.last_success_at, lastFullAt: state.last_full_at, nextAttemptAt: state.next_attempt_at, busy: Boolean(this.inFlight) };
+            intervalSeconds: cadence.hotCollectIntervalSeconds, pagesPerRound: 2,
+            lastSuccessAt: state.last_success_at, nextAttemptAt: state.next_attempt_at, busy: Boolean(this.inFlight) };
     }
     saveBatch(input: unknown, now = new Date()) {
         const batch = batchSchema.parse(input);

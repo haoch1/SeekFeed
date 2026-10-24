@@ -13,7 +13,23 @@ def row(views='1,234', replies='27', inner='28', title='&lt;script&gt;'):
     <span class="info-comments-count" title="{replies} comments"><span title="{inner} comments">{replies}</span></span>
     <a class="info-last-comment-time"><time datetime="2026-10-20T01:00:00.000Z"></time></a></li>'''
 
+
+def listing(sort, html=None):
+    return f'<div class="sorter"><a data-sort="{sort}" class="selected">排序</a></div>' + (html or row())
+
 class ParserTests(unittest.TestCase):
+    def test_checks_actual_selected_sort_instead_of_trusting_the_url_or_cookie(self):
+        self.assertEqual(len(parse(listing('postTime'), 'postTime')), 1)
+        for html in [row(), listing('replyTime')]:
+            with self.assertRaisesRegex(ValueError, '^unexpected_sort$'):
+                parse(html, 'postTime')
+        session = MagicMock()
+        session.get.return_value = SimpleNamespace(status_code=200, text=listing('postTime'), headers={})
+        with self.assertRaisesRegex(ValueError, '^unexpected_sort$'):
+            collect(light=True, session_factory=lambda: session)
+        session.get.assert_called_once()
+        self.assertEqual(failure_details(ValueError('unexpected_sort'))['error'], 'unexpected_sort')
+
     def test_browser_header_case_preserves_retry_after_and_stops_the_batch(self):
         session = MagicMock()
         session.get.return_value = SimpleNamespace(status_code=429, text='PRIVATE', headers={'retry-after': '1800'})
@@ -35,7 +51,7 @@ class ParserTests(unittest.TestCase):
 
     def test_backfill_uses_one_extra_request_and_does_not_retry_a_denial(self):
         session = MagicMock()
-        session.get.side_effect = [SimpleNamespace(status_code=200, text=row()), SimpleNamespace(status_code=200, text=row()),
+        session.get.side_effect = [SimpleNamespace(status_code=200, text=listing('replyTime')), SimpleNamespace(status_code=200, text=listing('postTime')),
                                    SimpleNamespace(status_code=403, text='private challenge', headers={'Retry-After': '1800'})]
         with patch('curl_cffi.requests.Session', return_value=session), patch('collect.time.sleep'):
             result = collect(light=True, author_post=456)
@@ -90,10 +106,10 @@ class ParserTests(unittest.TestCase):
             self.assertEqual(failure_details(error), {'error': reason, 'retryAfterSeconds': 0})
         self.assertNotIn('SECRET', str(failure_details(ValueError('TOKEN_SECRET'))))
 
-    def test_light_and_full_scan_request_budget(self):
-        for light, pages in [(True, 2), (False, 4)]:
+    def test_collection_always_uses_only_both_first_pages(self):
+        for light, pages in [(True, 2), (False, 2)]:
             session = MagicMock()
-            session.get.return_value = SimpleNamespace(status_code=200, text=row())
+            session.get.side_effect = lambda url, **_: SimpleNamespace(status_code=200, text=listing('postTime' if 'sortBy=postTime' in url else 'replyTime'))
             with patch('curl_cffi.requests.Session', return_value=session), patch('collect.time.sleep') as sleep:
                 result = collect(light)
             self.assertEqual([c.args[0] for c in session.get.call_args_list], URLS[:pages])
