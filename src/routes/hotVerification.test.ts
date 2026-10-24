@@ -15,7 +15,7 @@ let oldEndpoint: string | undefined, oldGui: string | undefined;
 beforeEach(() => {
     oldEndpoint = process.env.HOT_BROWSER_ENDPOINT; oldGui = process.env.HOT_BROWSER_GUI_URL;
     const sqlite = new Database(':memory:');
-    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '009_account_avatar', '011_forum_author_links', '012_collection_insights', '016_hot_browser_collection']) sqlite.exec(readFileSync(new URL(`../database/migrations/${name}.sql`, import.meta.url), 'utf8'));
+    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '009_account_avatar', '011_forum_author_links', '012_collection_insights', '016_hot_browser_collection', '017_hot_collector_control']) sqlite.exec(readFileSync(new URL(`../database/migrations/${name}.sql`, import.meta.url), 'utf8'));
     db = new DatabaseService(sqlite);
     db.getHotService().prepareVerification = async () => true;
     db.createBaseConfig({ username: 'tester', password: 'hash', chat_id: '', stop_push: 0, only_title: 0 });
@@ -52,12 +52,33 @@ describe('private manual verification entry', () => {
         expect(db.getHotService().collectionStatus().verificationRequired).toBe(true);
     });
     it('rejects guests, forged credentials, cross-origin opens and anonymous proxy requests', async () => {
-        for (const path of ['/collection', '/verification', '/verification/resume']) for (const auth of [{}, { Authorization: 'Bearer forged' }]) {
+        for (const path of ['/collection', '/collection/start', '/collection/stop', '/collection/restart', '/verification', '/verification/resume']) for (const auth of [{}, { Authorization: 'Bearer forged' }]) {
             expect((await app.request('/api/hot' + path, { method: path === '/collection' ? 'GET' : 'POST', headers: auth })).status).toBe(401);
         }
         expect((await app.request('/api/hot/verification', { method: 'POST', headers: { ...headers(), Origin: 'https://evil.test' } })).status).toBe(403);
         expect((await app.request('/hot-verification/')).status).toBe(401);
         expect((await app.request('/hot-verification/websockify', { headers: { Origin: 'http://localhost', Upgrade: 'websocket' } })).status).toBe(401);
+    });
+    it('requires same-origin requests for all lifecycle actions and exposes only named actions', async () => {
+        const actions: string[] = [];
+        db.getHotService().controlCollection = async action => { actions.push(action); };
+        for (const action of ['start', 'stop', 'restart']) {
+            for (const origin of ['', 'https://evil.test']) {
+                expect((await app.request('/api/hot/collection/' + action, { method: 'POST', headers: { ...headers(), Origin: origin } })).status).toBe(403);
+            }
+            expect((await app.request('/api/hot/collection/' + action, { method: 'POST', headers: headers() })).status).toBe(200);
+        }
+        expect(actions).toEqual(['start', 'stop', 'restart']);
+    });
+    it('revokes manual entry access after stop and returns lifecycle errors to the user', async () => {
+        const cookie = await open();
+        db.getHotService().controlCollection = async () => {};
+        expect((await app.request('/api/hot/collection/stop', { method: 'POST', headers: headers() })).status).toBe(200);
+        expect((await app.request('/hot-verification/', { headers: { Cookie: cookie } })).status).toBe(401);
+        db.getHotService().controlCollection = async () => { throw new Error('请先完成人工验证，再重启采集'); };
+        const response = await app.request('/api/hot/collection/restart', { method: 'POST', headers: headers() });
+        expect(response.status).toBe(409);
+        expect((await response.json()).message).toContain('人工验证');
     });
     it('issues a restricted expiring cookie, pauses collection, proxies only GUI assets, and honors logout', async () => {
         const response = await app.request('/api/hot/verification', { method: 'POST', headers: headers() });

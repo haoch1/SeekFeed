@@ -79,9 +79,11 @@ API、认证响应禁止共享缓存。客户端不得将私有响应交由 Serv
 
 `day` 按北京时间当天 00:00 起算，`week` 按北京时间本周一 00:00 起算，均包含起点。时间范围随当前日期切换；采集延迟不延长上一日或上一周。仅纳入已确认发布时间且不晚于最近成功采集时刻的帖子。
 
-`GET /api/hot/collection` 返回采集状态、120 秒基础间隔、每轮两种排序各 2 页、上次成功采集时间、人工暂停状态，仅登录可读。
+`GET /api/hot/collection` 返回采集状态、120 秒基础间隔、每轮两种排序各 2 页、上次成功采集时间、人工暂停状态、持久停止状态、浏览器运行状态与验证入口到期时间，仅登录可读。
 
-`POST /api/hot/verification` 需要有效会话与同源 Origin，暂停采集并签发受限验证 Cookie，返回 `/hot-verification/` 入口。采集中返回 `409`。`POST /api/hot/verification/resume` 检查服务器浏览器已进入可解析的帖子列表后恢复，未完成验证返回 `409`。代理入口与 WebSocket 均校验真实账号会话，不接受查询参数中的令牌，不代理 CDP、文件管理或终端。
+`POST /api/hot/collection/start`、`POST /api/hot/collection/stop`、`POST /api/hot/collection/restart` 需要有效会话及同源 Origin。停止会取消当前任务并关闭浏览器容器；启动及重启保留既有冷却与显式限流，未完成人工验证时返回 `409`。重启不会关闭刚完成验证的浏览器。
+
+`POST /api/hot/verification` 需要有效会话与同源 Origin，暂停采集、按需启动浏览器并签发受限验证 Cookie，返回 `/hot-verification/` 入口。采集中返回 `409`。`POST /api/hot/verification/resume` 作为兼容接口，检查服务器浏览器已进入可解析的帖子列表后重启采集，未完成验证返回 `409`。代理入口与 WebSocket 均校验真实账号会话，不接受查询参数中的令牌，不代理 CDP、文件管理或终端。
 
 `POST /api/hot/refresh` 需要认证，遵守采集冷却和异常退避；采集未启用时返回 `409`。页面轮询及访客刷新读取已有缓存。响应中的原始热度用于排序，网页展示乘以 40 后四舍五入的整数。完整定义见 [热榜规则](docs/hot-ranking.md)。
 

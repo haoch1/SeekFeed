@@ -114,7 +114,7 @@ bun run start
 | `TRUST_PROXY` | `false` | 可信代理 IP 转发开关，部署要求见 Docker 文档 |
 | `RSS_CHECK_ENABLED` | `true` | RSS 自动监控开关 |
 | `RSS_TIMEOUT` | `30000` | RSS 请求超时，单位毫秒 |
-| `HOT_COLLECT_ENABLED` | Docker 为 `true`，本地未配置时关闭 | 基础间隔 120 秒，两种排序各取前两页，验证时暂停 |
+| `HOT_COLLECT_ENABLED` | Docker 为 `true`，本地未配置时关闭 | 基础间隔 120 秒，两种排序各取前两页；支持启停，失败时释放浏览器 |
 | `HOT_BROWSER_ENDPOINT`、`HOT_BROWSER_GUI_URL` | 生产 Compose 已配置 | 私有网络中的浏览器 CDP 与人工验证界面地址，不映射公网端口 |
 | `HOT_COLLECTOR_PYTHON` | Docker 已配置，本地 `python3` | 热榜采集 Python 路径 |
 | `TELEGRAM_WEBHOOK_URL` | 未设置 | 可选的公网 HTTPS Webhook 地址 |

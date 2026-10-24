@@ -1,10 +1,11 @@
-/* Read-only collection diagnostics. */
+/* Collection controls and read-only diagnostics. */
 window.SeekFeedInsights = (() => {
     const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
     const num = value => new Intl.NumberFormat('zh-CN').format(value || 0);
     const time = value => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '暂无记录';
     const source = { rss: 'RSS', hot: '热榜', identity: '作者补全' };
     const authHeaders = () => { const token = localStorage.getItem('sessionId'); return token ? { Authorization: `Bearer ${token}` } : {}; };
+    let changing = false;
     async function hotStatus() {
         const state = document.getElementById('hotCollectionState');
         if (!state || state.closest('section').hidden) return;
@@ -13,29 +14,43 @@ window.SeekFeedInsights = (() => {
             const result = await response.json();
             if (!response.ok || !result.success) throw new Error();
             const data = result.data;
-            state.textContent = !data.configured ? '浏览器未配置' : !data.enabled ? '自动采集未启用' : data.verificationRequired ? '等待人工验证 · 已暂停' : data.busy ? '采集中' : '自动采集中';
+            const verifying = data.verificationExpiresAt && Date.parse(data.verificationExpiresAt) > Date.now();
+            const browser = data.browserRunning === false ? ' · 浏览器已关闭' : '';
+            state.textContent = !data.configured ? '浏览器未配置' : data.controlling ? '正在处理' : verifying ? '人工验证中' : data.stopped ? '已停止' + browser :
+                !data.enabled ? '自动采集未启用' : data.verificationRequired ? '等待人工验证' + browser : data.busy ? '采集中' : data.error ? '等待重试' + browser : '自动采集中';
             document.getElementById('hotCollectionSuccess').textContent = time(data.lastSuccessAt);
-            document.getElementById('hotVerificationOpen').disabled = !data.configured || data.busy;
-            document.getElementById('hotVerificationResume').disabled = !data.configured || !data.verificationRequired || data.busy;
+            document.getElementById('hotCollectionStart').disabled = changing || !data.controllable || data.enabled || data.controlling;
+            document.getElementById('hotCollectionStop').disabled = changing || !data.controllable || data.controlling || (data.stopped && data.browserRunning === false);
+            document.getElementById('hotVerificationOpen').disabled = changing || !data.configured || !data.controllable || data.busy;
+            document.getElementById('hotVerificationResume').disabled = changing || !data.controllable || data.controlling || (data.stopped && !verifying);
         } catch { state.textContent = '状态读取失败'; }
     }
     document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('hotCollectionRefresh')?.addEventListener('click', event => window.SeekFeedControls.pending(event.currentTarget, hotStatus));
-        for (const action of ['Open', 'Resume']) document.getElementById('hotVerification' + action)?.addEventListener('click', event => {
+        const controls = [
+            ['hotCollectionStart', '/api/hot/collection/start', '已启动自动采集。'],
+            ['hotCollectionStop', '/api/hot/collection/stop', '采集和浏览器已停止。'],
+            ['hotVerificationResume', '/api/hot/collection/restart', '已重启自动采集。'],
+            ['hotVerificationOpen', '/api/hot/verification', '验证完成并进入帖子列表后，点击重启采集。'],
+        ];
+        for (const [id, path, success] of controls) document.getElementById(id)?.addEventListener('click', event => {
+            if (changing) return;
+            changing = true;
             // Open synchronously so mobile browsers do not block the new window.
-            const popup = action === 'Open' ? window.open('about:blank', '_blank') : null;
+            const popup = id === 'hotVerificationOpen' ? window.open('about:blank', '_blank') : null;
             if (popup) popup.opener = null;
+            for (const [other] of controls) if (other !== id) document.getElementById(other).disabled = true;
             window.SeekFeedControls.pending(event.currentTarget, async () => {
                 const message = document.getElementById('hotVerificationMessage');
                 try {
-                    if (action === 'Open' && !popup) throw new Error('请允许本站打开新窗口后重试。');
-                    const response = await fetch('/api/hot/verification' + (action === 'Resume' ? '/resume' : ''), { method: 'POST', headers: authHeaders(), signal: AbortSignal.timeout(20000) });
+                    if (id === 'hotVerificationOpen' && !popup) throw new Error('请允许本站打开新窗口后重试。');
+                    const response = await fetch(path, { method: 'POST', headers: authHeaders(), signal: AbortSignal.timeout(60000) });
                     const result = await response.json();
                     if (!response.ok || !result.success) throw new Error(result.message || '操作失败，请稍后重试。');
                     if (popup) popup.location.replace(result.data.url);
-                    message.textContent = action === 'Open' ? '采集已暂停。请在新窗口完成验证、进入帖子列表，再点击恢复采集。' : '已恢复自动采集，后续更新仍遵守采集间隔和源站等待时间。';
+                    message.textContent = success;
                 } catch (error) { popup?.close(); message.textContent = error.message || '操作失败，请稍后重试。'; }
-            }).finally(hotStatus);
+            }).finally(() => { changing = false; return hotStatus(); });
         });
     });
     async function quality() {

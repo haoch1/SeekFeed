@@ -11,6 +11,7 @@ services:
       HOT_COLLECT_ENABLED: ${HOT_COLLECT_ENABLED:-true}
       HOT_BROWSER_ENDPOINT: http://seekfeed-browser:9222
       HOT_BROWSER_GUI_URL: http://seekfeed-browser:5800
+      HOT_BROWSER_CONTROL_SOCKET: /run/seekfeed-browser-control/control.sock
       NODE_ENV: production
       PORT: 3010
       HOST: 0.0.0.0
@@ -23,6 +24,11 @@ services:
     volumes:
       - seekfeed_data:/usr/src/app/data
       - seekfeed_logs:/usr/src/app/logs
+      - seekfeed_browser_control:/run/seekfeed-browser-control:ro
+    depends_on:
+      seekfeed-browser-control:
+        condition: service_healthy
+    stop_grace_period: 40s
     networks:
       - seekfeed_network
       - seekfeed_browser
@@ -52,7 +58,7 @@ services:
     restart: unless-stopped
     shm_size: 256m
     environment:
-      CHROMIUM_APP_URL: https://www.nodeseek.com/
+      CHROMIUM_APP_URL: about:blank
       CHROMIUM_REMOTE_DEBUGGING: '1'
       KEEP_APP_RUNNING: '1'
       DISPLAY_WIDTH: '1280'
@@ -77,6 +83,37 @@ services:
           memory: 1280M
           cpus: '0.75'
 
+  seekfeed-browser-control:
+    image: ${SEEKFEED_IMAGE:-ghcr.io/haoch1/seekfeed:latest}
+    container_name: seekfeed-browser-control
+    entrypoint: ["bun", "dist/browser-control.js"]
+    user: root
+    restart: unless-stopped
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 32
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - seekfeed_browser_control:/run/seekfeed-browser-control
+    healthcheck:
+      test: ["CMD", "curl", "-f", "--unix-socket", "/run/seekfeed-browser-control/control.sock", "http://localhost/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: 2m
+        max-file: '2'
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.10'
+
 volumes:
   seekfeed_data:
     name: seekfeed_data
@@ -84,6 +121,8 @@ volumes:
     name: seekfeed_logs
   seekfeed_browser_profile:
     name: seekfeed_browser_profile
+  seekfeed_browser_control:
+    name: seekfeed_browser_control
 
 networks:
   seekfeed_network:

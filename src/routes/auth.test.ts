@@ -22,7 +22,7 @@ const avatar = 'data:image/png;base64,' + readFileSync(new URL('../../public/ico
 
 beforeEach(() => {
     const sqlite = new Database(':memory:');
-    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '009_account_avatar', '010_dismissed_matches', '011_forum_author_links', '012_collection_insights', '016_hot_browser_collection', '014_remove_trade_analysis', '015_remove_post_history']) {
+    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '009_account_avatar', '010_dismissed_matches', '011_forum_author_links', '012_collection_insights', '016_hot_browser_collection', '017_hot_collector_control', '014_remove_trade_analysis', '015_remove_post_history']) {
         sqlite.exec(readFileSync(new URL(`../database/migrations/${name}.sql`, import.meta.url), 'utf8'));
     }
     db = new DatabaseService(sqlite);

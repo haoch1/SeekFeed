@@ -47,7 +47,23 @@ async function authorized(c: Context<{ Variables: ContextVariables }>) {
 // Mounted after the API's requireSession middleware. The cookie is restricted to
 // the browser proxy and is checked against the real account session on every request.
 export const hotVerificationApi = new Hono<{ Variables: ContextVariables }>();
-hotVerificationApi.get('/collection', c => c.json({ success: true, data: c.get('dbService').getHotService().collectionStatus() }));
+hotVerificationApi.get('/collection', async c => {
+    const service = c.get('dbService').getHotService();
+    const browserRunning = await service.browserRunning();
+    return c.json({ success: true, data: { ...service.collectionStatus(), browserRunning } });
+});
+for (const action of ['start', 'stop', 'restart'] as const) hotVerificationApi.post('/collection/' + action, async c => {
+    if (!sameOrigin(c)) return c.json({ success: false, message: '请求来源无效' }, 403);
+    const service = c.get('dbService').getHotService();
+    try {
+        if (action === 'stop') for (const [key, grant] of grants) revoke(key, grant);
+        await service.controlCollection(action);
+        if (action !== 'start') for (const [key, grant] of grants) revoke(key, grant);
+        return c.json({ success: true, data: { ...service.collectionStatus(), browserRunning: await service.browserRunning() } });
+    } catch (error) {
+        return c.json({ success: false, message: error instanceof Error ? error.message : '采集控制失败，请稍后重试' }, 409);
+    }
+});
 hotVerificationApi.post('/verification', async c => {
     if (!guiUrl() || !process.env.HOT_BROWSER_ENDPOINT) return c.json({ success: false, message: '服务器尚未配置采集浏览器' }, 409);
     if (!sameOrigin(c)) return c.json({ success: false, message: '请求来源无效' }, 403);
@@ -67,7 +83,7 @@ hotVerificationApi.post('/verification', async c => {
 hotVerificationApi.post('/verification/resume', async c => {
     if (!sameOrigin(c)) return c.json({ success: false, message: '请求来源无效' }, 403);
     const service = c.get('dbService').getHotService();
-    if (!await service.resumeAfterVerification()) return c.json({ success: false, message: '请先在验证窗口进入帖子列表，再恢复采集' }, 409);
+    if (!await service.resumeAfterVerification()) return c.json({ success: false, message: '请先在验证窗口进入帖子列表，再重启采集' }, 409);
     const sessionId = c.get('sessionData')!.sessionId;
     for (const [key, grant] of grants) if (grant.sessionId === sessionId) revoke(key, grant);
     return c.json({ success: true, data: service.collectionStatus() });

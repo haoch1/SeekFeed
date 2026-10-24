@@ -5,6 +5,8 @@ import { logger } from '../utils/logger';
 import cadence from '../config/cadence.json';
 import { linkForumPosts } from './forumAuthors';
 import { CollectionInsights } from './collectionInsights';
+import { ManagedBrowser } from './browserControl';
+import type { BrowserControl } from './browserControl';
 
 const metric = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const postSchema = z.object({
@@ -132,46 +134,96 @@ export class HotService {
     private running = false;
     private preparingVerification = false;
     private inFlight?: Promise<boolean>;
-    constructor(private db: Database, private collectBatch: (full: boolean, authorPost?: number) => Promise<unknown> = collectWithPython) {}
+    private preparation?: Promise<boolean>;
+    private batchAbort?: AbortController;
+    private controlBusy = false;
+    private controlEpoch = 0;
+    private verificationTimer?: ReturnType<typeof setTimeout>;
+    private controlError: string | null = null;
+    constructor(private db: Database, private collectBatch: (full: boolean, authorPost?: number, signal?: AbortSignal) => Promise<unknown> = collectWithPython,
+        private browser: BrowserControl = new ManagedBrowser()) {}
 
-    start() {
+    async start() {
         if (this.running || process.env.HOT_COLLECT_ENABLED !== 'true') return;
         this.running = true;
-        this.schedule(Math.max(0, Date.parse(this.state().next_attempt_at || '') - Date.now()) || 0);
+        const state = this.state();
+        if (!state.enabled || state.verification_required) {
+            if (state.verification_expires_at && Date.parse(state.verification_expires_at) > Date.now()) this.armVerificationExpiry();
+            else await this.releaseBrowser();
+            return;
+        }
+        this.schedule(Math.max(0, Date.parse(state.next_attempt_at || '') - Date.now()) || 0);
     }
-    stop() { this.running = false; clearTimeout(this.timer); }
+    stop() {
+        this.controlEpoch++;
+        this.running = false; clearTimeout(this.timer); clearTimeout(this.verificationTimer);
+        this.batchAbort?.abort();
+    }
+    async shutdown() {
+        this.stop();
+        await Promise.allSettled([this.inFlight, this.preparation]);
+        await this.releaseBrowser();
+    }
     private schedule(delay: number) {
+        if (!this.running || !this.state().enabled || this.state().verification_required) return;
+        clearTimeout(this.timer);
         this.timer = setTimeout(async () => {
+            this.timer = undefined;
             await this.refresh();
-            if (this.running) this.schedule(this.state().verification_required ? COLLECT_INTERVAL
-                : Math.max(1000, Date.parse(this.state().next_attempt_at || '') - Date.now()) || COLLECT_INTERVAL);
+            if (this.running && !this.timer) this.schedule(Math.max(1000, Date.parse(this.state().next_attempt_at || '') - Date.now()) || COLLECT_INTERVAL);
         }, delay);
+    }
+    private async releaseBrowser() {
+        try { await this.browser.stop(); this.controlError = null; return true; }
+        catch { this.controlError = '浏览器关闭失败，请重试停止采集'; logger.error('热榜浏览器关闭失败'); return false; }
+    }
+    private armVerificationExpiry() {
+        clearTimeout(this.verificationTimer);
+        const expires = Date.parse(this.state().verification_expires_at || '');
+        if (Number.isFinite(expires)) {
+            this.verificationTimer = setTimeout(() => { void this.expireVerification(); }, Math.max(0, expires - Date.now()));
+            this.verificationTimer.unref?.();
+        }
+    }
+    async expireVerification(now = Date.now()) {
+        const expires = Date.parse(this.state().verification_expires_at || '');
+        if (!Number.isFinite(expires) || expires > now || this.preparingVerification || this.controlBusy) return false;
+        this.controlEpoch++;
+        this.db.query('UPDATE hot_collector_state SET verification_expires_at=NULL WHERE id=1').run();
+        return this.releaseBrowser();
     }
     private state() {
         return this.db.query('SELECT * FROM hot_collector_state WHERE id=1').get() as {
             last_attempt_at: string | null; last_success_at: string | null; last_error: string | null;
             failures: number; pages: number; batch_size: number; next_attempt_at: string | null;
             last_full_at: string | null; verification_required: number; retry_after_at: string | null;
+            enabled: number; verification_expires_at: string | null;
         };
     }
     refresh(): Promise<boolean> {
         if (this.inFlight) return this.inFlight;
         const state = this.state();
-        if (state.verification_required) return Promise.resolve(false);
+        if (!state.enabled || state.verification_required || this.controlBusy || this.preparingVerification) return Promise.resolve(false);
         if (state.next_attempt_at && Date.now() < Date.parse(state.next_attempt_at)) return Promise.resolve(false);
         const last = state.last_attempt_at;
         if (last && Date.now() - Date.parse(last) < COLLECT_INTERVAL) return Promise.resolve(false);
-        this.inFlight = this.run().finally(() => { this.inFlight = undefined; });
+        const abort = this.batchAbort = new AbortController();
+        this.inFlight = this.run(abort.signal).finally(() => { this.inFlight = undefined; if (this.batchAbort === abort) this.batchAbort = undefined; });
         return this.inFlight;
     }
-    private async run() {
+    private async run(signal: AbortSignal) {
+        let succeeded = false;
         const startedAt = new Date().toISOString();
         const insights = new CollectionInsights(this.db);
         this.db.query('UPDATE hot_collector_state SET last_attempt_at=?,next_attempt_at=? WHERE id=1')
             .run(new Date().toISOString(), new Date(Date.now() + COLLECT_INTERVAL).toISOString());
         try {
+            try { await this.browser.start(signal); } catch { throw new CollectorUnavailable(0, 'browser_unavailable'); }
+            signal.throwIfAborted();
             const authorPost = insights.nextAuthor();
-            const input: any = await this.collectBatch(false, authorPost);
+            const input: any = await this.collectBatch(false, authorPost, signal);
+            signal.throwIfAborted();
+            if (!this.state().enabled) return false;
             this.saveBatch(input);
             insights.record({ source: 'hot', startedAt, durationMs: Date.now() - Date.parse(startedAt), status: 'success',
                 received: input.posts.length, accepted: input.posts.length, pages: input.pages });
@@ -198,10 +250,12 @@ export class HotService {
             }
             this.db.query('UPDATE hot_collector_state SET next_attempt_at=? WHERE id=1')
                 .run(new Date(Date.now() + Math.max(identityDelay, COLLECT_INTERVAL) + Math.random() * 15 * 1000).toISOString());
+            succeeded = true;
             logger.info('热榜采集完成');
             return true;
         } catch (error) {
             this.db.query("DELETE FROM author_backfill WHERE result='pending'").run();
+            if (signal.aborted || !this.state().enabled) return false;
             const failure = error instanceof CollectorUnavailable ? error : new CollectorUnavailable(0, error instanceof z.ZodError ? 'invalid_output' : 'collector_error');
             const issue = error instanceof z.ZodError ? error.issues[0] : null;
             const validationCode = issue ? `invalid_${issue.path.filter(part => typeof part === 'string').join('_')}`.slice(0, 48).toLowerCase() : undefined;
@@ -213,38 +267,88 @@ export class HotService {
             const delay = Math.max(backoff, retryAfter);
             this.db.query('UPDATE hot_collector_state SET failures=failures+1,last_error=?,next_attempt_at=?,verification_required=?,retry_after_at=? WHERE id=1')
                 .run(`${failure.description}，已保留上次榜单`, new Date(Date.now() + delay).toISOString(),
-                    Number(Boolean(process.env.HOT_BROWSER_ENDPOINT) && failure.code === 'verification_required'), retryAfter ? new Date(Date.now() + retryAfter).toISOString() : null);
+                    Number(Boolean(process.env.HOT_BROWSER_ENDPOINT) && (['verification_required', 'challenge_or_empty'].includes(failure.code) || failure.httpStatus === 403)), retryAfter ? new Date(Date.now() + retryAfter).toISOString() : null);
             logger.warn(`热榜采集失败：${failure.description}${failure.code === 'verification_required' ? '' : `；${Math.ceil(delay / 1000)} 秒后重试`}`);
             return false;
+        } finally {
+            if (!succeeded || signal.aborted || this.state().verification_required || !this.state().enabled) await this.releaseBrowser();
         }
     }
     pauseForVerification() {
-        if (this.inFlight || this.preparingVerification) return false;
+        if (this.inFlight || this.preparingVerification || this.controlBusy) return false;
+        this.controlEpoch++;
         this.db.query('UPDATE hot_collector_state SET verification_required=1 WHERE id=1').run();
         return true;
     }
     async prepareVerification(prepare = prepareBrowserVerification) {
-        if (this.inFlight || this.preparingVerification || !this.state().verification_required) return false;
+        if (this.inFlight || this.preparingVerification || this.controlBusy || !this.state().verification_required) return false;
         this.preparingVerification = true;
-        try { return await prepare(); }
-        finally { this.preparingVerification = false; }
+        clearTimeout(this.verificationTimer);
+        this.db.query('UPDATE hot_collector_state SET verification_expires_at=NULL WHERE id=1').run();
+        const abort = this.batchAbort = new AbortController();
+        this.preparation = (async () => {
+            try {
+                await this.browser.start(abort.signal);
+                if (!await prepare(abort.signal) || abort.signal.aborted) { await this.releaseBrowser(); return false; }
+                this.db.query('UPDATE hot_collector_state SET verification_expires_at=? WHERE id=1').run(new Date(Date.now() + 15 * MINUTE).toISOString());
+                this.armVerificationExpiry();
+                return true;
+            } catch { await this.releaseBrowser(); return false; }
+            finally { this.preparingVerification = false; if (this.batchAbort === abort) this.batchAbort = undefined; }
+        })();
+        return this.preparation;
     }
     async resumeAfterVerification(check = browserStatus) {
-        if (this.inFlight || this.preparingVerification || !this.state().verification_required) return false;
+        if (this.inFlight || this.preparingVerification || this.controlBusy || !this.state().verification_required) return false;
+        const epoch = this.controlEpoch;
         const status = await check();
-        if (!status.ready || this.inFlight || this.preparingVerification || !this.state().verification_required) return false;
+        if (epoch !== this.controlEpoch || !status.ready || this.inFlight || this.preparingVerification || this.controlBusy || !this.state().verification_required) return false;
         const state = this.state();
         const earliest = Math.max(Date.now(), Date.parse(state.last_attempt_at || '') + COLLECT_INTERVAL || 0, Date.parse(state.retry_after_at || '') || 0);
-        this.db.query('UPDATE hot_collector_state SET verification_required=0,failures=0,last_error=NULL,next_attempt_at=? WHERE id=1')
+        this.db.query('UPDATE hot_collector_state SET enabled=1,verification_required=0,verification_expires_at=NULL,failures=0,last_error=NULL,next_attempt_at=? WHERE id=1')
             .run(new Date(earliest).toISOString());
+        clearTimeout(this.verificationTimer);
+        if (process.env.HOT_COLLECT_ENABLED === 'true') this.running = true;
         if (this.running) { clearTimeout(this.timer); this.schedule(Math.max(0, earliest - Date.now())); }
         return true;
     }
+    async controlCollection(action: 'start' | 'stop' | 'restart') {
+        if (!this.browser.configured || process.env.HOT_COLLECT_ENABLED !== 'true') throw new Error('服务器尚未配置采集控制');
+        if (this.controlBusy || (this.preparingVerification && action !== 'stop')) throw new Error('正在处理，请稍后重试');
+        this.controlEpoch++;
+        // A completed manual verification must survive restarting the scheduler.
+        if (action !== 'stop' && this.state().verification_required) {
+            if (this.state().verification_expires_at && await this.resumeAfterVerification()) return;
+            throw new Error('请先完成人工验证，再重启采集');
+        }
+        this.controlBusy = true;
+        try {
+            if (action === 'start' && this.state().enabled) return;
+            clearTimeout(this.timer); clearTimeout(this.verificationTimer);
+            this.batchAbort?.abort();
+            this.db.query('UPDATE hot_collector_state SET enabled=0,verification_expires_at=NULL WHERE id=1').run();
+            await Promise.allSettled([this.inFlight, this.preparation]);
+            if (!await this.releaseBrowser()) throw new Error(this.controlError!);
+            if (action !== 'stop') {
+                const state = this.state();
+                const due = Math.max(Date.now(), Date.parse(state.next_attempt_at || '') || 0, (Date.parse(state.last_attempt_at || '') || 0) + COLLECT_INTERVAL, Date.parse(state.retry_after_at || '') || 0);
+                this.db.query('UPDATE hot_collector_state SET enabled=1,next_attempt_at=? WHERE id=1').run(new Date(due).toISOString());
+                this.running = true;
+                this.schedule(due - Date.now());
+            }
+        } finally { this.controlBusy = false; }
+    }
+    async browserRunning() {
+        try { return await this.browser.status(); } catch { return null; }
+    }
     collectionStatus() {
         const state = this.state();
-        return { configured: Boolean(process.env.HOT_BROWSER_ENDPOINT), enabled: process.env.HOT_COLLECT_ENABLED === 'true', verificationRequired: Boolean(state.verification_required),
+        return { configured: Boolean(process.env.HOT_BROWSER_ENDPOINT), controllable: this.browser.configured,
+            enabled: process.env.HOT_COLLECT_ENABLED === 'true' && Boolean(state.enabled), stopped: !state.enabled,
+            verificationRequired: Boolean(state.verification_required), verificationExpiresAt: state.verification_expires_at,
             intervalSeconds: cadence.hotCollectIntervalSeconds, pagesPerRound: 4,
-            lastSuccessAt: state.last_success_at, nextAttemptAt: state.next_attempt_at, busy: Boolean(this.inFlight) || this.preparingVerification };
+            lastSuccessAt: state.last_success_at, nextAttemptAt: state.next_attempt_at, error: this.controlError || state.last_error,
+            busy: Boolean(this.inFlight) || this.preparingVerification || this.controlBusy, controlling: this.preparingVerification || this.controlBusy };
     }
     saveBatch(input: unknown, now = new Date()) {
         const batch = batchSchema.parse(input);
@@ -320,16 +424,19 @@ export class HotService {
         const warmingUp = live && cold > 0 && ranked.length === 0;
         return { posts: linkForumPosts(this.db, ranked.slice(0, limit), row => ({ postId: row.postId, creator: row.author })), total: ranked.length, categories, period, sort, limit,
             updatedAt: state.last_success_at, stale: !state.last_success_at || now.getTime() - Date.parse(state.last_success_at) > 15 * MINUTE,
-            error: state.last_error, busy: Boolean(this.inFlight), enabled: process.env.HOT_COLLECT_ENABLED === 'true',
+            error: state.last_error, busy: Boolean(this.inFlight), enabled: process.env.HOT_COLLECT_ENABLED === 'true' && Boolean(state.enabled),
             coverage: state.batch_size, pages: state.pages, intervalSeconds: cadence.hotCollectIntervalSeconds, nextAttemptAt: state.next_attempt_at,
             verificationRequired: Boolean(state.verification_required), warmingUp };
     }
 }
 
-async function collectWithPython(full: boolean, authorPost?: number, status = false, prepare = false): Promise<unknown> {
+async function collectWithPython(full: boolean, authorPost?: number, signal?: AbortSignal, status = false, prepare = false): Promise<unknown> {
     const child = Bun.spawn([process.env.HOT_COLLECTOR_PYTHON || 'python3', resolve('collector/collect.py'), ...(prepare ? ['--prepare-verification'] : status ? ['--browser-status'] : []), ...(full ? [] : ['--light']), ...(authorPost ? [`--author-post=${authorPost}`] : [])], {
         stdout: 'pipe', stderr: 'pipe', stdin: 'ignore', env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
     });
+    const cancel = () => { child.kill(); };
+    signal?.addEventListener('abort', cancel, { once: true });
+    if (signal?.aborted) cancel();
     let timedOut = false;
     const timeout = setTimeout(() => { timedOut = true; child.kill(); }, prepare ? 10000 : status ? 15000 : 125000);
     try {
@@ -337,19 +444,19 @@ async function collectWithPython(full: boolean, authorPost?: number, status = fa
         if (exitCode !== 0 || timedOut) throw parseCollectorFailure(errors, timedOut);
         if (output.length > 1_000_000) throw new CollectorUnavailable(0, 'invalid_output');
         try { return JSON.parse(output); } catch { throw new CollectorUnavailable(0, 'invalid_output'); }
-    } finally { clearTimeout(timeout); }
+    } finally { clearTimeout(timeout); signal?.removeEventListener('abort', cancel); }
 }
 
 export async function browserStatus() {
     if (!process.env.HOT_BROWSER_ENDPOINT) return { connected: false, ready: false, verificationRequired: false };
     try {
-        return z.object({ connected: z.boolean(), ready: z.boolean(), verificationRequired: z.boolean() }).parse(await collectWithPython(false, undefined, true));
+        return z.object({ connected: z.boolean(), ready: z.boolean(), verificationRequired: z.boolean() }).parse(await collectWithPython(false, undefined, undefined, true));
     } catch { return { connected: false, ready: false, verificationRequired: false }; }
 }
 
-export async function prepareBrowserVerification() {
+export async function prepareBrowserVerification(signal?: AbortSignal) {
     if (!process.env.HOT_BROWSER_ENDPOINT) return false;
     try {
-        return z.object({ connected: z.literal(true) }).parse(await collectWithPython(false, undefined, false, true)).connected;
+        return z.object({ connected: z.literal(true) }).parse(await collectWithPython(false, undefined, signal, false, true)).connected;
     } catch { return false; }
 }
