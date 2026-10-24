@@ -19,7 +19,8 @@ docker compose -f docker-compose.prod.yml up -d
 | Compose 项目、服务、容器 | `seekfeed` |
 | 生产镜像 | `ghcr.io/haoch1/seekfeed:latest` |
 | 数据卷、日志卷 | `seekfeed_data`、`seekfeed_logs` |
-| 网络 | `seekfeed_network` |
+| 网络 | `seekfeed_network`、`seekfeed_browser` |
+| 浏览器容器／配置卷 | `seekfeed-browser`、`seekfeed_browser_profile` |
 | 数据库 | `/usr/src/app/data/seekfeed.db` |
 | 入口 | `dist/seekfeed.js` |
 
@@ -34,6 +35,10 @@ RSS URL、抓取间隔、代理、Bot Token 与接收账号在网页设置中管
 ```nginx
 location / {
     proxy_pass http://127.0.0.1:3010;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 900s;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-Proto $scheme;
@@ -41,6 +46,14 @@ location / {
 ```
 
 直接暴露应用端口的部署应保持 `TRUST_PROXY=false`。已有会话保留创建时记录的 IP。
+
+## 热榜浏览器与人工验证
+
+生产 Compose 自动运行固定摘要的 Chromium 侧车，限制为 768 MiB 内存、0.75 CPU、256 MiB 共享内存。应用容器保持原有 512 MiB 限制。浏览器通过 `seekfeed_browser` 私有桥接网络连接，不发布 5800、5900 或 9222 端口；禁止将 CDP 直接暴露至公网。浏览器需要正常访问外网，网络不应设为 `internal: true`。
+
+配置与验证状态保存在 `seekfeed_browser_profile`。更新或重建容器时保留该卷；备份须包含应用数据和浏览器配置卷，浏览器配置按私有会话数据保护。首次使用或验证失效后，登录 SeekFeed，在“RSS 配置 → 热榜采集”打开“人工验证”，完成验证进入帖子列表后返回点击“恢复采集”。入口 15 分钟到期后可重新打开，不会自动恢复采集。反向代理必须透传 WebSocket 升级头，且保留原始 Host；入口使用与 SeekFeed 相同的 HTTPS 域名。
+
+`docker-compose.yml` 为源码开发部署，默认保留 HTTP 适配器。需要与生产一致的浏览器部署时，可先构建镜像，再设置 `SEEKFEED_IMAGE=seekfeed:latest` 使用 `docker-compose.prod.yml`。
 
 ## 更新与版本核对
 

@@ -4,6 +4,7 @@ import { DatabaseService } from './services/database';
 import { SchedulerService } from './services/scheduler';
 import { logger } from './utils/logger';
 import { setScheduler } from './services/runtime';
+import { websocket } from 'hono/bun';
 
 process.title = 'SeekFeed';
 
@@ -29,6 +30,7 @@ async function main() {
             port: config!.PORT,
             hostname: config!.HOST,
             fetch: app.fetch,
+            websocket,
         });
 
         logger.server(`服务器运行在: http://${server.hostname}:${server.port}`);

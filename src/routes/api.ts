@@ -23,6 +23,7 @@ import { getEnvConfig } from '../config/env';
 import cadence from '../config/cadence.json';
 import { logger } from '../utils/logger';
 import { getScheduler } from '../services/runtime';
+import { hotVerificationApi } from './hotVerification';
 
 /**
  * 智能构建 Webhook URL，考虑 CDN 代理情况
@@ -211,6 +212,7 @@ apiRoutes.get('/stats/keywords', createQueryValidationMiddleware(keywordAnalytic
 
 // 应用Session中间件到所有后续API路由
 apiRoutes.use('*', requireSession);
+apiRoutes.route('/hot', hotVerificationApi);
 
 apiRoutes.get('/collection/quality', c => c.json(createSuccessResponse(c.get('dbService').getCollectionInsights().quality())));
 

@@ -14,6 +14,15 @@ def row(views='1,234', replies='27', inner='28', title='&lt;script&gt;'):
     <a class="info-last-comment-time"><time datetime="2026-10-20T01:00:00.000Z"></time></a></li>'''
 
 class ParserTests(unittest.TestCase):
+    def test_browser_header_case_preserves_retry_after_and_stops_the_batch(self):
+        session = MagicMock()
+        session.get.return_value = SimpleNamespace(status_code=429, text='PRIVATE', headers={'retry-after': '1800'})
+        with self.assertRaises(CollectionError) as error:
+            collect(light=True, session_factory=lambda: session)
+        self.assertEqual(failure_details(error.exception), {'error': 'http_429', 'retryAfterSeconds': 1800})
+        session.get.assert_called_once()
+        session.close.assert_called_once()
+
     def test_op_config_is_validated_without_confusing_reply_authors(self):
         def page(data):
             return '<script id="temp-script">' + base64.b64encode(json.dumps({'postData': data}).encode()).decode() + '</script>'

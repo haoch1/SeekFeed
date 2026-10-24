@@ -12,7 +12,7 @@
 | 帖子 | RSS 定时采集、手动刷新、包含或容错搜索、分类与作者筛选、分页；最新帖子与命中订阅分别保存筛选条件；命中帖子支持单条删除 |
 | 订阅 | 最多三个关键词组合、正则、作者、分类、屏蔽词；新增、编辑、暂停、恢复与删除 |
 | 统计 | 发帖趋势、分类结构、作者贡献、活跃时段、热门标题词、分类联动和 CSV 导出 |
-| 采集分析 | 作者 ID 渐进补全、采集质量记录、帖子变更同步与版本查看、30 天互动历史、交易标题信息提取 |
+| 采集分析 | 作者 ID 渐进补全、采集质量记录、当前帖子内容同步、持久浏览器会话与人工验证入口 |
 | 作者主页 | 热榜、帖子列表及作者榜支持在新标签页打开已确认的 NodeSeek 用户主页；未确认或存在同名歧义时保留作者文本 |
 | 关键词分析 | 指定日期的发帖数量及占比、1／3／6 小时分布、近七天趋势、最多三个词独立对比、共同命中、分类与作者明细 |
 | Telegram | Bot 绑定、Webhook 或 Polling、持久化待发送队列、失败重试、命令交互及热榜切换 |
@@ -114,7 +114,8 @@ bun run start
 | `TRUST_PROXY` | `false` | 可信代理 IP 转发开关，部署要求见 Docker 文档 |
 | `RSS_CHECK_ENABLED` | `true` | RSS 自动监控开关 |
 | `RSS_TIMEOUT` | `30000` | RSS 请求超时，单位毫秒 |
-| `HOT_COLLECT_ENABLED` | Docker 为 `true`，本地未配置时关闭 | 基础间隔 60 秒，完整扫描每三轮一次，异常时分类退避 |
+| `HOT_COLLECT_ENABLED` | Docker 为 `true`，本地未配置时关闭 | 基础间隔 120 秒，第二页每 10 分钟补扫，验证时暂停 |
+| `HOT_BROWSER_ENDPOINT`、`HOT_BROWSER_GUI_URL` | 生产 Compose 已配置 | 私有网络中的浏览器 CDP 与人工验证界面地址，不映射公网端口 |
 | `HOT_COLLECTOR_PYTHON` | Docker 已配置，本地 `python3` | 热榜采集 Python 路径 |
 | `TELEGRAM_WEBHOOK_URL` | 未设置 | 可选的公网 HTTPS Webhook 地址 |
 
@@ -141,6 +142,8 @@ RSS 地址、间隔、代理与 Telegram Token、接收账号在设置页管理�
 | [DailyHotApi NodeSeek](https://github.com/imsyy/DailyHotApi/blob/master/src/routes/nodeseek.ts) | RSS 动态与热榜数据源能力的边界对照；未使用其热榜接口 |
 | [Reddit 排序源码](https://github.com/reddit-archive/reddit/blob/master/r2/r2/lib/db/_sorts.pyx) · [Arc news](https://github.com/arclanguage/anarki/blob/master/apps/news/news.arc) | 热榜与时间范围榜的算法思路对照；SeekFeed 使用独立的浏览／回复增长权重 |
 | [Lucide](https://lucide.dev/) | 实际使用的功能图标，许可见 [lucide.txt](licenses/lucide.txt)；品牌 S 标识为本项目资源 |
+| [jlesage/docker-chromium](https://github.com/jlesage/docker-chromium) | 实际使用的持久 Chromium 侧车容器；通过受认证的入口提供人工验证 |
+| [Nodyssey 会话架构](https://github.com/5151561/nodyssey/blob/main/docs/architecture.md) | 浏览器保留真实会话、人工验证期间暂停请求、完成后显式恢复的设计对照 |
 | [Miniflux](https://github.com/miniflux/v2/blob/main/internal/storage/entry.go) | 条目内容更新与用户状态分离、保留原发布时间 |
 
 参考来源的细节分别记录于 [界面规范](docs/style-guide.md)、[优化记录](docs/OPTIMIZATION.md) 与 [热榜规则](docs/hot-ranking.md)。未采用的主题预览不属于当前界面的实现来源。

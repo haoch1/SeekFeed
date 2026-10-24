@@ -16,7 +16,7 @@
 .insight-note { font-size: 12px; color: var(--text-secondary); line-height: 1.7; margin: 12px 0; }
 .app-update-notice { position: fixed; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 400; display: flex; align-items: center; gap: 12px; max-width: calc(100% - 32px); padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-card); color: var(--text-primary); box-shadow: var(--shadow-lg); font-size: 12px; }
 @media(max-width:760px) {
-    .collection-card { padding: 18px 16px; }
+    .collection-card { padding: 18px 20px; }
     .insight-summary { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px 12px; margin: 18px 0; }
     .insight-summary > div:nth-child(2) { border: 0; }
     .insight-summary strong { font-size: 21px; margin: 5px 0; }

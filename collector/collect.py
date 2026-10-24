@@ -4,6 +4,7 @@ import base64
 import re
 import random
 import sys
+import os
 import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -25,7 +26,7 @@ class CollectionError(ValueError):
 def failure_details(error):
     # Preserve a bounded reason code, never transport messages, URLs or response bodies.
     reason = str(error) if isinstance(error, ValueError) else ''
-    if reason not in ('challenge_or_empty', 'unexpected_markup') and not re.fullmatch(r'http_[1-5]\d\d', reason):
+    if reason not in ('challenge_or_empty', 'unexpected_markup', 'verification_required', 'browser_unavailable') and not re.fullmatch(r'http_[1-5]\d\d', reason):
         code = getattr(error, 'code', None)
         if code == 28:
             reason = 'network_timeout'
@@ -44,6 +45,10 @@ def retry_after_seconds(value, now=None):
         return min(86400, max(0, int(seconds)))
     except (TypeError, ValueError, OverflowError):
         return 0
+
+
+def header(response, name):
+    return next((value for key, value in getattr(response, 'headers', {}).items() if key.lower() == name.lower()), None)
 
 def count(value):
     text = (value or '').strip().replace(',', '')
@@ -125,9 +130,12 @@ def parse_author(html, post_id):
         raise ValueError('unexpected_markup')
 
 
-def collect(light=False, author_post=None):
-    from curl_cffi import requests
-    session = requests.Session(impersonate='chrome')
+def collect(light=False, author_post=None, session_factory=None):
+    if session_factory is None:
+        from curl_cffi import requests
+        session = requests.Session(impersonate='chrome')
+    else:
+        session = session_factory()
     posts = {}
     urls = URLS[:2] if light else URLS
     identity = None
@@ -138,8 +146,10 @@ def collect(light=False, author_post=None):
             if index:
                 time.sleep(random.uniform(2, 3))
             response = session.get(url, timeout=20)
+            if header(response, 'cf-mitigated') == 'challenge':
+                raise CollectionError('verification_required' if session_factory else 'challenge_or_empty')
             if response.status_code != 200:
-                raise CollectionError('http_' + str(response.status_code), retry_after_seconds(response.headers.get('Retry-After')))
+                raise CollectionError('http_' + str(response.status_code), retry_after_seconds(header(response, 'Retry-After')))
             for post in parse(response.text):
                 # A later page can repeat a pinned/bumped row with older cached counts.
                 previous = posts.get(post['postId'])
@@ -157,7 +167,7 @@ def collect(light=False, author_post=None):
                 try:
                     response = session.get(f'https://www.nodeseek.com/post-{author_post}-1', timeout=20)
                     if response.status_code != 200:
-                        raise CollectionError('http_' + str(response.status_code), retry_after_seconds(response.headers.get('Retry-After')))
+                        raise CollectionError('http_' + str(response.status_code), retry_after_seconds(header(response, 'Retry-After')))
                     identity = parse_author(response.text, author_post)
                 except Exception as error:
                     identity_error = failure_details(error)
@@ -171,7 +181,12 @@ if __name__ == '__main__':
     try:
         argument = next((value.split('=', 1)[1] for value in sys.argv if value.startswith('--author-post=')), '')
         author_post = int(argument) if re.fullmatch(r'[1-9]\d{0,15}', argument) else None
-        print(json.dumps(collect(light='--light' in sys.argv, author_post=author_post), ensure_ascii=False))
+        if os.environ.get('HOT_BROWSER_ENDPOINT'):
+            from browser import BrowserSession, browser_status
+            result = browser_status() if '--browser-status' in sys.argv else collect(light='--light' in sys.argv, author_post=author_post, session_factory=BrowserSession)
+        else:
+            result = collect(light='--light' in sys.argv, author_post=author_post)
+        print(json.dumps(result, ensure_ascii=False))
     except Exception as error:
         # Do not log headers, cookies, response pages or transport exceptions.
         print(json.dumps(failure_details(error)), file=sys.stderr)

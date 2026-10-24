@@ -9,6 +9,8 @@ services:
       - "${SEEKFEED_BIND_ADDRESS:-127.0.0.1}:${PORT:-3010}:3010"
     environment:
       HOT_COLLECT_ENABLED: ${HOT_COLLECT_ENABLED:-true}
+      HOT_BROWSER_ENDPOINT: http://seekfeed-browser:9222
+      HOT_BROWSER_GUI_URL: http://seekfeed-browser:5800
       NODE_ENV: production
       PORT: 3010
       HOST: 0.0.0.0
@@ -23,6 +25,7 @@ services:
       - seekfeed_logs:/usr/src/app/logs
     networks:
       - seekfeed_network
+      - seekfeed_browser
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3010/health"]
       interval: 30s
@@ -43,13 +46,49 @@ services:
           memory: 256M
           cpus: '0.5'
 
+  seekfeed-browser:
+    image: jlesage/chromium:v26.09.2@sha256:e42de7469bce122b8a69d4f62101850ece45c41ed7ed952f2b506f99947093ae
+    container_name: seekfeed-browser
+    restart: unless-stopped
+    shm_size: 256m
+    environment:
+      CHROMIUM_APP_URL: https://www.nodeseek.com/
+      CHROMIUM_REMOTE_DEBUGGING: '1'
+      KEEP_APP_RUNNING: '1'
+      DISPLAY_WIDTH: '1280'
+      DISPLAY_HEIGHT: '900'
+      WEB_AUDIO: '0'
+      WEB_HOST_CLIPBOARD_SYNC: '0'
+      WEB_FILE_MANAGER: '0'
+      WEB_TERMINAL: '0'
+      TZ: Asia/Shanghai
+    volumes:
+      - seekfeed_browser_profile:/config
+    networks:
+      - seekfeed_browser
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '2'
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: '0.75'
+
 volumes:
   seekfeed_data:
     name: seekfeed_data
   seekfeed_logs:
     name: seekfeed_logs
+  seekfeed_browser_profile:
+    name: seekfeed_browser_profile
 
 networks:
   seekfeed_network:
     name: seekfeed_network
+    driver: bridge
+  seekfeed_browser:
+    name: seekfeed_browser
     driver: bridge

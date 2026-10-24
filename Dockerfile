@@ -38,7 +38,7 @@ RUN bun run build
 
 # 生产阶段
 FROM base AS release
-COPY collector/collect.py /usr/src/app/collector/collect.py
+COPY collector/collect.py collector/browser.py /usr/src/app/collector/
 ENV HOT_COLLECTOR_PYTHON=/opt/collector/bin/python
 ENV HOT_COLLECT_ENABLED=true
 

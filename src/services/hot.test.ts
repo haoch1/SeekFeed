@@ -10,7 +10,7 @@ const batch = (posts = [post(1)], date = now) => ({ posts, pages: 4, collectedAt
 const publish = (id: number, date: string) => db.query("INSERT INTO posts(post_id,title,memo,category,creator,pub_date) VALUES(?,'title','','tech','alice',?)").run(id, date);
 beforeEach(() => {
     db = new Database(':memory:');
-    for (const name of ['001_initial', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '011_forum_author_links', '012_collection_insights']) db.exec(readFileSync(new URL(`../database/migrations/${name}.sql`, import.meta.url), 'utf8'));
+    for (const name of ['001_initial', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '011_forum_author_links', '012_collection_insights', '016_hot_browser_collection']) db.exec(readFileSync(new URL(`../database/migrations/${name}.sql`, import.meta.url), 'utf8'));
 });
 afterEach(() => db.close());
 
@@ -310,22 +310,86 @@ describe('independent hot ranking', () => {
         expect(zero).toEqual({ views: 0, replies: 0, active: false });
     });
 
-    it('paces fast scans, performs a full scan every third success, and persists the cooldown across restarts', async () => {
+    it('keeps heat invariant at 60 and 120 seconds, admits ten-minute scans, and excludes outage growth', () => {
+        const history = (step: number) => Array.from({ length: 60 / step + 1 }, (_, i) => ({ post_id: 1,
+            observed_at: new Date(+now - (60 - i * step) * MINUTE).toISOString(), views: i * step * 100, replies: i * step * 5 }));
+        const first = liveActivity(history(1), +now - 3 * HOUR, +now)!;
+        for (const step of [2, 10]) {
+            const value = liveActivity(history(step), +now - 3 * HOUR, +now)!;
+            expect(value.views).toBeCloseTo(first.views, 8);
+            expect(value.replies).toBeCloseTo(first.replies, 8);
+            expect(heatScore(value.views, value.replies)).toBeCloseTo(heatScore(first.views, first.replies), 8);
+            expect(value.active).toBe(true);
+        }
+        publish(1, new Date(+now - 2 * HOUR).toISOString());
+        const service = new HotService(db);
+        for (const minutes of [20, 10, 0]) {
+            const at = new Date(+now - minutes * MINUTE);
+            service.saveBatch(batch([post(1, { views: 2000 - minutes * 50 })], at), at);
+        }
+        expect(service.ranking('live', '', 'heat', now).posts.map(p => p.postId)).toEqual([1]);
+        const gap = [{ post_id: 1, observed_at: new Date(+now - HOUR).toISOString(), views: 10, replies: 0 },
+            { post_id: 1, observed_at: new Date(+now - 2 * MINUTE).toISOString(), views: 99999, replies: 100 },
+            { post_id: 1, observed_at: now.toISOString(), views: 100009, replies: 101 }];
+        const recovered = liveActivity(gap, +now - 3 * HOUR, +now)!;
+        expect(recovered.views).toBeGreaterThan(0);
+        expect(recovered.views).toBeLessThan(10);
+        expect(recovered.replies).toBeLessThan(1);
+    });
+
+    it('pauses on a challenge without retries and resumes only after verified DOM, preserving rate limits', async () => {
+        const previous = process.env.HOT_BROWSER_ENDPOINT;
+        process.env.HOT_BROWSER_ENDPOINT = 'http://browser:9222';
+        try {
+            let calls = 0;
+            const service = new HotService(db, async () => { calls++; throw new CollectorUnavailable(1800, 'verification_required'); });
+            expect(await service.refresh()).toBe(false);
+            expect(service.collectionStatus().verificationRequired).toBe(true);
+            db.query('UPDATE hot_collector_state SET next_attempt_at=NULL,last_attempt_at=NULL').run();
+            expect(await service.refresh()).toBe(false);
+            expect(calls).toBe(1);
+            expect(await service.resumeAfterVerification(async () => ({ connected: true, ready: false, verificationRequired: true }))).toBe(false);
+            const ready = async () => ({ connected: true, ready: true, verificationRequired: false });
+            expect(await service.resumeAfterVerification(ready)).toBe(true);
+            expect(service.collectionStatus().verificationRequired).toBe(false);
+            expect(Date.parse(service.collectionStatus().nextAttemptAt!) - Date.now()).toBeGreaterThan(1799000);
+            expect(await service.refresh()).toBe(false);
+            expect(await service.resumeAfterVerification(ready)).toBe(false);
+        } finally { if (previous === undefined) delete process.env.HOT_BROWSER_ENDPOINT; else process.env.HOT_BROWSER_ENDPOINT = previous; }
+    });
+
+    it('does not allow opening verification while a batch is in flight', async () => {
+        let finish: (value: unknown) => void = () => {};
+        const service = new HotService(db, () => new Promise(resolve => { finish = resolve; }));
+        const current = service.refresh();
+        expect(service.pauseForVerification()).toBe(false);
+        expect(service.collectionStatus().busy).toBe(true);
+        finish(batch([post(1)], new Date()));
+        expect(await current).toBe(true);
+        expect(service.pauseForVerification()).toBe(true);
+        expect(await service.refresh()).toBe(false);
+    });
+
+    it('paces fast scans, performs a full scan after ten elapsed minutes, and persists the cooldown across restarts', async () => {
         const modes: boolean[] = [];
         const service = new HotService(db, async full => { modes.push(full); return { ...batch([post(1)], new Date()), pages: full ? 4 : 2 }; });
         for (let i = 0; i < 4; i++) {
             db.query('UPDATE hot_collector_state SET next_attempt_at=NULL,last_attempt_at=NULL WHERE id=1').run();
             expect(await service.refresh()).toBe(true);
             const state = db.query('SELECT next_attempt_at FROM hot_collector_state').get() as any;
-            expect(Date.parse(state.next_attempt_at) - Date.now()).toBeGreaterThan(59000);
-            expect(Date.parse(state.next_attempt_at) - Date.now()).toBeLessThanOrEqual(75000);
-            expect(service.ranking().intervalSeconds).toBe(60);
+            expect(Date.parse(state.next_attempt_at) - Date.now()).toBeGreaterThan(119000);
+            expect(Date.parse(state.next_attempt_at) - Date.now()).toBeLessThanOrEqual(135000);
+            expect(service.ranking().intervalSeconds).toBe(120);
             expect(Date.parse(state.next_attempt_at) - Date.now()).toBeLessThanOrEqual(135000);
             expect(await service.refresh()).toBe(false);
             const restarted = new HotService(db, async () => { throw new Error('must not collect'); });
             expect(await restarted.refresh()).toBe(false);
         }
-        expect(modes).toEqual([true, false, false, true]);
+        expect(modes).toEqual([true, false, false, false]);
+        db.query('UPDATE hot_collector_state SET next_attempt_at=NULL,last_attempt_at=NULL,last_full_at=?').run(new Date(Date.now() - 601000).toISOString());
+        const restarted = new HotService(db, async full => { modes.push(full); return { ...batch([post(1)], new Date()), pages: full ? 4 : 2 }; });
+        expect(await restarted.refresh()).toBe(true);
+        expect(modes.at(-1)).toBe(true);
     });
 
     it('respects upstream Retry-After and progressively backs off failures even for manual triggers', async () => {
@@ -346,7 +410,7 @@ describe('independent hot ranking', () => {
             db.query('UPDATE hot_collector_state SET failures=0,last_error=NULL,next_attempt_at=NULL,last_attempt_at=NULL WHERE id=1').run();
             let broken = true, calls = 0;
             const service = new HotService(db, async () => { calls++; if (broken) throw failure; return batch([post(1)], new Date()); });
-            for (const seconds of [60, 120, 240, 300]) {
+            for (const seconds of [120, 240, 300, 300]) {
                 db.query('UPDATE hot_collector_state SET next_attempt_at=NULL,last_attempt_at=NULL WHERE id=1').run();
                 expect(await service.refresh()).toBe(false);
                 const state = db.query('SELECT next_attempt_at,last_error FROM hot_collector_state').get() as any;

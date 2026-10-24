@@ -16,7 +16,7 @@ const post = (id: number, title = 'DMIT 补货'): ParsedPost => ({ post_id: id, 
 beforeAll(async () => { await loadEnvConfig(); });
 beforeEach(() => {
     sqlite = new Database(':memory:');
-    for (const file of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '010_dismissed_matches', '011_forum_author_links', '012_collection_insights', '015_remove_post_history']) {
+    for (const file of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '010_dismissed_matches', '011_forum_author_links', '012_collection_insights', '016_hot_browser_collection', '015_remove_post_history']) {
         sqlite.exec(readFileSync(new URL(`../database/migrations/${file}.sql`, import.meta.url), 'utf8'));
     }
     db = new DatabaseService(sqlite); insights = new CollectionInsights(sqlite);
