@@ -93,7 +93,6 @@ services:
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
-    pids_limit: 32
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - seekfeed_browser_control:/run/seekfeed-browser-control
@@ -113,6 +112,7 @@ services:
         limits:
           memory: 64M
           cpus: '0.10'
+          pids: 32
 
 volumes:
   seekfeed_data:
