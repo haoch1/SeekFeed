@@ -48,7 +48,7 @@ async function authorized(c: Context<{ Variables: ContextVariables }>) {
 // the browser proxy and is checked against the real account session on every request.
 export const hotVerificationApi = new Hono<{ Variables: ContextVariables }>();
 hotVerificationApi.get('/collection', c => c.json({ success: true, data: c.get('dbService').getHotService().collectionStatus() }));
-hotVerificationApi.post('/verification', c => {
+hotVerificationApi.post('/verification', async c => {
     if (!guiUrl() || !process.env.HOT_BROWSER_ENDPOINT) return c.json({ success: false, message: '服务器尚未配置采集浏览器' }, 409);
     if (!sameOrigin(c)) return c.json({ success: false, message: '请求来源无效' }, 403);
     const service = c.get('dbService').getHotService();
@@ -57,6 +57,7 @@ hotVerificationApi.post('/verification', c => {
     const sessionId = c.get('sessionData')!.sessionId;
     for (const [key, grant] of grants) if (grant.sessionId === sessionId) revoke(key, grant);
     if (grants.size >= 20) return c.json({ success: false, message: '验证窗口数量已达上限' }, 429);
+    if (!await service.prepareVerification()) return c.json({ success: false, message: '浏览器暂不可用，请稍后重试。' }, 502);
     const key = randomBytes(32).toString('hex');
     grants.set(key, { sessionId, ip: getClientInfo(c).ipAddress, expires: Date.now() + LIFETIME, connections: new Set() });
     setCookie(c, COOKIE, key, { httpOnly: true, secure: new URL(c.req.url).protocol === 'https:' ||

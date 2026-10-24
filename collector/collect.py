@@ -13,6 +13,8 @@ from bs4 import BeautifulSoup
 URLS = [
     'https://www.nodeseek.com/?sortBy=replyTime',
     'https://www.nodeseek.com/?sortBy=postTime',
+    'https://www.nodeseek.com/page-2?sortBy=replyTime',
+    'https://www.nodeseek.com/page-2?sortBy=postTime',
 ]
 
 class CollectionError(ValueError):
@@ -176,7 +178,11 @@ def collect(light=False, author_post=None, session_factory=None):
                     identity_error = failure_details(error)
             identity_duration = round((time.monotonic() - identity_start) * 1000)
     finally:
-        session.close()
+        try:
+            if session_factory:
+                session.park()
+        finally:
+            session.close()
     return {'posts': list(posts.values()), 'collectedAt': datetime.now(timezone.utc).isoformat(), 'pages': len(urls),
             'identity': identity, 'identityError': identity_error, 'identityDurationMs': identity_duration}
 
@@ -185,8 +191,8 @@ if __name__ == '__main__':
         argument = next((value.split('=', 1)[1] for value in sys.argv if value.startswith('--author-post=')), '')
         author_post = int(argument) if re.fullmatch(r'[1-9]\d{0,15}', argument) else None
         if os.environ.get('HOT_BROWSER_ENDPOINT'):
-            from browser import BrowserSession, browser_status
-            result = browser_status() if '--browser-status' in sys.argv else collect(light='--light' in sys.argv, author_post=author_post, session_factory=BrowserSession)
+            from browser import BrowserSession, browser_status, prepare_verification
+            result = prepare_verification() if '--prepare-verification' in sys.argv else browser_status() if '--browser-status' in sys.argv else collect(light='--light' in sys.argv, author_post=author_post, session_factory=BrowserSession)
         else:
             result = collect(light='--light' in sys.argv, author_post=author_post)
         print(json.dumps(result, ensure_ascii=False))

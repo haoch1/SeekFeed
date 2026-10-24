@@ -52,10 +52,11 @@ class ParserTests(unittest.TestCase):
     def test_backfill_uses_one_extra_request_and_does_not_retry_a_denial(self):
         session = MagicMock()
         session.get.side_effect = [SimpleNamespace(status_code=200, text=listing('replyTime')), SimpleNamespace(status_code=200, text=listing('postTime')),
+                                   SimpleNamespace(status_code=200, text=listing('replyTime')), SimpleNamespace(status_code=200, text=listing('postTime')),
                                    SimpleNamespace(status_code=403, text='private challenge', headers={'Retry-After': '1800'})]
         with patch('curl_cffi.requests.Session', return_value=session), patch('collect.time.sleep'):
             result = collect(light=True, author_post=456)
-        self.assertEqual(session.get.call_count, 3)
+        self.assertEqual(session.get.call_count, 5)
         self.assertEqual(session.get.call_args_list[-1].args[0], 'https://www.nodeseek.com/post-456-1')
         self.assertEqual(result['identityError'], {'error': 'http_403', 'retryAfterSeconds': 1800})
         self.assertNotIn('private', json.dumps(result))
@@ -106,17 +107,41 @@ class ParserTests(unittest.TestCase):
             self.assertEqual(failure_details(error), {'error': reason, 'retryAfterSeconds': 0})
         self.assertNotIn('SECRET', str(failure_details(ValueError('TOKEN_SECRET'))))
 
-    def test_collection_always_uses_only_both_first_pages(self):
-        for light, pages in [(True, 2), (False, 2)]:
+    def test_collection_always_reads_first_two_pages_of_both_sorts_and_deduplicates(self):
+        self.assertEqual(URLS, ['https://www.nodeseek.com/?sortBy=replyTime', 'https://www.nodeseek.com/?sortBy=postTime',
+                               'https://www.nodeseek.com/page-2?sortBy=replyTime', 'https://www.nodeseek.com/page-2?sortBy=postTime'])
+        for light, pages in [(True, 4), (False, 4)]:
             session = MagicMock()
             session.get.side_effect = lambda url, **_: SimpleNamespace(status_code=200, text=listing('postTime' if 'sortBy=postTime' in url else 'replyTime'))
             with patch('curl_cffi.requests.Session', return_value=session), patch('collect.time.sleep') as sleep:
                 result = collect(light)
             self.assertEqual([c.args[0] for c in session.get.call_args_list], URLS[:pages])
             self.assertEqual(result['pages'], pages)
+            self.assertEqual(len(result['posts']), 1)
             self.assertEqual(sleep.call_count, pages - 1)
             self.assertTrue(all(2 <= c.args[0] <= 3 for c in sleep.call_args_list))
             session.close.assert_called_once()
+
+    def test_second_page_failure_discards_partial_batch_without_retry(self):
+        session = MagicMock()
+        session.get.side_effect = [SimpleNamespace(status_code=200, text=listing('replyTime')),
+                                   SimpleNamespace(status_code=200, text=listing('postTime')),
+                                   SimpleNamespace(status_code=403, text='private challenge', headers={})]
+        with patch('collect.time.sleep'), self.assertRaisesRegex(CollectionError, '^http_403$'):
+            collect(session_factory=lambda: session)
+        self.assertEqual(session.get.call_count, 3)
+        session.park.assert_called_once()
+        session.close.assert_called_once()
+
+    def test_browser_releases_its_page_after_a_successful_round(self):
+        session = MagicMock()
+        session.get.side_effect = lambda url, **_: SimpleNamespace(status_code=200, text=listing('postTime' if 'sortBy=postTime' in url else 'replyTime'))
+        with patch('collect.time.sleep'):
+            result = collect(session_factory=lambda: session)
+        self.assertEqual(result['pages'], 4)
+        self.assertEqual(session.get.call_count, 4)
+        session.park.assert_called_once()
+        session.close.assert_called_once()
 
     def test_rate_limit_or_challenge_aborts_without_retrying_more_pages(self):
         for status, html in [(429, ''), (403, ''), (200, '<title>Just a moment...</title>')]:

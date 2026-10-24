@@ -13,7 +13,7 @@ const postSchema = z.object({
     category: z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/), categoryLabel: z.string().min(1).max(50),
     views: metric, replies: metric, lastActiveAt: z.string().datetime({ offset: true }), pinned: z.boolean(),
 });
-// Retain the bounded legacy batch contract; the collector reads two first pages.
+// Retain the bounded legacy batch contract; the collector reads the first two pages of each sort.
 const batchSchema = z.object({ posts: z.array(postSchema).min(1).max(500), collectedAt: z.string().datetime({ offset: true }), pages: z.union([z.literal(2), z.literal(4)]) });
 export type HotBatch = z.infer<typeof batchSchema>;
 export type HotPeriod = 'live' | 'day' | 'week';
@@ -130,6 +130,7 @@ export function liveActivity(history: HotSample[], published: number, reference:
 export class HotService {
     private timer?: ReturnType<typeof setTimeout>;
     private running = false;
+    private preparingVerification = false;
     private inFlight?: Promise<boolean>;
     constructor(private db: Database, private collectBatch: (full: boolean, authorPost?: number) => Promise<unknown> = collectWithPython) {}
 
@@ -218,14 +219,20 @@ export class HotService {
         }
     }
     pauseForVerification() {
-        if (this.inFlight) return false;
+        if (this.inFlight || this.preparingVerification) return false;
         this.db.query('UPDATE hot_collector_state SET verification_required=1 WHERE id=1').run();
         return true;
     }
+    async prepareVerification(prepare = prepareBrowserVerification) {
+        if (this.inFlight || this.preparingVerification || !this.state().verification_required) return false;
+        this.preparingVerification = true;
+        try { return await prepare(); }
+        finally { this.preparingVerification = false; }
+    }
     async resumeAfterVerification(check = browserStatus) {
-        if (this.inFlight || !this.state().verification_required) return false;
+        if (this.inFlight || this.preparingVerification || !this.state().verification_required) return false;
         const status = await check();
-        if (!status.ready || this.inFlight || !this.state().verification_required) return false;
+        if (!status.ready || this.inFlight || this.preparingVerification || !this.state().verification_required) return false;
         const state = this.state();
         const earliest = Math.max(Date.now(), Date.parse(state.last_attempt_at || '') + COLLECT_INTERVAL || 0, Date.parse(state.retry_after_at || '') || 0);
         this.db.query('UPDATE hot_collector_state SET verification_required=0,failures=0,last_error=NULL,next_attempt_at=? WHERE id=1')
@@ -236,8 +243,8 @@ export class HotService {
     collectionStatus() {
         const state = this.state();
         return { configured: Boolean(process.env.HOT_BROWSER_ENDPOINT), enabled: process.env.HOT_COLLECT_ENABLED === 'true', verificationRequired: Boolean(state.verification_required),
-            intervalSeconds: cadence.hotCollectIntervalSeconds, pagesPerRound: 2,
-            lastSuccessAt: state.last_success_at, nextAttemptAt: state.next_attempt_at, busy: Boolean(this.inFlight) };
+            intervalSeconds: cadence.hotCollectIntervalSeconds, pagesPerRound: 4,
+            lastSuccessAt: state.last_success_at, nextAttemptAt: state.next_attempt_at, busy: Boolean(this.inFlight) || this.preparingVerification };
     }
     saveBatch(input: unknown, now = new Date()) {
         const batch = batchSchema.parse(input);
@@ -319,12 +326,12 @@ export class HotService {
     }
 }
 
-async function collectWithPython(full: boolean, authorPost?: number, status = false): Promise<unknown> {
-    const child = Bun.spawn([process.env.HOT_COLLECTOR_PYTHON || 'python3', resolve('collector/collect.py'), ...(status ? ['--browser-status'] : []), ...(full ? [] : ['--light']), ...(authorPost ? [`--author-post=${authorPost}`] : [])], {
+async function collectWithPython(full: boolean, authorPost?: number, status = false, prepare = false): Promise<unknown> {
+    const child = Bun.spawn([process.env.HOT_COLLECTOR_PYTHON || 'python3', resolve('collector/collect.py'), ...(prepare ? ['--prepare-verification'] : status ? ['--browser-status'] : []), ...(full ? [] : ['--light']), ...(authorPost ? [`--author-post=${authorPost}`] : [])], {
         stdout: 'pipe', stderr: 'pipe', stdin: 'ignore', env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
     });
     let timedOut = false;
-    const timeout = setTimeout(() => { timedOut = true; child.kill(); }, status ? 15000 : 125000);
+    const timeout = setTimeout(() => { timedOut = true; child.kill(); }, prepare ? 10000 : status ? 15000 : 125000);
     try {
         const [output, errors, exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
         if (exitCode !== 0 || timedOut) throw parseCollectorFailure(errors, timedOut);
@@ -338,4 +345,11 @@ export async function browserStatus() {
     try {
         return z.object({ connected: z.boolean(), ready: z.boolean(), verificationRequired: z.boolean() }).parse(await collectWithPython(false, undefined, true));
     } catch { return { connected: false, ready: false, verificationRequired: false }; }
+}
+
+export async function prepareBrowserVerification() {
+    if (!process.env.HOT_BROWSER_ENDPOINT) return false;
+    try {
+        return z.object({ connected: z.literal(true) }).parse(await collectWithPython(false, undefined, false, true)).connected;
+    } catch { return false; }
 }

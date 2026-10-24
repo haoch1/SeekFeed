@@ -44,6 +44,8 @@ class BrowserSession:
                 pages = json.loads(response.read(MAX_MESSAGE))
             target = next((page for page in pages if page.get('type') == 'page' and (allowed_url(page.get('url', '')) or public_list_url(page.get('url', '')))), None)
             if not target:
+                target = next((page for page in pages if page.get('type') == 'page' and page.get('url') == 'about:blank'), None)
+            if not target:
                 raise CollectionError('browser_unavailable')
             self.frame_id = target.get('id')
             original = urlsplit(target['webSocketDebuggerUrl'])
@@ -83,7 +85,7 @@ class BrowserSession:
         if not isinstance(value, str) or len(value) > MAX_MESSAGE:
             raise CollectionError('browser_unavailable')
         data = json.loads(value)
-        if not allowed_url(data.get('url', '')) and not public_list_url(data.get('url', '')):
+        if data.get('url') != 'about:blank' and not allowed_url(data.get('url', '')) and not public_list_url(data.get('url', '')):
             raise CollectionError('browser_unavailable')
         return data
 
@@ -115,9 +117,29 @@ class BrowserSession:
             frame = self.call('Page.getFrameTree').get('frameTree', {}).get('frame', {})
             loader = self.document_loader or navigation.get('loaderId')
             if data['url'] == url and data['ready'] == 'complete' and self.document and loader and frame.get('loaderId') == loader:
-                return SimpleNamespace(status_code=int(self.document.get('status', 200)), text=data['html'], headers=headers)
+                response = SimpleNamespace(status_code=int(self.document.get('status', 200)), text=data['html'], headers=headers)
+                self.clear_history()
+                return response
             time.sleep(0.25)
+        self.park()
         raise CollectionError('verification_required' if challenged else 'browser_unavailable')
+
+    def clear_history(self):
+        # The collector owns this tab; retain only its current document, not old
+        # list pages in the browser's back/forward cache. Cookies stay intact.
+        try:
+            self.call('Page.resetNavigationHistory')
+        except Exception:
+            pass
+
+    def park(self):
+        # A paused challenge can otherwise keep scripts and renderers alive for
+        # hours. Reopen the public site only when a person opens verification.
+        try:
+            self.call('Page.navigate', {'url': 'about:blank'})
+            self.clear_history()
+        except Exception:
+            pass
 
     def close(self):
         if self.socket:
@@ -130,7 +152,7 @@ def browser_status():
     try:
         data = session.snapshot()
         soup = BeautifulSoup(data['html'], 'html.parser')
-        challenged = data['title'].strip().lower() == 'just a moment...'
+        challenged = data['url'] == 'about:blank' or data['title'].strip().lower() == 'just a moment...'
         ready = False
         if public_list_url(data['url']) and not challenged:
             try:
@@ -138,5 +160,25 @@ def browser_status():
             except ValueError:
                 pass
         return {'connected': True, 'ready': ready, 'verificationRequired': challenged}
+    finally:
+        session.close()
+
+
+def prepare_verification():
+    session = BrowserSession()
+    try:
+        ready = False
+        try:
+            data = session.snapshot()
+            ready = public_list_url(data['url']) and data['title'].strip().lower() != 'just a moment...' and bool(parse(data['html']))
+        except (CollectionError, ValueError):
+            pass
+        if not ready:
+            session.park()
+            session.call('Page.navigate', {'url': 'https://www.nodeseek.com/'})
+        else:
+            session.clear_history()
+        session.call('Page.bringToFront')
+        return {'connected': True}
     finally:
         session.close()

@@ -17,7 +17,7 @@ describe('server rendered workspace', () => {
         expect(html).toContain(`window.SeekFeedCadence = ${JSON.stringify(cadence)};`);
         expect(html.indexOf('window.SeekFeedCadence =')).toBeLessThan(html.indexOf('src="/js/home.js?'));
         expect(html).toContain('默认 30 秒');
-        expect(cadence).toEqual({ rssIntervalSeconds: 30, hotCollectIntervalSeconds: 60, feedRefreshMs: 5000, hotRefreshMs: 15000, analyticsRefreshMs: 15000, keywordRefreshMs: 30000 });
+        expect(cadence).toEqual({ rssIntervalSeconds: 30, hotCollectIntervalSeconds: 120, feedRefreshMs: 5000, hotRefreshMs: 15000, analyticsRefreshMs: 15000, keywordRefreshMs: 30000 });
     });
     it('provides product share metadata without a misleading guest identity on first paint', () => {
         const html = HomePage({ path: '/hot' }).toString();

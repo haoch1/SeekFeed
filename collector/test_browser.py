@@ -3,7 +3,7 @@ import os
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
-from browser import BrowserSession, browser_status, allowed_url, public_list_url
+from browser import BrowserSession, browser_status, prepare_verification, allowed_url, public_list_url
 from collect import CollectionError, URLS
 from test_collect import row
 
@@ -65,7 +65,9 @@ class BrowserTests(unittest.TestCase):
         session.snapshot = snapshot
         with self.assertRaisesRegex(CollectionError, '^verification_required$'), patch('browser.time.sleep'):
             session.get(URLS[0], timeout=0.001)
-        self.assertEqual([c.args[0] for c in session.call.call_args_list], ['Network.enable', 'Page.navigate'])
+        self.assertEqual([c.args[0] for c in session.call.call_args_list], ['Network.enable', 'Page.navigate', 'Page.navigate', 'Page.resetNavigationHistory'])
+        navigations = [c.args[1]['url'] for c in session.call.call_args_list if c.args[0] == 'Page.navigate']
+        self.assertEqual(navigations, [URLS[0], 'about:blank'])
 
     def test_transient_interstitial_can_finish_within_one_passively_observed_navigation(self):
         session = BrowserSession.__new__(BrowserSession)
@@ -95,6 +97,44 @@ class BrowserTests(unittest.TestCase):
             self.assertNotIn('html', result)
         session.get.assert_not_called()
         session.call.assert_not_called()
+
+    def test_manual_entry_recovers_a_crashed_tab_without_touching_cookies(self):
+        session = MagicMock()
+        session.snapshot.side_effect = CollectionError('browser_unavailable')
+        with patch('browser.BrowserSession', return_value=session):
+            self.assertEqual(prepare_verification(), {'connected': True})
+        session.park.assert_called_once()
+        self.assertEqual(session.call.call_args_list[0].args, ('Page.navigate', {'url': 'https://www.nodeseek.com/'}))
+        self.assertEqual(session.call.call_args_list[1].args, ('Page.bringToFront',))
+        session.close.assert_called_once()
+
+    def test_manual_entry_reuses_a_ready_list_without_an_extra_source_request(self):
+        session = MagicMock()
+        session.snapshot.return_value = {'url': URLS[0], 'title': 'NodeSeek', 'html': row()}
+        with patch('browser.BrowserSession', return_value=session):
+            prepare_verification()
+        session.park.assert_not_called()
+        session.clear_history.assert_called_once()
+        session.call.assert_called_once_with('Page.bringToFront')
+
+    def test_parked_tab_is_reconnectable_but_does_not_allow_resume(self):
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = json.dumps([{'type': 'page', 'url': 'about:blank',
+            'webSocketDebuggerUrl': 'ws://browser/devtools/page/PARKED'}]).encode()
+        with patch.dict(os.environ, {'HOT_BROWSER_ENDPOINT': 'http://browser:9222'}), \
+             patch('browser.urllib.request.urlopen', return_value=response), patch('browser.websocket.create_connection'):
+            session = BrowserSession()
+            session.close()
+        session = MagicMock()
+        session.snapshot.return_value = {'url': 'about:blank', 'title': '', 'html': '<html></html>'}
+        with patch('browser.BrowserSession', return_value=session):
+            self.assertEqual(browser_status(), {'connected': True, 'ready': False, 'verificationRequired': True})
+
+    def test_history_cleanup_cannot_discard_a_successful_collection(self):
+        session = BrowserSession.__new__(BrowserSession)
+        session.call = MagicMock(side_effect=TimeoutError('private transport failure'))
+        session.clear_history()
+        session.park()
 
 
 if __name__ == '__main__':

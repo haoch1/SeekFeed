@@ -370,23 +370,40 @@ describe('independent hot ranking', () => {
         expect(await service.refresh()).toBe(false);
     });
 
-    it('paces fast scans, always reads only first pages, and persists the cooldown across restarts', async () => {
+    it('serializes browser preparation and cannot resume or open another entry during recovery', async () => {
+        const service = new HotService(db, async () => { throw new Error('must not collect'); });
+        expect(await service.prepareVerification(async () => true)).toBe(false);
+        expect(service.pauseForVerification()).toBe(true);
+        let finish: (value: boolean) => void = () => {};
+        const preparing = service.prepareVerification(() => new Promise(resolve => { finish = resolve; }));
+        expect(service.collectionStatus().busy).toBe(true);
+        expect(service.pauseForVerification()).toBe(false);
+        expect(await service.prepareVerification(async () => true)).toBe(false);
+        expect(await service.resumeAfterVerification(async () => ({ connected: true, ready: true, verificationRequired: false }))).toBe(false);
+        expect(await service.refresh()).toBe(false);
+        finish(true);
+        expect(await preparing).toBe(true);
+        expect(service.collectionStatus().busy).toBe(false);
+    });
+
+    it('paces four-page scans at 120 seconds and persists the cooldown across restarts', async () => {
         const modes: boolean[] = [];
-        const service = new HotService(db, async full => { modes.push(full); return { ...batch([post(1)], new Date()), pages: full ? 4 : 2 }; });
+        const service = new HotService(db, async full => { modes.push(full); return { ...batch([post(1)], new Date()), pages: 4 }; });
         for (let i = 0; i < 4; i++) {
             db.query('UPDATE hot_collector_state SET next_attempt_at=NULL,last_attempt_at=NULL WHERE id=1').run();
             expect(await service.refresh()).toBe(true);
             const state = db.query('SELECT next_attempt_at FROM hot_collector_state').get() as any;
-            expect(Date.parse(state.next_attempt_at) - Date.now()).toBeGreaterThan(59000);
-            expect(Date.parse(state.next_attempt_at) - Date.now()).toBeLessThanOrEqual(75000);
-            expect(service.ranking().intervalSeconds).toBe(60);
+            expect(Date.parse(state.next_attempt_at) - Date.now()).toBeGreaterThan(119000);
+            expect(Date.parse(state.next_attempt_at) - Date.now()).toBeLessThanOrEqual(135000);
+            expect(service.ranking().intervalSeconds).toBe(120);
+            expect(service.collectionStatus()).toMatchObject({ intervalSeconds: 120, pagesPerRound: 4 });
             expect(await service.refresh()).toBe(false);
             const restarted = new HotService(db, async () => { throw new Error('must not collect'); });
             expect(await restarted.refresh()).toBe(false);
         }
         expect(modes).toEqual([false, false, false, false]);
         db.query('UPDATE hot_collector_state SET next_attempt_at=NULL,last_attempt_at=NULL,last_full_at=?').run(new Date(Date.now() - 601000).toISOString());
-        const restarted = new HotService(db, async full => { modes.push(full); return { ...batch([post(1)], new Date()), pages: full ? 4 : 2 }; });
+        const restarted = new HotService(db, async full => { modes.push(full); return { ...batch([post(1)], new Date()), pages: 4 }; });
         expect(await restarted.refresh()).toBe(true);
         expect(modes.at(-1)).toBe(false);
     });
@@ -409,7 +426,7 @@ describe('independent hot ranking', () => {
             db.query('UPDATE hot_collector_state SET failures=0,last_error=NULL,next_attempt_at=NULL,last_attempt_at=NULL WHERE id=1').run();
             let broken = true, calls = 0;
             const service = new HotService(db, async () => { calls++; if (broken) throw failure; return batch([post(1)], new Date()); });
-            for (const seconds of [60, 120, 240, 300]) {
+            for (const seconds of [120, 240, 300, 300]) {
                 db.query('UPDATE hot_collector_state SET next_attempt_at=NULL,last_attempt_at=NULL WHERE id=1').run();
                 expect(await service.refresh()).toBe(false);
                 const state = db.query('SELECT next_attempt_at,last_error FROM hot_collector_state').get() as any;

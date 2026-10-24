@@ -17,6 +17,7 @@ beforeEach(() => {
     const sqlite = new Database(':memory:');
     for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '009_account_avatar', '011_forum_author_links', '012_collection_insights', '016_hot_browser_collection']) sqlite.exec(readFileSync(new URL(`../database/migrations/${name}.sql`, import.meta.url), 'utf8'));
     db = new DatabaseService(sqlite);
+    db.getHotService().prepareVerification = async () => true;
     db.createBaseConfig({ username: 'tester', password: 'hash', chat_id: '', stop_push: 0, only_title: 0 });
     sessions = new SessionService(db); session = sessions.createSession(1, 'tester').sessionId;
     gui = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch(request, server) {
@@ -43,6 +44,13 @@ async function open() {
     return response.headers.get('Set-Cookie')!.split(';')[0];
 }
 describe('private manual verification entry', () => {
+    it('does not grant an entry when the browser page cannot be prepared', async () => {
+        db.getHotService().prepareVerification = async () => false;
+        const response = await app.request('/api/hot/verification', { method: 'POST', headers: headers() });
+        expect(response.status).toBe(502);
+        expect(response.headers.get('Set-Cookie')).toBeNull();
+        expect(db.getHotService().collectionStatus().verificationRequired).toBe(true);
+    });
     it('rejects guests, forged credentials, cross-origin opens and anonymous proxy requests', async () => {
         for (const path of ['/collection', '/verification', '/verification/resume']) for (const auth of [{}, { Authorization: 'Bearer forged' }]) {
             expect((await app.request('/api/hot' + path, { method: path === '/collection' ? 'GET' : 'POST', headers: auth })).status).toBe(401);
