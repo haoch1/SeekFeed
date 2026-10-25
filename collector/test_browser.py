@@ -136,6 +136,64 @@ class BrowserTests(unittest.TestCase):
         session.clear_history()
         session.park()
 
+    def test_cold_start_new_tab_connects_and_collects_with_one_source_navigation(self):
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = json.dumps([
+            {'type': 'browser_ui', 'url': 'chrome://omnibox-popup.top-chrome/'},
+            {'type': 'page', 'url': 'chrome://newtab/', 'id': 'STARTUP',
+             'webSocketDebuggerUrl': 'ws://localhost/devtools/page/STARTUP'},
+        ]).encode()
+        with patch.dict(os.environ, {'HOT_BROWSER_ENDPOINT': 'http://browser:9222'}), \
+             patch('browser.urllib.request.urlopen', return_value=response), patch('browser.websocket.create_connection'):
+            session = BrowserSession()
+        methods = []
+        def call(method, params=None):
+            methods.append((method, params))
+            if method == 'Runtime.evaluate':
+                session.document = {'status': 200, 'headers': {}}
+                session.document_loader = 'new'
+                return {'result': {'value': json.dumps({'url': URLS[0], 'title': 'NodeSeek',
+                    'ready': 'complete', 'html': row()})}}
+            if method == 'Page.navigate':
+                return {'frameId': 'STARTUP', 'loaderId': 'new'}
+            return {'frameTree': {'frame': {'loaderId': 'new'}}}
+        session.call = call
+        try:
+            self.assertEqual(session.get(URLS[0]).status_code, 200)
+        finally:
+            session.close()
+        self.assertEqual([params['url'] for method, params in methods if method == 'Page.navigate'], [URLS[0]])
+        self.assertFalse(allowed_url('chrome://newtab/'))
+
+    def test_new_tab_snapshot_is_idle_and_does_not_resume_or_request_the_source(self):
+        session = BrowserSession.__new__(BrowserSession)
+        session.call = MagicMock(return_value={'result': {'value': json.dumps({
+            'url': 'chrome://newtab/', 'title': 'New Tab', 'ready': 'complete', 'html': '<html></html>'})}})
+        session.close = MagicMock()
+        with patch('browser.BrowserSession', return_value=session):
+            self.assertEqual(browser_status(), {'connected': True, 'ready': False, 'verificationRequired': True})
+        self.assertEqual([call.args[0] for call in session.call.call_args_list], ['Runtime.evaluate'])
+
+    def test_manual_entry_from_new_tab_navigates_to_the_source_only_once(self):
+        session = MagicMock()
+        session.snapshot.return_value = {'url': 'chrome://newtab/', 'title': 'New Tab', 'html': '<html></html>'}
+        with patch('browser.BrowserSession', return_value=session):
+            self.assertEqual(prepare_verification(), {'connected': True})
+        session.park.assert_called_once()
+        navigations = [call.args[1]['url'] for call in session.call.call_args_list if call.args[0] == 'Page.navigate']
+        self.assertEqual(navigations, ['https://www.nodeseek.com/'])
+
+    def test_unrelated_internal_or_external_tabs_are_never_selected(self):
+        for url in ['chrome://settings/', 'chrome-extension://extension/page.html', 'https://evil.test/']:
+            response = MagicMock()
+            response.__enter__.return_value.read.return_value = json.dumps([{'type': 'page', 'url': url,
+                'webSocketDebuggerUrl': 'ws://localhost/devtools/page/OTHER'}]).encode()
+            with patch.dict(os.environ, {'HOT_BROWSER_ENDPOINT': 'http://browser:9222'}), \
+                 patch('browser.urllib.request.urlopen', return_value=response), patch('browser.websocket.create_connection') as connect:
+                with self.assertRaisesRegex(CollectionError, '^browser_unavailable$'):
+                    BrowserSession()
+                connect.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()

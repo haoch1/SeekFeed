@@ -16,6 +16,9 @@ from bs4 import BeautifulSoup
 from collect import CollectionError, URLS, parse
 
 MAX_MESSAGE = 4_000_000
+# Chromium may restore its built-in new tab instead of the configured blank
+# startup page. Both are idle targets; neither expands allowed source URLs.
+IDLE_URLS = ('about:blank', 'chrome://newtab/')
 
 
 def allowed_url(url):
@@ -44,7 +47,7 @@ class BrowserSession:
                 pages = json.loads(response.read(MAX_MESSAGE))
             target = next((page for page in pages if page.get('type') == 'page' and (allowed_url(page.get('url', '')) or public_list_url(page.get('url', '')))), None)
             if not target:
-                target = next((page for page in pages if page.get('type') == 'page' and page.get('url') == 'about:blank'), None)
+                target = next((page for page in pages if page.get('type') == 'page' and page.get('url') in IDLE_URLS), None)
             if not target:
                 raise CollectionError('browser_unavailable')
             self.frame_id = target.get('id')
@@ -85,7 +88,7 @@ class BrowserSession:
         if not isinstance(value, str) or len(value) > MAX_MESSAGE:
             raise CollectionError('browser_unavailable')
         data = json.loads(value)
-        if data.get('url') != 'about:blank' and not allowed_url(data.get('url', '')) and not public_list_url(data.get('url', '')):
+        if data.get('url') not in IDLE_URLS and not allowed_url(data.get('url', '')) and not public_list_url(data.get('url', '')):
             raise CollectionError('browser_unavailable')
         return data
 
@@ -152,7 +155,7 @@ def browser_status():
     try:
         data = session.snapshot()
         soup = BeautifulSoup(data['html'], 'html.parser')
-        challenged = data['url'] == 'about:blank' or data['title'].strip().lower() == 'just a moment...'
+        challenged = data['url'] in IDLE_URLS or data['title'].strip().lower() == 'just a moment...'
         ready = False
         if public_list_url(data['url']) and not challenged:
             try:
