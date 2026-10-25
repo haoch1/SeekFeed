@@ -8,6 +8,8 @@
 
 测试任务使用 Bun 1.4.3 与 Python 3.12，依次安装锁定依赖、安装采集依赖、运行 Python 单元测试、Bun 测试及生产构建。测试通过后才执行容器构建。
 
+采集器回归测试模拟 CDP、冷启动新标签页及源站响应，不请求 NodeSeek。部署验收先检查镜像提交、应用健康和持久状态；需要真实采集时只验收一轮，保留 120 秒基础间隔、退避和 CF 暂停，避免用连续刷新代替验证。
+
 ```bash
 bun install --frozen-lockfile
 python -m pip install -r collector/requirements.txt
