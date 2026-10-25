@@ -21,7 +21,7 @@ class BrowserTests(unittest.TestCase):
         self.assertFalse(public_list_url('https://www.nodeseek.com/account'))
         self.assertFalse(public_list_url('https://www.nodeseek.com/page-100?url=https://evil.test/'))
 
-    def test_debugger_host_is_fixed_to_private_endpoint_and_never_exports_cookies(self):
+    def test_debugger_host_is_fixed_to_private_endpoint_and_connection_does_not_read_cookies(self):
         response = MagicMock()
         response.__enter__.return_value.read.return_value = json.dumps([{'type': 'page', 'url': URLS[0],
             'webSocketDebuggerUrl': 'ws://evil.test/devtools/page/ABC123'}]).encode()

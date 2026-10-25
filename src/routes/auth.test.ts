@@ -319,7 +319,7 @@ describe('account settings and session expiry', () => {
         for (const limit of [30, 50, 100]) {
             const response = await app.request('/api/hot?limit=' + limit);
             expect(response.status).toBe(200);
-            expect((await response.json()).data.limit).toBe(limit);
+            expect((await response.json()).data.limit).toBe(30);
         }
         expect(JSON.stringify(body)).not.toContain('unused-test-hash');
         for (const query of ['period=month', 'sort=unknown', 'category=%3Cscript%3E', 'limit=10', 'limit=31', 'limit=1000', 'limit=-30', 'limit=NaN', 'limit=30.5']) expect((await app.request('/api/hot?' + query)).status).toBe(400);

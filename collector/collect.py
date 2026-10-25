@@ -26,7 +26,7 @@ class CollectionError(ValueError):
 def failure_details(error):
     # Preserve a bounded reason code, never transport messages, URLs or response bodies.
     reason = str(error) if isinstance(error, ValueError) else ''
-    if reason not in ('challenge_or_empty', 'unexpected_markup', 'unexpected_sort', 'verification_required', 'browser_unavailable') and not re.fullmatch(r'http_[1-5]\d\d', reason):
+    if reason not in ('challenge_or_empty', 'unexpected_markup', 'unexpected_sort', 'verification_required', 'browser_unavailable', 'http_session_unavailable') and not re.fullmatch(r'http_[1-5]\d\d', reason):
         code = getattr(error, 'code', None)
         if code == 28:
             reason = 'network_timeout'
@@ -136,8 +136,8 @@ def parse_author(html, post_id):
 
 def collect(light=False, author_post=None, session_factory=None):
     if session_factory is None:
-        from curl_cffi import requests
-        session = requests.Session(impersonate='chrome')
+        from http_session import create_session
+        session = create_session()
     else:
         session = session_factory()
     posts = {}
@@ -148,10 +148,10 @@ def collect(light=False, author_post=None, session_factory=None):
     try:
         for index, url in enumerate(urls):
             if index:
-                time.sleep(random.uniform(2, 3))
-            response = session.get(url, timeout=20)
+                time.sleep(random.uniform(5, 8))
+            response = session.get(url, timeout=20, allow_redirects=False)
             if header(response, 'cf-mitigated') == 'challenge':
-                raise CollectionError('verification_required' if session_factory else 'challenge_or_empty')
+                raise CollectionError('verification_required' if session_factory else 'challenge_or_empty', retry_after_seconds(header(response, 'Retry-After')))
             if response.status_code != 200:
                 raise CollectionError('http_' + str(response.status_code), retry_after_seconds(header(response, 'Retry-After')))
             expected_sort = 'postTime' if 'sortBy=postTime' in url else 'replyTime'
@@ -168,9 +168,11 @@ def collect(light=False, author_post=None, session_factory=None):
             if known and known.get('authorId'):
                 identity = {'postId': author_post, 'creator': known['author'], 'authorId': known['authorId']}
             else:
-                time.sleep(random.uniform(2, 3))
+                time.sleep(random.uniform(5, 8))
                 try:
-                    response = session.get(f'https://www.nodeseek.com/post-{author_post}-1', timeout=20)
+                    response = session.get(f'https://www.nodeseek.com/post-{author_post}-1', timeout=20, allow_redirects=False)
+                    if header(response, 'cf-mitigated') == 'challenge':
+                        raise CollectionError('verification_required', retry_after_seconds(header(response, 'Retry-After')))
                     if response.status_code != 200:
                         raise CollectionError('http_' + str(response.status_code), retry_after_seconds(header(response, 'Retry-After')))
                     identity = parse_author(response.text, author_post)
@@ -183,6 +185,9 @@ def collect(light=False, author_post=None, session_factory=None):
                 session.park()
         finally:
             session.close()
+    if session_factory is None:
+        from http_session import persist_session
+        persist_session(session)
     return {'posts': list(posts.values()), 'collectedAt': datetime.now(timezone.utc).isoformat(), 'pages': len(urls),
             'identity': identity, 'identityError': identity_error, 'identityDurationMs': identity_duration}
 
@@ -190,9 +195,9 @@ if __name__ == '__main__':
     try:
         argument = next((value.split('=', 1)[1] for value in sys.argv if value.startswith('--author-post=')), '')
         author_post = int(argument) if re.fullmatch(r'[1-9]\d{0,15}', argument) else None
-        if os.environ.get('HOT_BROWSER_ENDPOINT'):
-            from browser import BrowserSession, browser_status, prepare_verification
-            result = prepare_verification() if '--prepare-verification' in sys.argv else browser_status() if '--browser-status' in sys.argv else collect(light='--light' in sys.argv, author_post=author_post, session_factory=BrowserSession)
+        if '--prepare-verification' in sys.argv or '--browser-status' in sys.argv or '--save-http-session' in sys.argv:
+            from browser import browser_status, prepare_verification, save_http_session
+            result = prepare_verification() if '--prepare-verification' in sys.argv else save_http_session() if '--save-http-session' in sys.argv else browser_status()
         else:
             result = collect(light='--light' in sys.argv, author_post=author_post)
         print(json.dumps(result, ensure_ascii=False))

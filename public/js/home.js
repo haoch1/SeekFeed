@@ -1410,7 +1410,12 @@ document.addEventListener("DOMContentLoaded", function () {
     updateStats();
     loadFilterSubscriptions();
     updateMonitor();
-    const liveTick = () => { if (!document.hidden) { updateMonitor(true); updateStats(true); refreshFeed(); analytics.tick(); } };
+    let lastStatusRefresh = Date.now();
+    const liveTick = () => {
+      if (document.hidden) return;
+      if (Date.now() - lastStatusRefresh >= 60000) { lastStatusRefresh = Date.now(); updateMonitor(true); updateStats(true); }
+      refreshFeed(); analytics.tick();
+    };
     setInterval(liveTick, window.SeekFeedCadence.feedRefreshMs);
     document.addEventListener('visibilitychange', liveTick);
   }

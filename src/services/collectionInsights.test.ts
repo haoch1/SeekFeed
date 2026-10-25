@@ -106,12 +106,12 @@ describe('collection observations and delivery invariants', () => {
         expect(db.getPostsWithPagination(1, 10).posts.map(p => p.authorId)).toEqual([42, 42]);
         expect(insights.nextAuthor(new Date(now.getTime() + 8 * 86400000))).toBeUndefined();
     });
-    it('permits at most one new unknown author every two minutes while retaining exact-name retry suppression', () => {
+    it('permits at most one historical author lookup every thirty minutes while retaining exact-name retry suppression', () => {
         insights.sync([{ ...post(1), creator: 'Alice' }, { ...post(2), creator: 'Bob' }, { ...post(3), creator: 'Carol' }], false);
         expect(insights.nextAuthor(now)).toBe(3);
-        expect(insights.nextAuthor(new Date(now.getTime() + 119999))).toBeUndefined();
-        expect(insights.nextAuthor(new Date(now.getTime() + 120000))).toBe(2);
-        expect(insights.nextAuthor(new Date(now.getTime() + 180000))).toBeUndefined();
+        expect(insights.nextAuthor(new Date(now.getTime() + 1799999))).toBeUndefined();
+        expect(insights.nextAuthor(new Date(now.getTime() + 1800000))).toBe(2);
+        expect(insights.nextAuthor(new Date(now.getTime() + 1800001))).toBeUndefined();
     });
     it('never stores raw error messages or secrets in diagnostic codes', () => {
         insights.record({ source: 'rss', startedAt: new Date().toISOString(), durationMs: 10, status: 'failed', errorCode: 'https://user:secret@example.com' });

@@ -32,7 +32,7 @@ body.is-overlay-open { position: fixed; top: var(--overlay-scroll-top); left: 0;
     #hotCategoryTrigger { order: 0; }
     #hotSortTrigger { order: 1; }
     .hot-filters #hotRefresh { order: 2; width: 44px; padding: 0; min-height: 44px; }
-    .hot-filters #hotRefresh span, #hotLimitTrigger { display: none; }
+    .hot-filters #hotRefresh span { display: none; }
     .heading-actions { display: flex; width: auto; gap: 6px; }
     .heading-actions > .btn { padding-inline: 9px; gap: 6px; }
     .heading-actions .manage-subscriptions { width: 44px; padding: 0; }

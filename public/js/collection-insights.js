@@ -12,7 +12,7 @@ window.SeekFeedInsights = (() => {
         if (!primary || !stop) return;
         const data = collectionState;
         if (!data) { primary.disabled = true; stop.hidden = true; return; }
-        const verifying = data.verificationRequired && Date.parse(data.verificationExpiresAt || '') > Date.now();
+        const verifying = data.verificationRequired && data.browserRunning !== false && Date.parse(data.verificationExpiresAt || '') > Date.now();
         const action = data.verificationRequired ? (verifying ? 'restart' : 'verify') :
             data.stopped && data.browserRunning !== true ? 'start' : 'stop';
         const available = data.configured && data.controllable;
@@ -20,14 +20,14 @@ window.SeekFeedInsights = (() => {
         if (!primary.hasAttribute('aria-busy')) primary.textContent = { start: '启动采集', stop: '停止采集', verify: '人工验证', restart: '验证完成，继续采集' }[action];
         primary.classList.toggle('btn-primary', action !== 'stop');
         primary.classList.toggle('btn-secondary', action === 'stop');
-        primary.disabled = !available || pending.size > 0 || (action !== 'stop' && data.busy);
+        primary.disabled = !available || pending.size > 0 || (action !== 'stop' && data.busy) || (action === 'verify' && data.verificationAvailable === false);
         stop.hidden = action === 'stop' || !(pending.has(primary) || (data.verificationRequired &&
             (data.controlling || !data.stopped || data.browserRunning !== false)));
         stop.disabled = !available || pending.has(stop);
         if (returnFocus && stop.hidden && !primary.disabled) { primary.focus({ preventScroll: true }); returnFocus = false; }
         document.getElementById('hotVerificationMessage').textContent = feedback || (!available ? '服务器尚未配置采集控制。' :
             verifying ? '在验证窗口进入帖子列表后继续；验证窗口有效期 15 分钟。' :
-            data.verificationRequired ? '需要完成人工验证后才能继续采集。' : '采集按设定频率自动运行，停止后保留会话与榜单。');
+            data.verificationRequired ? (data.verificationAvailable === false ? '服务器未配置人工验证入口。' : '需要完成人工验证后才能继续 HTTP 采集。') : '日常通过 HTTP 采集，浏览器仅在人工验证时启动。');
     }
     async function hotStatus() {
         const state = document.getElementById('hotCollectionState');
@@ -39,9 +39,9 @@ window.SeekFeedInsights = (() => {
             if (!response.ok || !result.success) throw new Error();
             if (revision !== statusRevision || action !== actionRevision) return;
             const data = collectionState = result.data;
-            const verifying = data.verificationExpiresAt && Date.parse(data.verificationExpiresAt) > Date.now();
+            const verifying = data.verificationRequired && data.browserRunning !== false && data.verificationExpiresAt && Date.parse(data.verificationExpiresAt) > Date.now();
             const browser = data.browserRunning === false ? ' · 浏览器已关闭' : '';
-            state.textContent = !data.configured ? '浏览器未配置' : data.controlling ? '正在处理' : verifying ? '人工验证中' :
+            state.textContent = !data.configured ? 'HTTP 采集未启用' : data.controlling ? '正在处理' : verifying ? '人工验证中' :
                 data.verificationRequired ? '等待人工验证' + browser : data.stopped ? '已停止' + browser :
                 !data.enabled ? '自动采集未启用' : data.busy ? '采集中' : data.error ? '等待重试' + browser : '自动采集中';
             document.getElementById('hotCollectionSuccess').textContent = time(data.lastSuccessAt);

@@ -7,6 +7,7 @@
 ```bash
 cp .env.example .env
 docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml --profile verification create seekfeed-browser
 docker compose -f docker-compose.prod.yml up -d
 ```
 
@@ -49,11 +50,11 @@ location / {
 
 ## 热榜浏览器与人工验证
 
-生产 Compose 创建固定摘要的 Chromium 侧车，由采集状态控制启动与停止，限制为 1280 MiB 内存、0.75 CPU、256 MiB 共享内存。应用容器保持原有 512 MiB 限制。浏览器通过 `seekfeed_browser` 私有桥接网络连接，不发布 5800、5900 或 9222 端口；禁止将 CDP 直接暴露至公网。浏览器需要正常访问外网，网络不应设为 `internal: true`。768 MiB 限制在 US-RAK 验证期间触发过 Chromium 子进程 OOM，不作为生产推荐值。
+主程序限制为 256 MiB 内存、0.5 CPU，正常热榜仅运行短时 HTTP 采集进程。浏览器归属 `verification` profile，首次部署用上述 `create` 命令创建但不启动，普通 `up -d` 不启动它；重启策略为 `no`。人工验证期间允许临时使用固定摘要的 Chromium，峰值限制为 1280 MiB 内存、0.75 CPU、256 MiB 共享内存，验证结束或 15 分钟到期后关闭。该峰值不是日常常驻开销；较低内存限制曾触发 OOM，不能靠降低上限替代进程回收。浏览器通过 `seekfeed_browser` 私有桥接网络连接，不发布 5800、5900 或 9222 端口；禁止将 CDP 暴露至公网。浏览器需要正常访问外网，网络不应设为 `internal: true`。
 
 配置与验证状态保存在 `seekfeed_browser_profile`。更新或重建容器时保留该卷；备份须包含应用数据和浏览器配置卷，浏览器配置按私有会话数据保护。首次使用或验证失效后，登录 SeekFeed，在“RSS 配置 → 热榜采集”打开“人工验证”，完成验证进入帖子列表后返回点击“验证完成，继续采集”。日常只显示启动或停止采集，验证入口在需要时出现。入口 15 分钟到期后自动关闭浏览器，可重新打开；不会自动重启采集。反向代理必须透传 WebSocket 升级头，且保留原始 Host；入口使用与 SeekFeed 相同的 HTTPS 域名。
 
-停止采集会停止整个浏览器容器，释放 Chromium 及其子进程。正常采集复用浏览器；失败后释放，退避到期再按需启动；CF 验证时保持暂停。浏览器配置初始地址为 `about:blank`；若持久配置恢复为 `chrome://newtab/`，采集器也可连接该闲置标签页。闲置页不代表已经通过源站验证；健康检查和状态查询不访问源站，启用中的采集按原调度执行。
+正常采集每 300 秒串行读取四个公开列表页，不启动浏览器；失败只退避重试 HTTP，403 或验证页暂停等待人工操作。停止采集会取消 HTTP 进程并关闭可能存在的验证浏览器。人工验证完成后，CF 白名单 Cookie 与浏览器 User-Agent 保存到 `/usr/src/app/data/hot-http-session.json`（0600），随后停止 Chromium 全部子进程；不保存论坛登录 Cookie，不向客户端或日志输出会话值。该文件属于私有应用数据，应与数据库一样保护，不作为垃圾清理。浏览器配置初始地址为 `about:blank`，也兼容 `chrome://newtab/`。健康检查、状态查询不访问源站，升级保留冷却及人工暂停。
 
 若日志在浏览器冷启动后立即显示“采集浏览器暂不可用”，同时私有 CDP 列表显示 `chrome://newtab/`，应升级到兼容新标签页的版本。不要通过反复重启或刷新源站排查；先读取应用日志与容器状态，再按正常间隔验收一次。CF 暂停需要通过人工验证入口处理，重启不会自动解决验证。
 

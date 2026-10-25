@@ -1,6 +1,7 @@
 """Read public list pages in one persistent, manually verified browser profile.
 
-This adapter never clicks or solves challenges and never exports cookies.
+This adapter never clicks or solves challenges. Only public CF session cookies
+may be saved locally for the HTTP collector; account cookies are never exported.
 The CDP endpoint must stay on a private Docker network.
 """
 import json
@@ -92,7 +93,7 @@ class BrowserSession:
             raise CollectionError('browser_unavailable')
         return data
 
-    def get(self, url, timeout=20):
+    def get(self, url, timeout=20, **_):
         if not allowed_url(url):
             raise CollectionError('browser_unavailable')
         self.call('Network.enable')
@@ -163,6 +164,26 @@ def browser_status():
             except ValueError:
                 pass
         return {'connected': True, 'ready': ready, 'verificationRequired': challenged}
+    finally:
+        session.close()
+
+
+def save_http_session():
+    from http_session import save_session
+    session = BrowserSession()
+    try:
+        data = session.snapshot()
+        ready = public_list_url(data['url']) and data['title'].strip().lower() != 'just a moment...' and bool(parse(data['html']))
+        if not ready:
+            return {'connected': True, 'ready': False, 'verificationRequired': True}
+        result = session.call('Runtime.evaluate', {'expression': 'navigator.userAgent', 'returnByValue': True})
+        user_agent = result.get('result', {}).get('value')
+        if not user_agent:
+            raise ValueError('http_session_unavailable')
+        cookies = session.call('Network.getCookies', {'urls': ['https://www.nodeseek.com/']}).get('cookies', [])
+        save_session(user_agent, cookies)
+        session.park()
+        return {'connected': True, 'ready': True, 'verificationRequired': False}
     finally:
         session.close()
 

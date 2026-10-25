@@ -13,7 +13,7 @@ SeekFeed 为独立项目，不属于 NodeSeek 官方产品。公开帖子及相�
 - 运行时与服务：Bun、Hono、TypeScript、服务端 JSX。
 - 数据存储：SQLite，包含订阅、帖子、会话、通知状态与热榜样本。
 - 前端：原生 JavaScript、CSS 变量及 SVG 图表，无客户端 React 运行时。
-- 热榜采集：Python、Beautiful Soup 与持久 Chromium 浏览器；本地未配置浏览器时保留 curl_cffi 采集适配器。
+- 热榜采集：Python、curl_cffi 与 Beautiful Soup，每 300 秒串行读取公开列表。Chromium 仅用于按需人工验证，验证后保存本机 CF 会话并关闭；日常采集无浏览器进程。
 - 部署：Docker Compose、GHCR 多架构镜像及 GitHub Actions。
 
 ## 设计与来源

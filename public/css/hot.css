@@ -7,7 +7,6 @@
 .hot-tabs button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .hot-filters { display: flex; gap: 10px; }
 .hot-filters .select-trigger { width: 150px; }
-#hotLimitTrigger { width: 112px; }
 .hot-statusbar { position: relative; min-height: 48px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 12px 20px; font-size: 12px; color: var(--text-secondary); }
 .hot-status-text { position: relative; min-width: 0; flex: 1; line-height: 24px; }
 .hot-status-text #hotFreshness { display: block; }
@@ -54,7 +53,6 @@
     .hot-filters .select-trigger { width: auto; }
     .hot-filters { gap: 6px; }
     .hot-filters .select-trigger { padding-inline: 8px; gap: 4px; font-size: 12px; }
-    #hotLimitTrigger { width: auto; flex: .9; }
     .hot-statusbar { padding: 12px 14px; gap: 6px; }
     .hot-statusbar { min-height: 48px; }
     #hotError { left: 14px; right: 14px; }

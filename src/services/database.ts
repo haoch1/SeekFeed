@@ -36,7 +36,7 @@ export class DatabaseService {
     const cached = this.getFromCache<ReturnType<typeof getAnalytics>>(key);
     if (cached) return cached;
     const data = this.db.transaction(() => getAnalytics(this.db, days, offset, new Date(), category))();
-    this.setCache(key, data, 10000);
+    this.setCache(key, data, 60000);
     return data;
   }
 
@@ -65,6 +65,12 @@ export class DatabaseService {
   }
 
   private setCache(key: string, data: any, ttl: number = this.CACHE_TTL): void {
+    // Arbitrary date/category combinations must not grow a long-lived server.
+    const now = Date.now();
+    if (this.queryCache.size >= 128) {
+      for (const [cachedKey, entry] of this.queryCache) if (now - entry.timestamp >= entry.ttl) this.queryCache.delete(cachedKey);
+      if (this.queryCache.size >= 128 && !this.queryCache.has(key)) this.queryCache.delete(this.queryCache.keys().next().value!);
+    }
     this.queryCache.set(key, {
       data,
       timestamp: Date.now(),

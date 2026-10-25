@@ -79,7 +79,7 @@ window.SeekFeedHot = (() => {
     const timeout = setTimeout(() => activeController.abort('timeout'), 15000);
     const id = ++request;
     loading = true;
-    const query = new URLSearchParams({period, category:el('hotCategory').value, sort:el('hotSort').value, limit:el('hotLimit').value});
+    const query = new URLSearchParams({period, category:el('hotCategory').value, sort:el('hotSort').value});
     if (!background) el('hotResults').setAttribute('aria-busy', 'true');
     try {
       const response = await fetch('/api/hot?' + query, {signal:controller.signal, cache:'no-store'});
@@ -103,18 +103,15 @@ window.SeekFeedHot = (() => {
   }
   function init() {
     const mobile = matchMedia('(max-width: 760px), (max-width: 1000px) and (pointer: coarse)');
-    let desktopLimit = el('hotLimit').value;
     const placeRefresh = () => {
       el('hotPage').querySelector(mobile.matches ? '.hot-filters' : '.workspace-heading').appendChild(el('hotRefresh'));
-      if (mobile.matches) { desktopLimit = el('hotLimit').value; el('hotLimit').value = '30'; }
-      else el('hotLimit').value = desktopLimit;
       window.SeekFeedControls.refreshSelects();
       if (lastLoaded) load();
     };
     placeRefresh();
     mobile.addEventListener('change', placeRefresh);
     el('hotRefresh').addEventListener('click', event => window.SeekFeedControls.pending(event.currentTarget, () => load()));
-    for (const select of ['hotCategory', 'hotSort', 'hotLimit']) el(select).addEventListener('change', () => load());
+    for (const select of ['hotCategory', 'hotSort']) el(select).addEventListener('change', () => load());
     const tabs = [...document.querySelectorAll('[data-hot-period]')];
     for (const [index, tab] of tabs.entries()) {
       tab.addEventListener('click', () => {

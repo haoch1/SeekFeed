@@ -119,7 +119,7 @@ class ParserTests(unittest.TestCase):
             self.assertEqual(result['pages'], pages)
             self.assertEqual(len(result['posts']), 1)
             self.assertEqual(sleep.call_count, pages - 1)
-            self.assertTrue(all(2 <= c.args[0] <= 3 for c in sleep.call_args_list))
+            self.assertTrue(all(5 <= c.args[0] <= 8 for c in sleep.call_args_list))
             session.close.assert_called_once()
 
     def test_second_page_failure_discards_partial_batch_without_retry(self):

@@ -31,7 +31,7 @@ describe('collector and browser lifecycle', () => {
             finish = () => resolve(sample()); signal!.addEventListener('abort', finish, { once: true });
         }), resource);
         const collecting = service.refresh(); await Bun.sleep(0);
-        expect(resource.running).toBe(true);
+        expect(resource.running).toBe(false); expect(resource.starts).toBe(0);
         await service.controlCollection('stop'); await collecting;
         expect(service.collectionStatus().stopped).toBe(true); expect(resource.running).toBe(false);
         expect(db.query('SELECT COUNT(*) AS n FROM hot_posts').get()).toEqual({ n: 0 });
@@ -41,33 +41,33 @@ describe('collector and browser lifecycle', () => {
         await service.start(); expect(await service.refresh()).toBe(false); expect(resource.running).toBe(false);
         finish();
     });
-    it('releases the browser on transient failures and retries only after cooldown, while success reuses it', async () => {
+    it('never starts a browser for successful HTTP collection or transient retries', async () => {
         const resource = browser(); let fail = true;
         service = new HotService(db, async () => { if (fail) throw new CollectorUnavailable(0, 'network_error'); return sample(); }, resource);
-        expect(await service.refresh()).toBe(false); expect(resource.running).toBe(false); expect(resource.starts).toBe(1);
-        expect(await service.refresh()).toBe(false); expect(resource.starts).toBe(1);
+        expect(await service.refresh()).toBe(false); expect(resource.running).toBe(false); expect(resource.starts).toBe(0);
+        expect(await service.refresh()).toBe(false); expect(resource.starts).toBe(0);
         db.query('UPDATE hot_collector_state SET last_attempt_at=NULL,next_attempt_at=NULL').run(); fail = false;
-        expect(await service.refresh()).toBe(true); expect(resource.running).toBe(true);
+        expect(await service.refresh()).toBe(true); expect(resource.running).toBe(false); expect(resource.starts).toBe(0);
     });
     it('closes on CF without automatic retry, starts only for manual verification and expires the browser lease', async () => {
         const resource = browser();
         service = new HotService(db, async () => { throw new CollectorUnavailable(0, 'verification_required'); }, resource);
         await service.refresh(); expect(resource.running).toBe(false);
-        expect(await service.refresh()).toBe(false); expect(resource.starts).toBe(1);
+        expect(await service.refresh()).toBe(false); expect(resource.starts).toBe(0);
         expect(await service.prepareVerification(async () => true)).toBe(true); expect(resource.running).toBe(true);
         const expiry = Date.parse(service.collectionStatus().verificationExpiresAt!);
         expect(await service.expireVerification(expiry - 1)).toBe(false);
         expect(await service.expireVerification(expiry + 1)).toBe(true); expect(resource.running).toBe(false);
         expect(service.collectionStatus().verificationRequired).toBe(true);
     });
-    it('does not destroy a completed verification and keeps explicit Retry-After during restart', async () => {
+    it('closes a completed verification browser before resuming HTTP and keeps explicit Retry-After', async () => {
         const resource = browser();
         service = new HotService(db, async () => sample(), resource);
         service.pauseForVerification(); await service.prepareVerification(async () => true);
         const stops = resource.stops;
         db.query('UPDATE hot_collector_state SET retry_after_at=?').run(new Date(Date.now() + 1800000).toISOString());
         expect(await service.resumeAfterVerification(async () => ({ connected: true, ready: true, verificationRequired: false }))).toBe(true);
-        expect(resource.stops).toBe(stops); expect(resource.running).toBe(true);
+        expect(resource.stops).toBe(stops + 1); expect(resource.running).toBe(false);
         expect(Date.parse(service.collectionStatus().nextAttemptAt!) - Date.now()).toBeGreaterThan(1799000);
         expect(await service.expireVerification(Date.now() + 3600000)).toBe(false);
     });
@@ -102,5 +102,22 @@ describe('collector and browser lifecycle', () => {
         expect(calls).toEqual(['POST/start', 'ready', 'POST/stop']);
         const failed = new ManagedBrowser(async () => true, async () => {});
         await expect(failed.stop()).rejects.toThrow('尚未关闭');
+    });
+    it('extends a legacy two-minute schedule to five minutes at startup and releases an idle browser', async () => {
+        const resource = browser(); resource.running = true;
+        const last = Date.now();
+        db.query('UPDATE hot_collector_state SET last_attempt_at=?,next_attempt_at=?').run(new Date(last).toISOString(), new Date(last + 120000).toISOString());
+        service = new HotService(db, async () => { throw new Error('must not collect'); }, resource);
+        await service.start();
+        expect(resource.running).toBe(false); expect(resource.starts).toBe(0);
+        expect(Date.parse(service.collectionStatus().nextAttemptAt!)).toBeGreaterThanOrEqual(last + 300000);
+        expect(service.collectionStatus()).toMatchObject({ transport: 'http', intervalSeconds: 300 });
+    });
+    it('does not clear a verification pause when the browser cannot be released', async () => {
+        const resource = browser();
+        service = new HotService(db, async () => sample(), resource); service.pauseForVerification();
+        resource.stop = async () => { throw new Error('PRIVATE'); };
+        expect(await service.resumeAfterVerification(async () => ({ connected: true, ready: true, verificationRequired: false }))).toBe(false);
+        expect(service.collectionStatus().verificationRequired).toBe(true);
     });
 });

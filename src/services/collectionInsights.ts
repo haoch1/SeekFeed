@@ -58,7 +58,7 @@ export class CollectionInsights {
                 WHERE x.creator=p.creator AND julianday(b.attempted_at)>julianday(?) - 7)
             GROUP BY p.creator ORDER BY COUNT(*) DESC,MAX(p.post_id) DESC LIMIT 1`).get(now.toISOString()) as any;
         if (!row) return;
-        this.db.query('UPDATE author_backfill_state SET next_attempt_at=? WHERE id=1').run(new Date(now.getTime() + 2 * 60000).toISOString());
+        this.db.query('UPDATE author_backfill_state SET next_attempt_at=? WHERE id=1').run(new Date(now.getTime() + 30 * 60000).toISOString());
         this.db.query('INSERT OR REPLACE INTO author_backfill VALUES(?,?,?)').run(row.post_id, now.toISOString(), 'pending');
         return row.post_id as number;
     }

@@ -100,7 +100,7 @@ describe('independent hot ranking', () => {
         expect(stale.stale).toBe(true);
         expect(stale.error).not.toContain('secret');
     });
-    it('defaults to 30, supports 50/100 after sorting, and prunes only old heat records', () => {
+    it('caps every period at 30 after sorting and filtering without deleting the comparison pool', () => {
         const service = new HotService(db);
         const old = new Date(now.getTime() - 31 * 86400000);
         service.saveBatch(batch([post(999)], old), old);
@@ -112,10 +112,11 @@ describe('independent hot ranking', () => {
         expect(result.total).toBe(140);
         for (const limit of [30, 50, 100] as const) {
             const ranked = service.ranking('day', '', 'views', now, limit);
-            expect(ranked.posts.map(p => p.postId)).toEqual(Array.from({length:limit}, (_, i) => 140-i));
+            expect(ranked.posts.map(p => p.postId)).toEqual(Array.from({length:30}, (_, i) => 140-i));
+            expect(ranked.limit).toBe(30);
             expect(ranked.total).toBe(140);
             const filtered = service.ranking('week', 'tech', 'views', now, limit);
-            expect(filtered.posts.map(p => p.postId)).toEqual(Array.from({length:limit}, (_, i) => 110-i));
+            expect(filtered.posts.map(p => p.postId)).toEqual(Array.from({length:30}, (_, i) => 110-i));
             expect(filtered.total).toBe(110);
         }
         expect(db.query('SELECT COUNT(*) AS n FROM posts').get()).toEqual({n:141});
@@ -310,11 +311,11 @@ describe('independent hot ranking', () => {
         expect(zero).toEqual({ views: 0, replies: 0, active: false });
     });
 
-    it('keeps heat invariant at 60 and 120 seconds, admits ten-minute scans, and excludes outage growth', () => {
+    it('keeps heat invariant at one, two, five and ten minutes and excludes outage growth', () => {
         const history = (step: number) => Array.from({ length: 60 / step + 1 }, (_, i) => ({ post_id: 1,
             observed_at: new Date(+now - (60 - i * step) * MINUTE).toISOString(), views: i * step * 100, replies: i * step * 5 }));
         const first = liveActivity(history(1), +now - 3 * HOUR, +now)!;
-        for (const step of [2, 10]) {
+        for (const step of [2, 5, 10]) {
             const value = liveActivity(history(step), +now - 3 * HOUR, +now)!;
             expect(value.views).toBeCloseTo(first.views, 8);
             expect(value.replies).toBeCloseTo(first.replies, 8);
@@ -335,6 +336,18 @@ describe('independent hot ranking', () => {
         expect(recovered.views).toBeGreaterThan(0);
         expect(recovered.views).toBeLessThan(10);
         expect(recovered.replies).toBeLessThan(1);
+    });
+    it('warms older posts with two five-minute samples and does not keep missed scans live indefinitely', () => {
+        publish(1, new Date(+now - 2 * HOUR).toISOString());
+        const service = new HotService(db);
+        const earlier = new Date(+now - 5 * MINUTE);
+        service.saveBatch(batch([post(1, { views: 100, replies: 10 })], earlier), earlier);
+        expect(service.ranking('live', '', 'heat', earlier).warmingUp).toBe(true);
+        service.saveBatch(batch([post(1, { views: 600, replies: 35 })], now), now);
+        const live = service.ranking('live', '', 'heat', now);
+        expect(live.posts[0]).toMatchObject({ growthViews: 500, growthReplies: 25, sampleMinutes: 5 });
+        expect(live.warmingUp).toBe(false);
+        expect(service.ranking('live', '', 'heat', new Date(+now + 16 * MINUTE)).stale).toBe(true);
     });
 
     it('pauses on a challenge without retries and resumes only after verified DOM, preserving rate limits', async () => {
@@ -372,7 +385,9 @@ describe('independent hot ranking', () => {
     });
 
     it('serializes browser preparation and cannot resume or open another entry during recovery', async () => {
-        const service = new HotService(db, async () => { throw new Error('must not collect'); });
+        const service = new HotService(db, async () => { throw new Error('must not collect'); }, {
+            configured: true, async start() {}, async stop() {}, async status() { return false; },
+        });
         expect(await service.prepareVerification(async () => true)).toBe(false);
         expect(service.pauseForVerification()).toBe(true);
         let finish: (value: boolean) => void = () => {};
@@ -387,17 +402,17 @@ describe('independent hot ranking', () => {
         expect(service.collectionStatus().busy).toBe(false);
     });
 
-    it('paces four-page scans at 120 seconds and persists the cooldown across restarts', async () => {
+    it('paces four-page HTTP scans at 300 seconds and persists the cooldown across restarts', async () => {
         const modes: boolean[] = [];
         const service = new HotService(db, async full => { modes.push(full); return { ...batch([post(1)], new Date()), pages: 4 }; });
         for (let i = 0; i < 4; i++) {
             db.query('UPDATE hot_collector_state SET next_attempt_at=NULL,last_attempt_at=NULL WHERE id=1').run();
             expect(await service.refresh()).toBe(true);
             const state = db.query('SELECT next_attempt_at FROM hot_collector_state').get() as any;
-            expect(Date.parse(state.next_attempt_at) - Date.now()).toBeGreaterThan(119000);
-            expect(Date.parse(state.next_attempt_at) - Date.now()).toBeLessThanOrEqual(135000);
-            expect(service.ranking().intervalSeconds).toBe(120);
-            expect(service.collectionStatus()).toMatchObject({ intervalSeconds: 120, pagesPerRound: 4 });
+            expect(Date.parse(state.next_attempt_at) - Date.now()).toBeGreaterThan(299000);
+            expect(Date.parse(state.next_attempt_at) - Date.now()).toBeLessThanOrEqual(315000);
+            expect(service.ranking().intervalSeconds).toBe(300);
+            expect(service.collectionStatus()).toMatchObject({ intervalSeconds: 300, pagesPerRound: 4 });
             expect(await service.refresh()).toBe(false);
             const restarted = new HotService(db, async () => { throw new Error('must not collect'); });
             expect(await restarted.refresh()).toBe(false);
@@ -427,7 +442,7 @@ describe('independent hot ranking', () => {
             db.query('UPDATE hot_collector_state SET failures=0,last_error=NULL,next_attempt_at=NULL,last_attempt_at=NULL WHERE id=1').run();
             let broken = true, calls = 0;
             const service = new HotService(db, async () => { calls++; if (broken) throw failure; return batch([post(1)], new Date()); });
-            for (const seconds of [120, 240, 300, 300]) {
+            for (const seconds of [300, 600, 1200, 1800]) {
                 db.query('UPDATE hot_collector_state SET next_attempt_at=NULL,last_attempt_at=NULL WHERE id=1').run();
                 expect(await service.refresh()).toBe(false);
                 const state = db.query('SELECT next_attempt_at,last_error FROM hot_collector_state').get() as any;
@@ -445,7 +460,7 @@ describe('independent hot ranking', () => {
     });
     it('retains long cooldowns for blocked, rate-limited and invalid pages and honors Retry-After on transient errors', async () => {
         for (const failure of [new CollectorUnavailable(0, 'http_error', 403), new CollectorUnavailable(0, 'http_error', 429), new CollectorUnavailable(0, 'challenge_or_empty'), new CollectorUnavailable(0, 'unexpected_markup'), new CollectorUnavailable(1800, 'http_error', 503)]) {
-            db.query('UPDATE hot_collector_state SET failures=0,next_attempt_at=NULL,last_attempt_at=NULL WHERE id=1').run();
+            db.query('UPDATE hot_collector_state SET failures=0,verification_required=0,next_attempt_at=NULL,last_attempt_at=NULL WHERE id=1').run();
             const service = new HotService(db, async () => { throw failure; });
             expect(await service.refresh()).toBe(false);
             const state = db.query('SELECT next_attempt_at,last_error FROM hot_collector_state').get() as any;

@@ -29,6 +29,7 @@ git clone https://github.com/haoch1/SeekFeed.git
 cd SeekFeed
 cp .env.example .env
 docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml --profile verification create seekfeed-browser
 docker compose -f docker-compose.prod.yml up -d
 ```
 
@@ -64,7 +65,7 @@ docker compose up -d --build
 - 每个关键词独立计数，同一篇帖子对同一词仅计一次；多个词的交集单独展示。关键词分析采用文本包含匹配，与订阅中的正则规则不同。
 - 当前时段仅统计至查询时刻；未来时段不按零值展示。与上一日比较时使用相同时段，并提示历史覆盖不足。
 - 热榜使用独立采集的浏览与回复样本。实时榜按近期增长与时间衰减计算，日榜和周榜按范围内帖子的累计互动计算；不代表全站穷尽数据。
-- 热榜采集基础间隔为 120 秒，两种排序各取前两页；浏览器冷启动兼容空白页与 Chromium 新标签页。日常仅显示启动或停止按钮，遇到 CF 后显示人工验证，完成后继续采集。
+- 热榜通过 HTTP 每 300 秒采集两种排序各前两页，保留浏览量、回复数和近期增长热度。Chromium 日常关闭，仅人工验证时按需启动；验证后保存本机 CF 会话并关闭浏览器。日常仅显示启动或停止按钮，遇到 CF 后显示人工验证。
 - 热度为排序分数的整数展示，常规数值主要为三位数。完整公式、采集节流和适用边界见 [热榜规则](docs/hot-ranking.md)。
 - 最新帖子顶部的累计收录数与统计页所选时段数量具有不同范围。通知成功数仅统计实际投递成功的帖子。
 
@@ -115,14 +116,17 @@ bun run start
 | `TRUST_PROXY` | `false` | 可信代理 IP 转发开关，部署要求见 Docker 文档 |
 | `RSS_CHECK_ENABLED` | `true` | RSS 自动监控开关 |
 | `RSS_TIMEOUT` | `30000` | RSS 请求超时，单位毫秒 |
-| `HOT_COLLECT_ENABLED` | Docker 为 `true`，本地未配置时关闭 | 基础间隔 120 秒，两种排序各取前两页；支持启停，失败时释放浏览器 |
+| `HOT_COLLECT_ENABLED` | Docker 为 `true`，本地未配置时关闭 | HTTP 基础间隔 300 秒，两种排序各取前两页；支持启停及 CF 暂停 |
+| `HOT_HTTP_SESSION_PATH` | 生产 Compose 已配置 | 本机私有 CF 会话文件；仅保存白名单 Cookie 和 User-Agent，不保存论坛登录 Cookie |
 | `HOT_BROWSER_ENDPOINT`、`HOT_BROWSER_GUI_URL` | 生产 Compose 已配置 | 私有网络中的浏览器 CDP 与人工验证界面地址，不映射公网端口 |
 | `HOT_COLLECTOR_PYTHON` | Docker 已配置，本地 `python3` | 热榜采集 Python 路径 |
 | `TELEGRAM_WEBHOOK_URL` | 未设置 | 可选的公网 HTTPS Webhook 地址 |
 
 RSS 地址、间隔、代理与 Telegram Token、接收账号在设置页管理。
 
-默认 RSS 抓取间隔为 30 秒，订阅匹配与推送在每轮同步后执行。前台页面中，帖子列表每 5 秒更新，热榜与统计图表每 15 秒更新，已提交且展开的关键词分析每 30 秒更新。页面轮询读取本地数据库，不额外触发源站采集；页面不可见时暂停自动更新。刷新周期集中定义于 `src/config/cadence.json`，已保存的 RSS 自定义间隔优先于默认值。
+默认 RSS 抓取间隔为 30 秒，订阅匹配与推送在每轮同步后执行。前台帖子列表每 15 秒检查更新，热榜、统计图表和已提交且展开的关键词分析每 60 秒更新；全局计数和运行状态每 60 秒更新。页面轮询读取本地数据库，不额外触发源站采集；页面不可见时暂停自动更新。刷新周期集中定义于 `src/config/cadence.json`，已保存的 RSS 自定义间隔优先于默认值。
+
+项目保持服务端 Hono JSX、原生 JavaScript/SVG 与 SQLite，不引入常驻浏览器处理常规功能。热榜结果缓存最多 24 份、共享查询缓存最多 128 份，统计缓存 60 秒并在相关写入后失效。主容器限制为 256 MiB / 0.5 CPU；人工验证浏览器的临时峰值单独受限，验证结束或 15 分钟到期后回收。
 
 采集质量、身份补全与当前内容同步的定义、保留策略和权限见 [采集与数据质量](docs/collection-insights.md)。
 

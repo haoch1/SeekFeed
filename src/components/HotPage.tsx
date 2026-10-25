@@ -11,7 +11,6 @@ export const HotPage: FC<{ active: boolean }> = ({ active }) => <section id="hot
             <div class="hot-filters">
                 <select id="hotCategory" class="filter-select" aria-label="热榜分类" data-1p-ignore="true" data-op-ignore="true"><option value="">全部分类</option></select>
                 <select id="hotSort" class="filter-select" aria-label="热榜排序" data-1p-ignore="true" data-op-ignore="true"><option value="heat">综合热度</option><option value="views">浏览量最多</option><option value="replies">回复量最多</option></select>
-                <select id="hotLimit" class="filter-select" aria-label="热榜条数" data-1p-ignore="true" data-op-ignore="true"><option value="30">前 30 条</option><option value="50">前 50 条</option><option value="100">前 100 条</option></select>
             </div>
         </div>
         <div class="hot-statusbar"><div class="hot-status-text"><span id="hotFreshness" role="status">正在读取榜单…</span><span id="hotError" role="status" hidden></span></div></div>

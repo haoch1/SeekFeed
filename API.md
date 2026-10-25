@@ -75,15 +75,15 @@ API、认证响应禁止共享缓存。客户端不得将私有响应交由 Serv
 | `period` | `live`（默认）、`day`、`week` |
 | `category` | 分类键，默认不筛选 |
 | `sort` | `heat`（默认）、`views`、`replies` |
-| `limit` | `30`（默认）、`50`、`100` |
+| `limit` | 固定最多 `30`；兼容旧值 `50`／`100`，但响应仍为前 30 条 |
 
 `day` 按北京时间当天 00:00 起算，`week` 按北京时间本周一 00:00 起算，均包含起点。时间范围随当前日期切换；采集延迟不延长上一日或上一周。仅纳入已确认发布时间且不晚于最近成功采集时刻的帖子。
 
-`GET /api/hot/collection` 返回采集状态、120 秒基础间隔、每轮两种排序各 2 页、上次成功采集时间、人工暂停状态、持久停止状态、浏览器运行状态与验证入口到期时间，仅登录可读。
+`GET /api/hot/collection` 返回 HTTP 采集状态（`transport: "http"`）、300 秒基础间隔、每轮两种排序各 2 页、上次成功采集时间、人工暂停状态、持久停止状态、`verificationAvailable`、浏览器运行状态与验证入口到期时间，仅登录可读。HTTP 启停不依赖浏览器配置；浏览器仅供人工验证。
 
 状态查询不会触发源站采集。浏览器运行状态不表示已完成人工验证；空白页和 Chromium 新标签页均可作为冷启动采集目标，但不能作为验证成功的依据。
 
-`POST /api/hot/collection/start`、`POST /api/hot/collection/stop`、`POST /api/hot/collection/restart` 需要有效会话及同源 Origin。停止会取消当前任务并关闭浏览器容器；启动及重启保留既有冷却与显式限流，未完成人工验证时返回 `409`。重启不会关闭刚完成验证的浏览器。
+`POST /api/hot/collection/start`、`POST /api/hot/collection/stop`、`POST /api/hot/collection/restart` 需要有效会话及同源 Origin。停止会取消 HTTP 任务并关闭浏览器容器；启动及重启保留 300 秒最小冷却与显式限流，未完成人工验证时返回 `409`。验证后继续会先读取并保存本机 CF 白名单会话、关闭浏览器，再恢复 HTTP 调度；Cookie 值与 User-Agent 不出现在接口响应中。
 
 网页主按钮随状态显示启动、停止、人工验证或“验证完成，继续采集”；后者调用 `/collection/restart`。验证与浏览器准备期间按需显示停止按钮，接口地址保持兼容。
 

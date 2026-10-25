@@ -12,6 +12,7 @@ services:
       HOT_BROWSER_ENDPOINT: http://seekfeed-browser:9222
       HOT_BROWSER_GUI_URL: http://seekfeed-browser:5800
       HOT_BROWSER_CONTROL_SOCKET: /run/seekfeed-browser-control/control.sock
+      HOT_HTTP_SESSION_PATH: /usr/src/app/data/hot-http-session.json
       NODE_ENV: production
       PORT: 3010
       HOST: 0.0.0.0
@@ -46,16 +47,17 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
-          cpus: '1.0'
-        reservations:
           memory: 256M
-          cpus: '0.5'
+          cpus: '0.50'
+        reservations:
+          memory: 64M
+          cpus: '0.05'
 
   seekfeed-browser:
+    profiles: [verification]
     image: jlesage/chromium:v26.09.2@sha256:e42de7469bce122b8a69d4f62101850ece45c41ed7ed952f2b506f99947093ae
     container_name: seekfeed-browser
-    restart: unless-stopped
+    restart: 'no'
     shm_size: 256m
     environment:
       CHROMIUM_APP_URL: about:blank

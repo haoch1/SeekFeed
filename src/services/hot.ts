@@ -24,7 +24,7 @@ const MINUTE = 60000;
 const HOUR = 60 * MINUTE;
 const COLLECT_INTERVAL = cadence.hotCollectIntervalSeconds * 1000;
 
-type CollectorFailureCode = 'collector_error' | 'network_timeout' | 'network_error' | 'tls_error' | 'http_error' | 'challenge_or_empty' | 'unexpected_markup' | 'unexpected_sort' | 'invalid_output' | 'verification_required' | 'browser_unavailable';
+type CollectorFailureCode = 'collector_error' | 'network_timeout' | 'network_error' | 'tls_error' | 'http_error' | 'challenge_or_empty' | 'unexpected_markup' | 'unexpected_sort' | 'invalid_output' | 'verification_required' | 'browser_unavailable' | 'http_session_unavailable';
 
 export class CollectorUnavailable extends Error {
     constructor(public retryAfterSeconds = 0, public code: CollectorFailureCode = 'collector_error', public httpStatus?: number) {
@@ -38,6 +38,7 @@ export class CollectorUnavailable extends Error {
             unexpected_markup: '源站页面结构异常', invalid_output: '采集结果校验失败',
             unexpected_sort: '源站返回的帖子排序与请求不一致',
             verification_required: '需要人工完成浏览器验证，采集已暂停', browser_unavailable: '采集浏览器暂不可用',
+            http_session_unavailable: '本地 HTTP 会话不可用，请重新完成人工验证',
         }[this.code];
     }
     get transient() {
@@ -54,7 +55,7 @@ export function parseCollectorFailure(stderr: string, timedOut = false): Collect
         const retryAfter = parsedRetry.success ? parsedRetry.data : 0;
         const http = typeof payload.error === 'string' && /^http_[1-5]\d\d$/.test(payload.error) ? Number(payload.error.slice(5)) : undefined;
         if (http) return new CollectorUnavailable(retryAfter, 'http_error', http);
-        const code = z.enum(['network_timeout', 'network_error', 'tls_error', 'challenge_or_empty', 'unexpected_markup', 'unexpected_sort', 'verification_required', 'browser_unavailable']).safeParse(payload.error);
+        const code = z.enum(['network_timeout', 'network_error', 'tls_error', 'challenge_or_empty', 'unexpected_markup', 'unexpected_sort', 'verification_required', 'browser_unavailable', 'http_session_unavailable']).safeParse(payload.error);
         return new CollectorUnavailable(retryAfter, code.success ? code.data : 'collector_error');
     } catch { return new CollectorUnavailable(); }
 }
@@ -130,6 +131,7 @@ export function liveActivity(history: HotSample[], published: number, reference:
 }
 
 export class HotService {
+    private rankings = new Map<string, { expires: number; data: ReturnType<HotService['calculateRanking']> }>();
     private timer?: ReturnType<typeof setTimeout>;
     private running = false;
     private preparingVerification = false;
@@ -152,7 +154,12 @@ export class HotService {
             else await this.releaseBrowser();
             return;
         }
-        this.schedule(Math.max(0, Date.parse(state.next_attempt_at || '') - Date.now()) || 0);
+        // A browser is reserved for an explicit manual verification lease.
+        if (!await this.releaseBrowser()) return;
+        const due = Math.max(Date.now(), Date.parse(state.next_attempt_at || '') || 0,
+            (Date.parse(state.last_attempt_at || '') || 0) + COLLECT_INTERVAL);
+        this.db.query('UPDATE hot_collector_state SET next_attempt_at=? WHERE id=1').run(new Date(due).toISOString());
+        this.schedule(due - Date.now());
     }
     stop() {
         this.controlEpoch++;
@@ -218,7 +225,6 @@ export class HotService {
         this.db.query('UPDATE hot_collector_state SET last_attempt_at=?,next_attempt_at=? WHERE id=1')
             .run(new Date().toISOString(), new Date(Date.now() + COLLECT_INTERVAL).toISOString());
         try {
-            try { await this.browser.start(signal); } catch { throw new CollectorUnavailable(0, 'browser_unavailable'); }
             signal.throwIfAborted();
             const authorPost = insights.nextAuthor();
             const input: any = await this.collectBatch(false, authorPost, signal);
@@ -242,7 +248,7 @@ export class HotService {
                         .run(new Date(Date.now() + Math.max(6 * HOUR, identityDelay)).toISOString());
                     if (failure.retryAfterSeconds) this.db.query('UPDATE hot_collector_state SET retry_after_at=? WHERE id=1')
                         .run(new Date(Date.now() + failure.retryAfterSeconds * 1000).toISOString());
-                    if (process.env.HOT_BROWSER_ENDPOINT && failure.code === 'verification_required') {
+                    if (['verification_required', 'challenge_or_empty'].includes(failure.code) || failure.httpStatus === 403) {
                         this.db.query('UPDATE hot_collector_state SET verification_required=1,last_error=? WHERE id=1')
                             .run(`${failure.description}，已保留上次榜单`);
                     }
@@ -262,13 +268,14 @@ export class HotService {
             insights.record({ source: 'hot', startedAt, durationMs: Date.now() - Date.parse(startedAt), status: 'failed', errorCode: validationCode || failure.code, httpStatus: failure.httpStatus });
             const failures = this.state().failures + 1;
             const retryAfter = Number.isFinite(failure.retryAfterSeconds) ? Math.max(0, Math.min(86400, failure.retryAfterSeconds)) * 1000 : 0;
-            const backoff = failure.transient ? Math.min(5 * MINUTE, COLLECT_INTERVAL * 2 ** Math.min(3, failures - 1))
+            const backoff = failure.transient ? Math.min(30 * MINUTE, COLLECT_INTERVAL * 2 ** Math.min(3, failures - 1))
                 : 10 * MINUTE * Math.min(6, 2 ** Math.min(3, failures - 1));
             const delay = Math.max(backoff, retryAfter);
+            const verification = ['verification_required', 'challenge_or_empty', 'http_session_unavailable'].includes(failure.code) || failure.httpStatus === 403;
             this.db.query('UPDATE hot_collector_state SET failures=failures+1,last_error=?,next_attempt_at=?,verification_required=?,retry_after_at=? WHERE id=1')
                 .run(`${failure.description}，已保留上次榜单`, new Date(Date.now() + delay).toISOString(),
-                    Number(Boolean(process.env.HOT_BROWSER_ENDPOINT) && (['verification_required', 'challenge_or_empty'].includes(failure.code) || failure.httpStatus === 403)), retryAfter ? new Date(Date.now() + retryAfter).toISOString() : null);
-            logger.warn(`热榜采集失败：${failure.description}${failure.code === 'verification_required' ? '' : `；${Math.ceil(delay / 1000)} 秒后重试`}`);
+                    Number(verification), retryAfter ? new Date(Date.now() + retryAfter).toISOString() : null);
+            logger.warn(`热榜采集失败：${failure.description}${verification ? '；等待人工验证' : `；${Math.ceil(delay / 1000)} 秒后重试`}`);
             return false;
         } finally {
             if (!succeeded || signal.aborted || this.state().verification_required || !this.state().enabled) await this.releaseBrowser();
@@ -281,7 +288,7 @@ export class HotService {
         return true;
     }
     async prepareVerification(prepare = prepareBrowserVerification) {
-        if (this.inFlight || this.preparingVerification || this.controlBusy || !this.state().verification_required) return false;
+        if (!this.browser.configured || this.inFlight || this.preparingVerification || this.controlBusy || !this.state().verification_required) return false;
         this.preparingVerification = true;
         clearTimeout(this.verificationTimer);
         this.db.query('UPDATE hot_collector_state SET verification_expires_at=NULL WHERE id=1').run();
@@ -298,11 +305,12 @@ export class HotService {
         })();
         return this.preparation;
     }
-    async resumeAfterVerification(check = browserStatus) {
+    async resumeAfterVerification(check = saveBrowserHttpSession) {
         if (this.inFlight || this.preparingVerification || this.controlBusy || !this.state().verification_required) return false;
         const epoch = this.controlEpoch;
         const status = await check();
         if (epoch !== this.controlEpoch || !status.ready || this.inFlight || this.preparingVerification || this.controlBusy || !this.state().verification_required) return false;
+        if (!await this.releaseBrowser() || epoch !== this.controlEpoch || this.inFlight || this.preparingVerification || this.controlBusy || !this.state().verification_required) return false;
         const state = this.state();
         const earliest = Math.max(Date.now(), Date.parse(state.last_attempt_at || '') + COLLECT_INTERVAL || 0, Date.parse(state.retry_after_at || '') || 0);
         this.db.query('UPDATE hot_collector_state SET enabled=1,verification_required=0,verification_expires_at=NULL,failures=0,last_error=NULL,next_attempt_at=? WHERE id=1')
@@ -313,10 +321,10 @@ export class HotService {
         return true;
     }
     async controlCollection(action: 'start' | 'stop' | 'restart') {
-        if (!this.browser.configured || process.env.HOT_COLLECT_ENABLED !== 'true') throw new Error('服务器尚未配置采集控制');
+        if (process.env.HOT_COLLECT_ENABLED !== 'true') throw new Error('服务器尚未启用 HTTP 采集');
         if (this.controlBusy || (this.preparingVerification && action !== 'stop')) throw new Error('正在处理，请稍后重试');
         this.controlEpoch++;
-        // A completed manual verification must survive restarting the scheduler.
+        // Capture the local HTTP session and release the verification browser.
         if (action !== 'stop' && this.state().verification_required) {
             if (this.state().verification_expires_at && await this.resumeAfterVerification()) return;
             throw new Error('请先完成人工验证，再继续采集');
@@ -343,7 +351,8 @@ export class HotService {
     }
     collectionStatus() {
         const state = this.state();
-        return { configured: Boolean(process.env.HOT_BROWSER_ENDPOINT), controllable: this.browser.configured,
+        return { configured: process.env.HOT_COLLECT_ENABLED === 'true', controllable: process.env.HOT_COLLECT_ENABLED === 'true',
+            transport: 'http', verificationAvailable: Boolean(process.env.HOT_BROWSER_ENDPOINT) && this.browser.configured,
             enabled: process.env.HOT_COLLECT_ENABLED === 'true' && Boolean(state.enabled), stopped: !state.enabled,
             verificationRequired: Boolean(state.verification_required), verificationExpiresAt: state.verification_expires_at,
             intervalSeconds: cadence.hotCollectIntervalSeconds, pagesPerRound: 4,
@@ -377,8 +386,22 @@ export class HotService {
             this.db.query('UPDATE hot_collector_state SET last_success_at=?, last_error=NULL,failures=0,pages=?,batch_size=?,last_full_at=CASE WHEN ?=4 THEN ? ELSE last_full_at END,retry_after_at=NULL WHERE id=1')
                 .run(observedAt, batch.pages, new Set(batch.posts.map(p => p.postId)).size, batch.pages, observedAt);
         })();
+        this.rankings.clear();
     }
-    ranking(period: HotPeriod = 'live', category = '', sort: HotSort = 'heat', now = new Date(), limit: 30 | 50 | 100 = 30) {
+    ranking(period: HotPeriod = 'live', category = '', sort: HotSort = 'heat', now = new Date(), _requestedLimit: 30 | 50 | 100 = 30) {
+        const limit = 30;
+        const state = this.state();
+        const key = JSON.stringify([period, category, sort, limit, Math.floor(+now / MINUTE), state.last_success_at]);
+        let cached = this.rankings.get(key);
+        if (!cached || cached.expires <= Date.now()) {
+            if (this.rankings.size >= 24) this.rankings.delete(this.rankings.keys().next().value!);
+            cached = { expires: Date.now() + MINUTE, data: this.calculateRanking(period, category, sort, now, limit) };
+            this.rankings.set(key, cached);
+        }
+        return { ...cached.data, busy: Boolean(this.inFlight), enabled: process.env.HOT_COLLECT_ENABLED === 'true' && Boolean(state.enabled),
+            error: state.last_error, verificationRequired: Boolean(state.verification_required), nextAttemptAt: state.next_attempt_at };
+    }
+    private calculateRanking(period: HotPeriod, category: string, sort: HotSort, now: Date, limit: 30 | 50 | 100) {
         const state = this.state();
         // Scores stay fixed between successful collections, including while serving stale data.
         const reference = Math.min(now.getTime(), Date.parse(state.last_success_at || now.toISOString()));
@@ -430,15 +453,15 @@ export class HotService {
     }
 }
 
-async function collectWithPython(full: boolean, authorPost?: number, signal?: AbortSignal, status = false, prepare = false): Promise<unknown> {
-    const child = Bun.spawn([process.env.HOT_COLLECTOR_PYTHON || 'python3', resolve('collector/collect.py'), ...(prepare ? ['--prepare-verification'] : status ? ['--browser-status'] : []), ...(full ? [] : ['--light']), ...(authorPost ? [`--author-post=${authorPost}`] : [])], {
+async function collectWithPython(full: boolean, authorPost?: number, signal?: AbortSignal, status = false, prepare = false, saveSession = false): Promise<unknown> {
+    const child = Bun.spawn([process.env.HOT_COLLECTOR_PYTHON || 'python3', resolve('collector/collect.py'), ...(saveSession ? ['--save-http-session'] : prepare ? ['--prepare-verification'] : status ? ['--browser-status'] : []), ...(full ? [] : ['--light']), ...(authorPost ? [`--author-post=${authorPost}`] : [])], {
         stdout: 'pipe', stderr: 'pipe', stdin: 'ignore', env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
     });
     const cancel = () => { child.kill(); };
     signal?.addEventListener('abort', cancel, { once: true });
     if (signal?.aborted) cancel();
     let timedOut = false;
-    const timeout = setTimeout(() => { timedOut = true; child.kill(); }, prepare ? 10000 : status ? 15000 : 125000);
+    const timeout = setTimeout(() => { timedOut = true; child.kill(); }, prepare || saveSession ? 15000 : status ? 15000 : 150000);
     try {
         const [output, errors, exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
         if (exitCode !== 0 || timedOut) throw parseCollectorFailure(errors, timedOut);
@@ -459,4 +482,12 @@ export async function prepareBrowserVerification(signal?: AbortSignal) {
     try {
         return z.object({ connected: z.literal(true) }).parse(await collectWithPython(false, undefined, signal, false, true)).connected;
     } catch { return false; }
+}
+
+export async function saveBrowserHttpSession() {
+    if (!process.env.HOT_BROWSER_ENDPOINT || !process.env.HOT_HTTP_SESSION_PATH) return { connected: false, ready: false, verificationRequired: true };
+    try {
+        return z.object({ connected: z.boolean(), ready: z.boolean(), verificationRequired: z.boolean() })
+            .parse(await collectWithPython(false, undefined, undefined, false, false, true));
+    } catch { return { connected: false, ready: false, verificationRequired: true }; }
 }

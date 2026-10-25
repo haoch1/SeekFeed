@@ -116,6 +116,9 @@ Key variables in `.env`:
 
 ## Caveats
 
+- Keep the entire frontend and backend lightweight: native server-rendered Hono pages, vanilla JavaScript/SVG, bounded SQLite queries/caches, and visibility-aware polling. Do not add a heavyweight client framework, a background browser, overlapping jobs, or unbounded caches for routine features.
+- Hot metrics use short-lived HTTP collection every 300 seconds, four list pages sequentially. Chromium is reserved for explicit manual verification, closes after local session capture or expiry, and must never start for ordinary scans or automatic CF retries. Preserve exact views/replies and persistent cooldowns; tests should use fixtures and mocks, with at most one controlled live acceptance round.
+
 - Always use `bun install` (not npm) - bun.lock is authoritative
 - Database is SQLite at `./data/seekfeed.db`
 - Restart dev server after `bun install` (hot reload doesn't catch new deps)

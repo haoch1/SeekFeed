@@ -19,6 +19,12 @@ beforeEach(() => {
 afterEach(() => db.close());
 
 describe('coherent publication-time analytics', () => {
+    it('bounds shared analytics memory under many user-selected categories', () => {
+        const service = new DatabaseService(db);
+        for (let i = 0; i < 180; i++) service.getAnalytics(7, 480, `category-${i}`);
+        expect((service as any).queryCache.size).toBeLessThanOrEqual(128);
+        expect(service.getAnalytics(7, 480, 'tech').period.category).toBe('tech');
+    });
     it('filters every overview dimension by one category and retains all filter choices', () => {
         post('2026-10-20T01:00:00Z', 3, 'tech', 'alice', 1, '2026-10-20T01:00:30Z');
         post('2026-10-20T02:00:00Z', 2, 'trade', 'bob');
