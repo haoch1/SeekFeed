@@ -85,6 +85,8 @@ API、认证响应禁止共享缓存。客户端不得将私有响应交由 Serv
 
 `POST /api/hot/collection/start`、`POST /api/hot/collection/stop`、`POST /api/hot/collection/restart` 需要有效会话及同源 Origin。停止会取消当前任务并关闭浏览器容器；启动及重启保留既有冷却与显式限流，未完成人工验证时返回 `409`。重启不会关闭刚完成验证的浏览器。
 
+网页主按钮随状态显示启动、停止、人工验证或“验证完成，继续采集”；后者调用 `/collection/restart`。验证与浏览器准备期间按需显示停止按钮，接口地址保持兼容。
+
 `POST /api/hot/verification` 需要有效会话与同源 Origin，暂停采集、按需启动浏览器并签发受限验证 Cookie，返回 `/hot-verification/` 入口。采集中返回 `409`。`POST /api/hot/verification/resume` 作为兼容接口，检查服务器浏览器已进入可解析的帖子列表后重启采集，未完成验证返回 `409`。代理入口与 WebSocket 均校验真实账号会话，不接受查询参数中的令牌，不代理 CDP、文件管理或终端。
 
 `POST /api/hot/refresh` 需要认证，遵守采集冷却和异常退避；采集未启用时返回 `409`。页面轮询及访客刷新读取已有缓存。响应中的原始热度用于排序，网页展示乘以 40 后四舍五入的整数。完整定义见 [热榜规则](docs/hot-ranking.md)。

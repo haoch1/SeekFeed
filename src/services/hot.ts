@@ -319,7 +319,7 @@ export class HotService {
         // A completed manual verification must survive restarting the scheduler.
         if (action !== 'stop' && this.state().verification_required) {
             if (this.state().verification_expires_at && await this.resumeAfterVerification()) return;
-            throw new Error('请先完成人工验证，再重启采集');
+            throw new Error('请先完成人工验证，再继续采集');
         }
         this.controlBusy = true;
         try {

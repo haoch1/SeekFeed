@@ -123,8 +123,8 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
         </div>
         <div class="settings-card collection-card"><div class="section-heading collection-heading"><div><h2>热榜采集</h2><p>停止或采集失败时释放浏览器，保留会话与榜单。</p></div><button id="hotCollectionRefresh" type="button" class="icon-btn" aria-label="刷新热榜采集状态"><Icon name="sync" /></button></div>
           <dl class="diagnostic-list"><div><dt>采集状态</dt><dd id="hotCollectionState">读取中</dd></div><div><dt>采集频率</dt><dd>{cadence.hotCollectIntervalSeconds} 秒 · 最近回复、最新发布各 2 页</dd></div><div><dt>上次成功采集</dt><dd id="hotCollectionSuccess">—</dd></div></dl>
-          <div class="form-actions verification-actions"><button id="hotCollectionStart" type="button" class="btn btn-secondary" disabled>启动采集</button><button id="hotCollectionStop" type="button" class="btn btn-secondary" disabled>停止采集</button><button id="hotVerificationResume" type="button" class="btn btn-primary" disabled>重启采集</button><button id="hotVerificationOpen" type="button" class="btn btn-secondary" disabled>人工验证</button></div>
-          <p id="hotVerificationMessage" class="insight-note" role="status">验证完成后点击重启采集；验证窗口有效期 15 分钟。</p>
+          <div class="form-actions verification-actions"><button id="hotCollectionAction" type="button" class="btn btn-primary" disabled>读取中</button><button id="hotCollectionStop" type="button" class="btn btn-secondary" hidden disabled>停止采集</button></div>
+          <p id="hotVerificationMessage" class="insight-note" role="status">采集按设定频率自动运行，停止后保留会话与榜单。</p>
         </div>
         <div class="settings-card collection-card"><div class="section-heading collection-heading"><div><h2>采集质量</h2><p>运行记录与作者补全进度。刷新记录不会触发源站请求。</p></div><button id="collectionQualityRefresh" type="button" class="icon-btn" aria-label="刷新采集记录"><Icon name="sync" /></button></div><div id="collectionQuality" aria-live="polite"><p class="insight-note">正在读取采集记录…</p></div></div>
       </section>

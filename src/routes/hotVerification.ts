@@ -83,7 +83,7 @@ hotVerificationApi.post('/verification', async c => {
 hotVerificationApi.post('/verification/resume', async c => {
     if (!sameOrigin(c)) return c.json({ success: false, message: '请求来源无效' }, 403);
     const service = c.get('dbService').getHotService();
-    if (!await service.resumeAfterVerification()) return c.json({ success: false, message: '请先在验证窗口进入帖子列表，再重启采集' }, 409);
+    if (!await service.resumeAfterVerification()) return c.json({ success: false, message: '请先在验证窗口进入帖子列表，再继续采集' }, 409);
     const sessionId = c.get('sessionData')!.sessionId;
     for (const [key, grant] of grants) if (grant.sessionId === sessionId) revoke(key, grant);
     return c.json({ success: true, data: service.collectionStatus() });
