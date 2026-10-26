@@ -43,6 +43,10 @@ describe('collection observations and delivery invariants', () => {
         sqlite.exec(removal);
         expect(sqlite.query("SELECT name FROM sqlite_master WHERE type='table' AND (name LIKE 'hot_%' OR name LIKE 'author_backfill%')").all()).toEqual([]);
         expect(sqlite.query('SELECT * FROM forum_post_authors').all()).toEqual([]);
+        const identities = readFileSync(new URL('../database/migrations/019_remove_collector_identity.sql', import.meta.url), 'utf8');
+        sqlite.exec(identities);
+        sqlite.exec(identities);
+        expect(sqlite.query("SELECT name FROM sqlite_master WHERE name='forum_post_authors'").get()).toBeNull();
         expect(sqlite.query('SELECT * FROM collection_runs').all()).toEqual(rssRuns);
         expect(retained.map(table => sqlite.query(`SELECT * FROM ${table} ORDER BY id`).all())).toEqual(before);
         expect(insights.sync([post(3)], true).new).toBe(1);

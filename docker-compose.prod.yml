@@ -24,7 +24,7 @@ services:
     networks:
       - seekfeed_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3010/health"]
+      test: ["CMD", "bun", "--no-install", "dist/healthcheck.js"]
       interval: 30s
       timeout: 10s
       retries: 3

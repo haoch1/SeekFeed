@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { Database } from 'bun:sqlite';
-import { readFileSync } from 'node:fs';
 import { getKeywordAnalytics } from './keywordAnalytics';
 
 let db: Database;
@@ -11,7 +10,6 @@ function post(date: string, title = 'DMIT 香港', creator = 'alice', category =
 }
 beforeEach(() => {
     db = new Database(':memory:');
-    db.exec(readFileSync(new URL('../database/migrations/011_forum_author_links.sql', import.meta.url), 'utf8'));
     db.exec('CREATE TABLE posts (id INTEGER, title TEXT, memo TEXT, creator TEXT, category TEXT, pub_date TEXT)');
 });
 afterEach(() => db.close());

@@ -27,6 +27,7 @@ bun run dev
 ```bash
 bun test
 bun run build
+bun run scripts/verify-bundle.ts
 git diff --check
 ```
 

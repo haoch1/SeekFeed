@@ -60,36 +60,15 @@ API、认证响应禁止共享缓存。客户端不得将私有响应交由 Serv
 | `pushStatusNot` | 0–3，需认证 |
 | `subId` | 正整数，需认证 |
 
-响应 `data` 包含 `posts`、`total`、`page`、`totalPages`。访客帖子字段仅包含 `post_id`、`title`、`memo`、`category`、`creator`、`pub_date` 及可选 `authorId`，不包含命中规则及推送状态。
+响应 `data` 包含 `posts`、`total`、`page`、`totalPages`。访客帖子字段仅包含 `post_id`、`title`、`memo`、`category`、`creator`、`pub_date`，不包含命中规则及推送状态。
 
 `DELETE /api/matched-posts/:id` 需要有效会话，`:id` 为论坛帖子 ID。该接口将已命中帖子从命中订阅列表中持久移除，并停止后续自动推送；原始帖子、推送历史及已发送的 Telegram 消息保留。重复删除返回成功，非命中帖子或不存在的 ID 返回 `404`。命中状态及订阅筛选结果均排除已移除帖子，公开帖子列表不受影响。
 
 `GET /api/stats/overview` 的认证响应包含 `visible_matched_posts`，表示当前保留的命中帖子数；`pushed_posts` 仍表示历史推送成功数。
 
-## 热榜
+## 已退役地址
 
-`GET /api/hot` 为公开接口。查询参数：
-
-| 参数 | 可选值 |
-| --- | --- |
-| `period` | `live`（默认）、`day`、`week` |
-| `category` | 分类键，默认不筛选 |
-| `sort` | `heat`（默认）、`views`、`replies` |
-| `limit` | 固定最多 `30`；兼容旧值 `50`／`100`，但响应仍为前 30 条 |
-
-`day` 按北京时间当天 00:00 起算，`week` 按北京时间本周一 00:00 起算，均包含起点。时间范围随当前日期切换；采集延迟不延长上一日或上一周。仅纳入已确认发布时间且不晚于最近成功采集时刻的帖子。
-
-`GET /api/hot/collection` 返回 HTTP 采集状态（`transport: "http"`）、300 秒基础间隔、每轮两种排序各 2 页、上次成功采集时间、人工暂停状态、持久停止状态、`verificationAvailable`、浏览器运行状态与验证入口到期时间，仅登录可读。HTTP 启停不依赖浏览器配置；浏览器仅供人工验证。
-
-状态查询不会触发源站采集。浏览器运行状态不表示已完成人工验证；空白页和 Chromium 新标签页均可作为冷启动采集目标，但不能作为验证成功的依据。
-
-`POST /api/hot/collection/start`、`POST /api/hot/collection/stop`、`POST /api/hot/collection/restart` 需要有效会话及同源 Origin。停止会取消 HTTP 任务并关闭浏览器容器；启动及重启保留 300 秒最小冷却与显式限流，未完成人工验证时返回 `409`。验证后继续会先读取并保存本机 CF 白名单会话、关闭浏览器，再恢复 HTTP 调度；Cookie 值与 User-Agent 不出现在接口响应中。
-
-网页主按钮随状态显示启动、停止、人工验证或“验证完成，继续采集”；后者调用 `/collection/restart`。验证与浏览器准备期间按需显示停止按钮，接口地址保持兼容。
-
-`POST /api/hot/verification` 需要有效会话与同源 Origin，暂停采集、按需启动浏览器并签发受限验证 Cookie，返回 `/hot-verification/` 入口。采集中返回 `409`。`POST /api/hot/verification/resume` 作为兼容接口，检查服务器浏览器已进入可解析的帖子列表后重启采集，未完成验证返回 `409`。代理入口与 WebSocket 均校验真实账号会话，不接受查询参数中的令牌，不代理 CDP、文件管理或终端。
-
-`POST /api/hot/refresh` 需要认证，遵守采集冷却和异常退避；采集未启用时返回 `409`。页面轮询及访客刷新读取已有缓存。响应中的原始热度用于排序，网页展示乘以 40 后四舍五入的整数。完整定义见 [热榜规则](docs/hot-ranking.md)。
+`/api/hot`、其全部子路径及 `/hot-verification` 入口统一返回 `410`。这些兼容响应不读取旧榜单、不调度采集、不代理浏览器。旧 `/hot` 页面地址重定向到 `/posts`。原始功能与接口定义只保存在 [归档分支](https://github.com/haoch1/SeekFeed/tree/codex/archive-hot-ranking)。
 
 ## 统计
 
@@ -159,14 +138,14 @@ RSS 更新字段为 `rss_url`、`rss_interval_seconds`（10–3600）及 `rss_pr
 | `/api/telegram` | `GET /status`；`POST /test`、`/send-test`、`/unbind` |
 | `/telegram` | `GET /bot-info`；`POST /set-webhook`、`/test-message` |
 
-Webhook 使用公网 HTTPS 地址；Polling 与 Webhook 为互斥连接方式。命令及热榜按钮仅向已绑定聊天开放。
+Webhook 使用公网 HTTPS 地址；Polling 与 Webhook 为互斥连接方式。订阅和帖子管理命令仅向已绑定聊天开放；旧热榜按钮只返回停用提示。
 
 ## 状态码
 
-`200` 为成功，`201` 为新增成功，`400` 为输入不合法，`401` 为认证无效，`404` 为资源不存在，`409` 为功能状态冲突，`413` 为请求过大，`500` 为执行失败，`503` 为依赖服务未就绪。
+`200` 为成功，`201` 为新增成功，`400` 为输入不合法，`401` 为认证无效，`404` 为资源不存在，`409` 为功能状态冲突，`410` 为接口已退役，`413` 为请求过大，`500` 为执行失败，`503` 为依赖服务未就绪。
 
 ## 采集质量
 
 | 方法与路径 | 认证 | 响应与行为 |
 | --- | --- | --- |
-| `GET /api/collection/quality` | 管理员 | `summary` 为近 24 小时分来源摘要，`recent` 为最近 30 条采集记录，`authors` 为名称覆盖，`retention` 为保留上限；只读本地数据库 |
+| `GET /api/collection/quality` | 管理员 | `summary` 为近 24 小时 RSS 摘要，`recent` 为最近 30 条 RSS 采集记录，`retention` 为保留上限；只读本地数据库 |

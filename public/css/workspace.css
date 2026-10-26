@@ -137,12 +137,6 @@ button svg, a.icon-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
 .icon-btn { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-secondary); background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 0; text-decoration: none; cursor: pointer; }
 .icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 .header-tooltip-trigger { position: relative; }
-.forum-author-link { color: inherit; text-decoration: none; text-underline-offset: 3px; border-radius: 3px; }
-.forum-author-link:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; color: var(--primary); text-decoration: underline; }
-@media (hover: hover) { .forum-author-link:hover { color: var(--primary); text-decoration: underline; } }
-.author-profile-tooltip { position: fixed; z-index: 1000; max-width: calc(100vw - 16px); padding: 6px 9px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-elevated); color: var(--text-primary); box-shadow: var(--shadow); font-size: 11px; line-height: 1.5; pointer-events: none; }
-.author-profile-tooltip[hidden] { display: none; }
-@media (pointer: coarse) { .forum-author-link { display: inline-block; min-height: 28px; line-height: 28px; max-width: 100%; } }
 .github-link > svg { width: 19px; height: 19px; }
 .header-tooltip { position: absolute; right: 0; top: calc(100% + 8px); z-index: 1; white-space: nowrap; padding: 6px 9px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-elevated); color: var(--text-primary); box-shadow: var(--shadow); font-size: 11px; pointer-events: none; opacity: 0; }
 .header-tooltip-trigger:focus-visible .header-tooltip { opacity: 1; }

@@ -130,7 +130,7 @@ apiRoutes.get('/posts', createQueryValidationMiddleware(paginationSchema), async
 
         const data = authenticated ? result : {
             ...result,
-            posts: result.posts.map(({ post_id, title, memo, category, creator, pub_date, authorId }) => ({ post_id, title, memo, category, creator, pub_date, ...(authorId ? { authorId } : {}) })),
+            posts: result.posts.map(({ post_id, title, memo, category, creator, pub_date }) => ({ post_id, title, memo, category, creator, pub_date })),
         };
         return c.json(createSuccessResponse(data));
     } catch (error) {
@@ -170,7 +170,7 @@ apiRoutes.get('/stats/analytics', createQueryValidationMiddleware(analyticsQuery
             period, totals: { posts: totals.posts, authors: totals.authors },
             trend: trend.map(({ time, count }) => ({ time, count })),
             categories: categories.map(({ category, count, authors }) => ({ category, count, authors })),
-            availableCategories, authors: authors.map(({ creator, count, authorId }) => ({ creator, count, ...(authorId ? { authorId } : {}) })),
+            availableCategories, authors: authors.map(({ creator, count }) => ({ creator, count })),
             authorDistribution, activity, topics,
         }));
     }

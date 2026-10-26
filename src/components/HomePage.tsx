@@ -9,7 +9,7 @@ import { DashboardSurface, Icon } from "./DashboardSurface";
 import cadence from '../config/cadence.json';
 
 export const HomePage: FC<{ path?: string }> = ({ path = "/posts" }) => {
-  if (path === '/' || path === '/hot') path = '/posts';
+  if (path === '/') path = '/posts';
   return (
     <Layout
       title="SeekFeed · NodeSeek 社区动态"

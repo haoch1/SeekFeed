@@ -22,7 +22,7 @@ const avatar = 'data:image/png;base64,' + readFileSync(new URL('../../public/ico
 
 beforeEach(() => {
     const sqlite = new Database(':memory:');
-    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '009_account_avatar', '010_dismissed_matches', '011_forum_author_links', '012_collection_insights', '016_hot_browser_collection', '017_hot_collector_control', '014_remove_trade_analysis', '015_remove_post_history']) {
+    for (const name of ['001_initial', '002_add_rss_config', '003_add_telegram_mode', '004_subscription_controls', '005_account_preferences', '006_hot_ranking', '007_hot_samples', '008_hot_collector_cooldown', '009_account_avatar', '010_dismissed_matches', '011_forum_author_links', '012_collection_insights', '016_hot_browser_collection', '017_hot_collector_control', '014_remove_trade_analysis', '015_remove_post_history', '018_retire_hot_ranking', '019_remove_collector_identity']) {
         sqlite.exec(readFileSync(new URL(`../database/migrations/${name}.sql`, import.meta.url), 'utf8'));
     }
     db = new DatabaseService(sqlite);
@@ -177,14 +177,10 @@ describe('account settings and session expiry', () => {
         const body = await publicRead.json();
         expect(publicRead.status).toBe(200);
         expect(Object.keys(body.data.posts[0]).sort()).toEqual(['category', 'creator', 'memo', 'post_id', 'pub_date', 'title']);
-        db.db.query('INSERT INTO forum_post_authors VALUES(?,?,?,?)').run(101, 'public-author', 72038, new Date().toISOString());
-        const linkedBody = await (await app.request('/api/posts')).json();
-        expect(linkedBody.data.posts[0].authorId).toBe(72038);
-        expect(Object.keys(linkedBody.data.posts[0]).sort()).toEqual(['authorId', 'category', 'creator', 'memo', 'post_id', 'pub_date', 'title']);
-        expect(JSON.stringify(linkedBody)).not.toMatch(/private-rule-example|secret-author|secret-exclusion|sub_id|push_status|push_date|session_id|password/);
-        const linkedAuthors = await (await app.request('/api/stats/analytics?days=-1')).json();
-        expect(linkedAuthors.data.authors).toEqual([{ creator: 'public-author', count: 1, authorId: 72038 }]);
-        expect(JSON.stringify(linkedAuthors)).not.toMatch(/private-rule-example|secret-author|secret-exclusion|sub_id|push_status|push_date|session_id|password|"matched"/);
+        expect(db.db.query("SELECT name FROM sqlite_master WHERE name='forum_post_authors'").get()).toBeNull();
+        const authors = await (await app.request('/api/stats/analytics?days=-1')).json();
+        expect(authors.data.authors).toEqual([{ creator: 'public-author', count: 1 }]);
+        expect(JSON.stringify(authors)).not.toMatch(/private-rule-example|secret-author|secret-exclusion|sub_id|push_status|push_date|session_id|password|authorId|"matched"/);
         expect(body.data.total).toBe(1);
         expect(JSON.stringify(body)).not.toMatch(/private-rule-example|secret-author|secret-exclusion|sub_id|push_status|push_date/);
         expect(publicRead.headers.get('Cache-Control')).toContain('no-store');

@@ -49,11 +49,11 @@ location / {
 
 ## 轻量运行与热榜退役
 
-主程序限制为 256 MiB 内存、0.5 CPU，生产仅运行 `seekfeed` 应用容器，不需要 Python、Chromium、浏览器控制或 Docker socket。源码开发 Compose 同样不包含采集器。热榜实现保存在独立归档分支，详见 [热榜归档](hot-ranking.md)。
+主程序限制为 256 MiB 内存、0.5 CPU，生产固定使用官方 `oven/bun:1.4.3-slim`，仅运行 `seekfeed` 应用容器，不需要 Python、Chromium、浏览器控制或 Docker socket。源码开发 Compose 同样不包含采集器。镜像依据 [Bun 官方镜像变体](https://bun.com/docs/installation#image-variants) 使用 slim；构建依赖保留在构建阶段，运行阶段只复制 bundle、静态文件和迁移 SQL。健康检查执行 `bun dist/healthcheck.js`，不安装额外 curl 或系统开发包。热榜实现保存在独立归档分支，详见 [热榜归档](hot-ranking.md)。
 
 已有部署升级时，停止并移除旧浏览器与控制容器，确认不再被容器引用后删除 `seekfeed_browser_profile` 和 `seekfeed_browser_control` 卷、专用浏览器网络与未使用的 Chromium 镜像。仅清理这些已退役资源，保留 `seekfeed_data` 和 `seekfeed_logs`。
 
-迁移 `018_retire_hot_ranking.sql` 清除热榜表、补全队列及热榜诊断和采集的数字作者 ID；另删除数据卷中的私有 `hot-http-session.json` 文件。核对配置、RSS 帖子、订阅、会话与通知状态后，对数据库执行 checkpoint 和 VACUUM，并移除临时升级备份。已删除数据不随恢复代码自动恢复。
+迁移 `018_retire_hot_ranking.sql` 清除热榜表、补全队列及热榜诊断和采集的数字作者 ID；另删除数据卷中的私有 `hot-http-session.json` 文件。核对配置、RSS 帖子、订阅、会话与通知状态后，对数据库执行 checkpoint 和 VACUUM，并移除临时升级备份。迁移 `019_remove_collector_identity.sql` 进一步删除不再使用的空身份表。已删除数据不随恢复代码自动恢复。
 
 ## 更新与版本核对
 

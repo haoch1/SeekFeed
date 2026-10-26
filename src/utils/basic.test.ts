@@ -36,11 +36,6 @@ describe('Configuration Validation', () => {
       expect(typeof config).toBe('string')
     }
   })
-
-  it('should handle JWT secret validation', () => {
-    const testSecret = 'test-jwt-secret-key-for-development-only'
-    expect(testSecret.length).toBeGreaterThan(32)
-  })
 })
 
 describe('Utility Functions', () => {

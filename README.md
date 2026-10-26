@@ -14,7 +14,6 @@
 | 订阅 | 最多三个关键词组合、正则、作者、分类、屏蔽词；新增、编辑、暂停、恢复与删除 |
 | 统计 | 发帖趋势、分类结构、作者贡献、活跃时段、热门标题词、分类联动和 CSV 导出 |
 | 采集分析 | RSS 采集质量记录、当前帖子内容同步 |
-| 作者主页 | 帖子列表及作者榜支持在新标签页打开已确认的 NodeSeek 用户主页；未确认或存在同名歧义时保留作者文本；当前不主动采集数字 ID |
 | 关键词分析 | 指定日期的发帖数量及占比、1／3／6 小时分布、近七天趋势、最多三个词独立对比、共同命中、分类与作者明细 |
 | Telegram | Bot 绑定、Webhook 或 Polling、持久化待发送队列、失败重试、命令交互 |
 | 账号 | 单管理员认证、自定义头像、登录有效期、设备列表、单设备退出与全部退出 |
@@ -88,13 +87,14 @@ docker compose up -d --build
 
 ## 本地开发
 
-CI 与容器使用 Bun 1.4.3；主分支不再需要 Python 或 Chromium。
+CI 与容器固定使用 Bun 1.4.3；生产采用 slim 基础镜像，只有打包代码、静态资源和迁移 SQL，不携带 node_modules、Python 或 Chromium。构建与依赖安装仅在构建阶段执行。
 
 ```bash
 bun install --frozen-lockfile
 bun run dev
 bun test
 bun run build
+bun run scripts/verify-bundle.ts
 bun run start
 ```
 
@@ -141,7 +141,7 @@ RSS 地址、间隔、代理与 Telegram Token、接收账号在设置页管理�
 | [Scrapy](https://github.com/scrapy/scrapy) · [Discourse TopTopic](https://github.com/discourse/discourse/blob/main/app/models/top_topic.rb) | 分页任务、限速与周期统计覆盖的方案调研；当前未采用深分页巡检，也未引入对应运行时 |
 | [Miniflux](https://github.com/miniflux/v2/blob/main/internal/storage/entry.go) | 条目内容更新与用户状态分离、保留原发布时间 |
 
-参考来源的细节分别记录于 [界面规范](docs/style-guide.md)、[优化记录](docs/OPTIMIZATION.md) 与 [热榜规则](docs/hot-ranking.md)。未采用的主题预览不属于当前界面的实现来源。
+参考来源的细节分别记录于 [界面规范](docs/style-guide.md)、[优化记录](docs/OPTIMIZATION.md) 与 [热榜归档](docs/hot-ranking.md)。未采用的主题预览不属于当前界面的实现来源。
 
 ## 文档与支持
 

@@ -1,5 +1,4 @@
 import type { Database } from 'bun:sqlite';
-import { linkForumAuthors } from './forumAuthors';
 
 const DAY = 86400000, HOUR = 3600000;
 const normalized = (text: string) => text.normalize('NFKC').toLocaleLowerCase('zh-CN');
@@ -47,7 +46,7 @@ export function getKeywordAnalytics(db: Database, terms: string[], date: string,
         return {
             term, total: today.length, previous, authors: authors.size, categoryCount: categories.size,
             hourly, daily, peak: peak ? { hour: hourly.findIndex(row => row.count === peak), count: peak } : null,
-            categories: ranked(categories, 'category'), topAuthors: linkForumAuthors(db, ranked(authors, 'creator').slice(0, 50) as { creator: string; count: number }[]),
+            categories: ranked(categories, 'category'), topAuthors: ranked(authors, 'creator').slice(0, 50) as { creator: string; count: number }[],
         };
     });
     const earliest = db.query('SELECT MIN(julianday(pub_date)) AS value FROM posts WHERE julianday(pub_date) <= julianday(?)').get(now.toISOString()) as { value: number | null };

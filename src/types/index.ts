@@ -28,7 +28,6 @@ export interface Post {
   memo: string;
   category: string;
   creator: string;
-  authorId?: number; // Verified public NodeSeek profile ID; unrelated to local sessions.
   push_status: number; // 0=待处理, 1=已匹配但未推送, 2=未匹配, 3=已匹配且已推送成功
   match_dismissed?: number; // 1=已从命中订阅移除，不再自动推送
   sub_id?: number;
@@ -99,18 +98,9 @@ export interface SessionVerification {
   message?: string;
 }
 
-// JWT 载荷接口（保留用于向后兼容）
-export interface JWTPayload {
-  userId: number;
-  username: string;
-  iat?: number;
-  exp?: number;
-}
-
 // 认证验证结果接口
 export interface AuthVerification {
   valid: boolean;
-  payload?: JWTPayload;
   sessionData?: SessionData;
   message?: string;
 }
@@ -208,29 +198,6 @@ export interface ServerConfig {
   host: string;
   environment: 'development' | 'production' | 'test';
   corsOrigins: string[];
-  jwtSecret: string;
-}
-
-// 作业配置接口
-export interface JobConfig {
-  rssCheck: {
-    enabled: boolean;
-    cronExpression: string;
-  };
-  dataCleanup: {
-    enabled: boolean;
-    cronExpression: string;
-    retentionDays: number;
-  };
-  telegram: {
-    botToken?: string;
-    webhookUrl?: string;
-  };
-  rss: {
-    url: string;
-    timeout: number;
-    userAgent: string;
-  };
 }
 
 // 错误响应接口
@@ -256,7 +223,6 @@ export interface ContextVariables {
   sessionData?: SessionData;
   dbService: any; // DatabaseService 类型
   authService?: any; // AuthService 类型
-  jwtPayload?: JWTPayload;
   validatedData?: any; // 验证后的请求体数据
   validatedQuery?: any; // 验证后的查询参数
   validatedParams?: any; // 验证后的路径参数

@@ -6,7 +6,7 @@
 
 `main`、`develop` 分支推送、`v*` 标签、目标为 `main` 的 Pull Request 以及手动触发均进入工作流。
 
-测试任务使用 Bun 1.4.3，依次安装锁定依赖、运行 Bun 测试及生产构建。测试通过后才执行容器构建。
+测试任务使用 Bun 1.4.3，依次安装锁定依赖、运行 Bun 测试、生产构建及无 node_modules 的独立运行验收。测试通过后才执行容器构建。
 
 验证使用本地数据库与模拟响应，不访问 NodeSeek。覆盖 RSS/通知状态、热榜移除、旧接口失效及数据清理迁移；部署核对镜像提交、健康、持久数据与资源占用，不触发热榜采集。
 
@@ -14,7 +14,10 @@
 bun install --frozen-lockfile
 bun test
 bun run build
+bun run scripts/verify-bundle.ts
 ```
+
+独立运行验收将生产文件复制到临时目录，禁用依赖自动安装与 RSS 调度，验证首次初始化、登录、当前迁移结构、帖子、统计、诊断以及成功／失败健康检查。只访问本地服务，不请求 NodeSeek。Windows 本地运行可通过 `SEEKFEED_TEST_TEMP` 指定任务临时目录。
 
 ## 镜像与标签
 

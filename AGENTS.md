@@ -117,8 +117,9 @@ Key variables in `.env`:
 ## Caveats
 
 - Keep the entire frontend and backend lightweight: native server-rendered Hono pages, vanilla JavaScript/SVG, bounded SQLite queries/caches, and visibility-aware polling. Do not add a heavyweight client framework, a background browser, overlapping jobs, or unbounded caches for routine features.
-- Hot ranking is retired from main and archived on `codex/archive-hot-ranking`. Do not re-enable collectors, browser services or HOT_* settings without an explicit request. Migration 018 intentionally purges hot data and collected identities while preserving RSS/account/subscription/delivery records. Legacy migration SQL is retained for upgrade compatibility; never replay it by deleting migration history.
+- Hot ranking is retired from main and archived on `codex/archive-hot-ranking`. Do not re-enable collectors, browser services or HOT_* settings without an explicit request. Migration 018 intentionally purges hot data and collected identities while preserving RSS/account/subscription/delivery records. Migration 019 removes the unused identity table and its frontend/backend consumers. Only tiny retired-URL/callback responses and migration compatibility remain. Legacy migration SQL is retained for upgrade compatibility; never replay it by deleting migration history.
 
+- Production images contain standalone bundles, static assets and migration SQL only. Keep dependencies and source tooling in the builder; run `bun run scripts/verify-bundle.ts` after building to verify operation without node_modules.
 - Always use `bun install` (not npm) - bun.lock is authoritative
 - Database is SQLite at `./data/seekfeed.db`
 - Restart dev server after `bun install` (hot reload doesn't catch new deps)
