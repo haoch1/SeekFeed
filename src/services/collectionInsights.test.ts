@@ -6,7 +6,6 @@ import { DatabaseService } from './database';
 import { RSSService } from './rss';
 import { MatcherService } from './matcher';
 import { TelegramPushService } from './telegram/push';
-import { HotService } from './hot';
 import { loadEnvConfig } from '../config/env';
 import type { ParsedPost } from '../types';
 
@@ -25,6 +24,32 @@ beforeEach(() => {
 afterEach(() => db.close());
 
 describe('collection observations and delivery invariants', () => {
+    it('purges archived hot data idempotently while preserving RSS, account, subscriptions and delivery state', () => {
+        const sub = db.createKeywordSub({ keyword1: 'DMIT' });
+        insights.sync([post(1), post(2)], true);
+        db.updatePostPushStatus(1, 3, sub.id, now.toISOString());
+        db.dismissMatchedPost(2);
+        insights.record({ source: 'rss', startedAt: now.toISOString(), durationMs: 20, status: 'success' });
+        sqlite.exec("INSERT INTO collection_runs(source,started_at,duration_ms,status) VALUES('hot','2026-10-22',10,'success'),('identity','2026-10-22',10,'success')");
+        sqlite.query('INSERT INTO forum_post_authors VALUES(?,?,?,?)').run(1, 'Alice', 42, now.toISOString());
+        sqlite.query('INSERT INTO author_backfill VALUES(?,?,?)').run(1, now.toISOString(), 'success');
+        sqlite.query('INSERT INTO hot_posts VALUES(?,?,?,?,?,?,?,?,?,?)').run(99, 'retired title', 'Alice', 'tech', '技术', 100, 10, now.toISOString(), now.toISOString(), 0);
+        sqlite.query('INSERT INTO hot_samples VALUES(?,?,?,?)').run(99, now.toISOString(), 100, 10);
+        const retained = ['base_config', 'keywords_sub', 'posts'];
+        const before = retained.map(table => sqlite.query(`SELECT * FROM ${table} ORDER BY id`).all());
+        const rssRuns = sqlite.query("SELECT * FROM collection_runs WHERE source='rss'").all();
+        const removal = readFileSync(new URL('../database/migrations/018_retire_hot_ranking.sql', import.meta.url), 'utf8');
+        sqlite.transaction(() => sqlite.exec(removal))();
+        sqlite.exec(removal);
+        expect(sqlite.query("SELECT name FROM sqlite_master WHERE type='table' AND (name LIKE 'hot_%' OR name LIKE 'author_backfill%')").all()).toEqual([]);
+        expect(sqlite.query('SELECT * FROM forum_post_authors').all()).toEqual([]);
+        expect(sqlite.query('SELECT * FROM collection_runs').all()).toEqual(rssRuns);
+        expect(retained.map(table => sqlite.query(`SELECT * FROM ${table} ORDER BY id`).all())).toEqual(before);
+        expect(insights.sync([post(3)], true).new).toBe(1);
+        expect(db.getPostsWithPagination(1, 10).total).toBe(3);
+        expect(sqlite.query('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' });
+    });
+
     it('removes retired analysis metadata idempotently while preserving forum data and subscriptions', () => {
         const rule = db.createKeywordSub({ keyword1: 'DMIT' });
         insights.sync([post(1)], true);
@@ -95,44 +120,9 @@ describe('collection observations and delivery invariants', () => {
             expect(insights.quality().recent[1]).toMatchObject({ status: 'partial', invalid: 1 });
         } finally { fetch.mockRestore(); }
     });
-    it('rate limits persistent backfill, checks exact OP identity and keeps mismatched data unlinked', () => {
-        insights.sync([post(1), post(2)], false);
-        const chosen = insights.nextAuthor(now)!;
-        expect(chosen).toBe(2);
-        expect(insights.nextAuthor(new Date(now.getTime() + 60000))).toBeUndefined();
-        expect(insights.saveAuthor(chosen, 'alice', 42, now)).toBe(false);
-        expect(insights.saveAuthor(chosen, 'Alice', -1, now)).toBe(false);
-        expect(insights.saveAuthor(chosen, 'Alice', 42, now)).toBe(true);
-        expect(db.getPostsWithPagination(1, 10).posts.map(p => p.authorId)).toEqual([42, 42]);
-        expect(insights.nextAuthor(new Date(now.getTime() + 8 * 86400000))).toBeUndefined();
-    });
-    it('permits at most one historical author lookup every thirty minutes while retaining exact-name retry suppression', () => {
-        insights.sync([{ ...post(1), creator: 'Alice' }, { ...post(2), creator: 'Bob' }, { ...post(3), creator: 'Carol' }], false);
-        expect(insights.nextAuthor(now)).toBe(3);
-        expect(insights.nextAuthor(new Date(now.getTime() + 1799999))).toBeUndefined();
-        expect(insights.nextAuthor(new Date(now.getTime() + 1800000))).toBe(2);
-        expect(insights.nextAuthor(new Date(now.getTime() + 1800001))).toBeUndefined();
-    });
     it('never stores raw error messages or secrets in diagnostic codes', () => {
         insights.record({ source: 'rss', startedAt: new Date().toISOString(), durationMs: 10, status: 'failed', errorCode: 'https://user:secret@example.com' });
         expect(JSON.stringify(insights.quality())).not.toContain('secret');
-    });
-    it('keeps the valid list batch but shares detail-page rate limits with the collector', async () => {
-        insights.sync([post(1)], false, new Date());
-        const service = new HotService(sqlite, async (_full, candidate) => {
-            expect(candidate).toBe(1);
-            return { posts: [{ postId: 1, title: 'DMIT', author: 'Alice', category: 'info', categoryLabel: '情报', views: 10, replies: 1,
-                lastActiveAt: new Date().toISOString(), pinned: false }], pages: 2, collectedAt: new Date().toISOString(),
-                identity: null, identityError: { error: 'http_429', retryAfterSeconds: 1800 } };
-        });
-        expect(await service.refresh()).toBe(true);
-        const state = sqlite.query('SELECT * FROM hot_collector_state').get() as any;
-        expect(Date.parse(state.next_attempt_at) - Date.now()).toBeGreaterThanOrEqual(1799000);
-        const backfill = sqlite.query('SELECT next_attempt_at FROM author_backfill_state').get() as any;
-        expect(Date.parse(backfill.next_attempt_at) - Date.now()).toBeGreaterThanOrEqual(6 * 3600000 - 1000);
-        expect(sqlite.query('SELECT COUNT(*) AS count FROM hot_posts').get()).toEqual({ count: 1 });
-        expect(insights.quality().recent[0]).toMatchObject({ source: 'identity', status: 'failed', http_status: 429 });
-        expect(await service.refresh()).toBe(false);
     });
     it('rolls back the content batch if a write fails', () => {
         insights.sync([post(1)], false);

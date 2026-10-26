@@ -1,3 +1,0 @@
-curl_cffi==0.16.3
-beautifulsoup4==4.14.3
-websocket-client==1.9.0

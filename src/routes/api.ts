@@ -23,7 +23,6 @@ import { getEnvConfig } from '../config/env';
 import cadence from '../config/cadence.json';
 import { logger } from '../utils/logger';
 import { getScheduler } from '../services/runtime';
-import { hotVerificationApi } from './hotVerification';
 
 /**
  * 智能构建 Webhook URL，考虑 CDN 代理情况
@@ -92,18 +91,10 @@ type Variables = ContextVariables & {
 }
 
 export const apiRoutes = new Hono<{ Variables: Variables }>();
+// Retired endpoints are inert even if an old deployment still sets HOT_* variables.
+for (const path of ['/hot', '/hot/*']) apiRoutes.all(path, c =>
+    c.json(createErrorResponse('热榜功能已停用'), 410));
 apiRoutes.use('*', optionalSession);
-
-const hotQuery = z.object({
-    period: z.enum(['live', 'day', 'week']).default('live'),
-    category: z.string().max(80).regex(/^[a-zA-Z0-9_-]*$/).default(''),
-    sort: z.enum(['heat', 'views', 'replies']).default('heat'),
-    limit: z.enum(['30', '50', '100']).default('30').transform(() => 30 as const),
-});
-apiRoutes.get('/hot', createQueryValidationMiddleware(hotQuery), c => {
-    const { period, category, sort, limit } = c.get('validatedQuery');
-    return c.json(createSuccessResponse(c.get('dbService').getHotService().ranking(period, category, sort, undefined, limit)));
-});
 
 // 公开路由（无需认证）
 apiRoutes.get('/posts', createQueryValidationMiddleware(paginationSchema), async (c) => {
@@ -212,7 +203,7 @@ apiRoutes.get('/stats/keywords', createQueryValidationMiddleware(keywordAnalytic
 
 // 应用Session中间件到所有后续API路由
 apiRoutes.use('*', requireSession);
-apiRoutes.route('/hot', hotVerificationApi);
+
 
 apiRoutes.get('/collection/quality', c => c.json(createSuccessResponse(c.get('dbService').getCollectionInsights().quality())));
 
@@ -222,13 +213,6 @@ apiRoutes.delete('/matched-posts/:id', createParamValidationMiddleware(idParamSc
         return c.json(createErrorResponse('命中帖子不存在'), 404);
     }
     return c.json(createSuccessResponse({ postId: id }, '已从命中订阅删除'));
-});
-
-apiRoutes.post('/hot/refresh', async c => {
-    if (process.env.HOT_COLLECT_ENABLED !== 'true') return c.json(createErrorResponse('热榜采集未启用'), 409);
-    const service = c.get('dbService').getHotService();
-    const success = await service.refresh();
-    return c.json(createSuccessResponse({ collected: success, ...service.ranking() }));
 });
 
 apiRoutes.get('/stats/subscription-ranking', createQueryValidationMiddleware(analyticsQuery), (c) => {

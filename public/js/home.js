@@ -1024,8 +1024,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }));
   }
   const routeMap = {
-    '/': ['hot', '热榜'], '/posts': ['feed', '最新帖子'], '/matched': ['feed', '命中订阅'],
-    '/hot': ['hot', '热榜'],
+    '/': ['feed', '最新帖子'], '/posts': ['feed', '最新帖子'], '/matched': ['feed', '命中订阅'],
     '/subscriptions': ['subscriptions', '订阅管理'], '/statistics': ['stats', '统计信息'],
     '/settings/account': ['account', '账号与安全'], '/settings/rss': ['rss', 'RSS 配置'], '/settings/telegram': ['telegram', 'Telegram'],
   };
@@ -1035,12 +1034,16 @@ document.addEventListener("DOMContentLoaded", function () {
   const routeScroll = new Map();
   async function navigate(path, push = true) {
     window.SeekFeedControls.dismissCharts();
+    if (path === '/' || path === '/hot') {
+      path = '/posts';
+      history.replaceState({}, '', path);
+    }
     if (path === '/settings') path = '/settings/account';
     const [name, title] = routeMap[path] || routeMap['/'];
-    if (!isLoggedIn && !['/', '/posts', '/statistics', '/hot'].includes(path)) {
+    if (!isLoggedIn && !['/', '/posts', '/statistics'].includes(path)) {
       if (!activePath) {
-        history.replaceState({}, '', '/hot');
-        navigate('/hot', false);
+        history.replaceState({}, '', '/posts');
+        navigate('/posts', false);
       }
       LoginModal.open(); return;
     }
@@ -1074,7 +1077,6 @@ document.addEventListener("DOMContentLoaded", function () {
       if (name === 'rss') loadRssConfig();
       if (name === 'telegram') loadTelegramConfig();
       if (name === 'stats') analytics.load();
-      if (name === 'hot') window.SeekFeedHot.load();
       if (name === 'account') loadAccount();
       activePath = path;
       window.scrollTo({ top: routeScroll.get(path) || 0, behavior: 'instant' });
@@ -1402,7 +1404,6 @@ document.addEventListener("DOMContentLoaded", function () {
     initLoginModal();
     initLogout();
     analytics.init();
-    window.SeekFeedHot.init();
 
     initAccount();
     navigate(location.pathname, false);

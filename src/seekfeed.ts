@@ -23,7 +23,6 @@ async function main() {
 
         // 启动定时任务
         schedulerService.start();
-        await dbService.getHotService().start();
 
         // 启动 Bun 服务器
         const server = Bun.serve({
@@ -48,7 +47,6 @@ async function main() {
 
 // 优雅关闭
 async function gracefulShutdown() {
-    await DatabaseService.create().getHotService().shutdown();
     logger.warn('收到关闭信号，正在优雅关闭...');
 
     if (schedulerService) {

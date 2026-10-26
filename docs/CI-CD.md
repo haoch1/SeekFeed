@@ -6,14 +6,12 @@
 
 `main`、`develop` 分支推送、`v*` 标签、目标为 `main` 的 Pull Request 以及手动触发均进入工作流。
 
-测试任务使用 Bun 1.4.3 与 Python 3.12，依次安装锁定依赖、安装采集依赖、运行 Python 单元测试、Bun 测试及生产构建。测试通过后才执行容器构建。
+测试任务使用 Bun 1.4.3，依次安装锁定依赖、运行 Bun 测试及生产构建。测试通过后才执行容器构建。
 
-采集器回归测试模拟 HTTP、CF 本机会话交接、按需浏览器及源站响应，不请求 NodeSeek。部署验收先检查镜像提交、应用健康、资源占用和持久状态；需要真实采集时只验收一轮，保留 300 秒基础间隔、退避和 CF 暂停。正常验收应确认浏览器 PID 为 0，不能用连续刷新代替验证。跨版本迁移已有验证会话时，只通过私有 CDP 读取同机白名单 Cookie，不额外导航源站、不记录或输出会话值。
+验证使用本地数据库与模拟响应，不访问 NodeSeek。覆盖 RSS/通知状态、热榜移除、旧接口失效及数据清理迁移；部署核对镜像提交、健康、持久数据与资源占用，不触发热榜采集。
 
 ```bash
 bun install --frozen-lockfile
-python -m pip install -r collector/requirements.txt
-python -m unittest discover -s collector -p 'test_*.py'
 bun test
 bun run build
 ```

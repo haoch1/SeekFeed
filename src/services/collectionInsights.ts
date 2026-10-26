@@ -2,7 +2,7 @@ import type { Database } from 'bun:sqlite';
 import type { ParsedPost } from '../types';
 
 export type CollectionRun = {
-    source: 'rss' | 'hot' | 'identity'; startedAt: string; durationMs: number;
+    source: 'rss'; startedAt: string; durationMs: number;
     status: 'success' | 'partial' | 'failed'; received?: number; accepted?: number;
     inserted?: number; updated?: number; invalid?: number; pages?: number;
     errorCode?: string; httpStatus?: number;
@@ -48,38 +48,12 @@ export class CollectionInsights {
         })();
     }
 
-    nextAuthor(now = new Date()): number | undefined {
-        const state = this.db.query('SELECT next_attempt_at FROM author_backfill_state WHERE id=1').get() as any;
-        if (Date.parse(state.next_attempt_at) > now.getTime()) return;
-        // One representative post per unknown exact name, not a full historical crawl.
-        const row = this.db.query(`SELECT MAX(p.post_id) AS post_id FROM posts p
-            WHERE p.creator<>'' AND NOT EXISTS(SELECT 1 FROM forum_post_authors a WHERE a.creator=p.creator)
-            AND NOT EXISTS(SELECT 1 FROM author_backfill b JOIN posts x ON x.post_id=b.post_id
-                WHERE x.creator=p.creator AND julianday(b.attempted_at)>julianday(?) - 7)
-            GROUP BY p.creator ORDER BY COUNT(*) DESC,MAX(p.post_id) DESC LIMIT 1`).get(now.toISOString()) as any;
-        if (!row) return;
-        this.db.query('UPDATE author_backfill_state SET next_attempt_at=? WHERE id=1').run(new Date(now.getTime() + 30 * 60000).toISOString());
-        this.db.query('INSERT OR REPLACE INTO author_backfill VALUES(?,?,?)').run(row.post_id, now.toISOString(), 'pending');
-        return row.post_id as number;
-    }
-
-    saveAuthor(postId: number, creator: string, authorId: number, now = new Date()) {
-        const post = this.db.query('SELECT creator FROM posts WHERE post_id=?').get(postId) as any;
-        if (!post || creator.trim() !== post.creator || !Number.isSafeInteger(authorId) || authorId <= 0) return false;
-        this.db.query(`INSERT INTO forum_post_authors VALUES(?,?,?,?) ON CONFLICT(post_id) DO UPDATE SET
-            creator=excluded.creator,author_id=excluded.author_id,observed_at=excluded.observed_at`).run(postId, creator.trim(), authorId, now.toISOString());
-        this.db.query('UPDATE author_backfill SET result=? WHERE post_id=?').run('success', postId);
-        return true;
-    }
-
     quality() {
         const recent = this.db.query('SELECT * FROM collection_runs ORDER BY id DESC LIMIT 30').all();
         const summary = this.db.query(`SELECT source,COUNT(*) AS runs,SUM(status='failed') AS failed,SUM(invalid) AS invalid,
             SUM(inserted) AS inserted,SUM(updated) AS updated,ROUND(AVG(duration_ms)) AS durationMs,
             MAX(CASE WHEN status<>'failed' THEN started_at END) AS lastSuccess
             FROM collection_runs WHERE julianday(started_at)>=julianday('now')-1 GROUP BY source`).all();
-        const authors = this.db.query(`SELECT COUNT(DISTINCT creator) AS total,
-            COUNT(DISTINCT CASE WHEN creator IN(SELECT creator FROM forum_post_authors GROUP BY creator HAVING COUNT(DISTINCT author_id)=1) THEN creator END) AS linked FROM posts WHERE creator<>''`).get();
-        return { recent, summary, authors, retention: { runsDays: 7 } };
+        return { recent, summary, retention: { runsDays: 7 } };
     }
 }

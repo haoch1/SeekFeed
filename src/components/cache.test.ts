@@ -5,7 +5,7 @@ import { app } from '../index';
 import { ASSET_VERSION } from '../config/assets';
 
 const script = readFileSync(new URL('../../public/js/pwa-register.js', import.meta.url), 'utf8');
-function browser(pathname = '/hot', latest = 'bbbbbbbbbbbbbbbb', offline = false) {
+function browser(pathname = '/posts', latest = 'bbbbbbbbbbbbbbbb', offline = false) {
     const events = new Map<string, (event?: any) => void>();
     const stored = new Map<string, string>();
     let reloads = 0, requests = 0, notices = 0;
@@ -63,7 +63,7 @@ describe('release cache and suspended-page recovery', () => {
         hidden.document.hidden = true;
         await hidden.resume(true);
         expect(hidden.state().requests).toBe(0);
-        for (const page of [browser('/hot', 'aaaaaaaaaaaaaaaa'), browser('/hot', undefined, true)]) {
+        for (const page of [browser('/posts', 'aaaaaaaaaaaaaaaa'), browser('/posts', undefined, true)]) {
             await page.resume(); await page.resume();
             expect(page.state()).toEqual({ reloads: 0, requests: 1, notices: 0 });
         }

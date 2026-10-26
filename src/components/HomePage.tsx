@@ -2,20 +2,19 @@ import { AccountSettings } from './AccountSettings';
 import { TelegramSettings } from './TelegramSettings';
 import { SubscriptionAnalytics } from './SubscriptionAnalytics';
 import { StatisticsPage } from './StatisticsPage';
-import { HotPage } from './HotPage';
 import { FieldInput } from './Controls';
 import type { FC } from "hono/jsx";
 import { Layout } from "./Layout";
 import { DashboardSurface, Icon } from "./DashboardSurface";
 import cadence from '../config/cadence.json';
 
-export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
-  if (path === '/') path = '/hot';
+export const HomePage: FC<{ path?: string }> = ({ path = "/posts" }) => {
+  if (path === '/' || path === '/hot') path = '/posts';
   return (
     <Layout
       title="SeekFeed · NodeSeek 社区动态"
-      description="浏览 NodeSeek 实时热榜、最新帖子与社区数据分析。"
-      scriptSrc={["/js/collection-insights.js", "/js/category-breakdown.js", "/js/keyword-statistics.js", "/js/statistics.js", "/js/hot.js", "/js/home.js"]}
+      description="浏览 NodeSeek 最新帖子与社区数据分析。"
+      scriptSrc={["/js/collection-insights.js", "/js/category-breakdown.js", "/js/keyword-statistics.js", "/js/statistics.js", "/js/home.js"]}
     >
       <DashboardSurface path={path}>
 
@@ -121,19 +120,13 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/hot" }) => {
             </button>
           </div>
         </div>
-        <div class="settings-card collection-card"><div class="section-heading collection-heading"><div><h2>热榜采集</h2><p>HTTP 采集，浏览器仅用于按需人工验证。</p></div><button id="hotCollectionRefresh" type="button" class="icon-btn" aria-label="刷新热榜采集状态"><Icon name="sync" /></button></div>
-          <dl class="diagnostic-list"><div><dt>采集状态</dt><dd id="hotCollectionState">读取中</dd></div><div><dt>采集频率</dt><dd>{cadence.hotCollectIntervalSeconds} 秒 · 最近回复、最新发布各 2 页</dd></div><div><dt>上次成功采集</dt><dd id="hotCollectionSuccess">—</dd></div></dl>
-          <div class="form-actions verification-actions"><button id="hotCollectionAction" type="button" class="btn btn-primary" disabled>读取中</button><button id="hotCollectionStop" type="button" class="btn btn-secondary" hidden disabled>停止采集</button></div>
-          <p id="hotVerificationMessage" class="insight-note" role="status">日常通过 HTTP 采集，浏览器仅在人工验证时启动。</p>
-        </div>
-        <div class="settings-card collection-card"><div class="section-heading collection-heading"><div><h2>采集质量</h2><p>运行记录与作者补全进度。刷新记录不会触发源站请求。</p></div><button id="collectionQualityRefresh" type="button" class="icon-btn" aria-label="刷新采集记录"><Icon name="sync" /></button></div><div id="collectionQuality" aria-live="polite"><p class="insight-note">正在读取采集记录…</p></div></div>
+        <div class="settings-card collection-card"><div class="section-heading collection-heading"><div><h2>采集质量</h2><p>RSS 运行记录。刷新记录不会触发源站请求。</p></div><button id="collectionQualityRefresh" type="button" class="icon-btn" aria-label="刷新采集记录"><Icon name="sync" /></button></div><div id="collectionQuality" aria-live="polite"><p class="insight-note">正在读取采集记录…</p></div></div>
       </section>
 
       <TelegramSettings active={path === "/settings/telegram"} />
       <AccountSettings active={path === "/settings/account"} />
 
       <StatisticsPage active={path === "/statistics"} />
-      <HotPage active={path === "/hot"} />
 
       </DashboardSurface>
       <div id="drawerOverlay" class="drawer-overlay" style="display:none"></div>

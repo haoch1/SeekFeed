@@ -7,11 +7,10 @@
 ```bash
 cp .env.example .env
 docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml --profile verification create seekfeed-browser
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-默认绑定 `127.0.0.1:3010`，通过同机反向代理提供公网 HTTPS。首次访问创建管理员，随后配置 RSS 与 Telegram。预构建镜像支持 amd64 与 arm64，并内置热榜 Python 依赖。
+默认绑定 `127.0.0.1:3010`，通过同机反向代理提供公网 HTTPS。首次访问创建管理员，随后配置 RSS 与 Telegram。预构建镜像支持 amd64 与 arm64；不包含热榜 Python 依赖或浏览器。
 
 开发或源码部署使用 `docker compose up -d --build`。同一实例的维护命令应始终使用对应 Compose 文件。
 
@@ -48,19 +47,13 @@ location / {
 
 直接暴露应用端口的部署应保持 `TRUST_PROXY=false`。已有会话保留创建时记录的 IP。
 
-## 热榜浏览器与人工验证
+## 轻量运行与热榜退役
 
-主程序限制为 256 MiB 内存、0.5 CPU，正常热榜仅运行短时 HTTP 采集进程。浏览器归属 `verification` profile，首次部署用上述 `create` 命令创建但不启动，普通 `up -d` 不启动它；重启策略为 `no`。人工验证期间允许临时使用固定摘要的 Chromium，峰值限制为 1280 MiB 内存、0.75 CPU、256 MiB 共享内存，验证结束或 15 分钟到期后关闭。该峰值不是日常常驻开销；较低内存限制曾触发 OOM，不能靠降低上限替代进程回收。浏览器通过 `seekfeed_browser` 私有桥接网络连接，不发布 5800、5900 或 9222 端口；禁止将 CDP 暴露至公网。浏览器需要正常访问外网，网络不应设为 `internal: true`。
+主程序限制为 256 MiB 内存、0.5 CPU，生产仅运行 `seekfeed` 应用容器，不需要 Python、Chromium、浏览器控制或 Docker socket。源码开发 Compose 同样不包含采集器。热榜实现保存在独立归档分支，详见 [热榜归档](hot-ranking.md)。
 
-配置与验证状态保存在 `seekfeed_browser_profile`。更新或重建容器时保留该卷；备份须包含应用数据和浏览器配置卷，浏览器配置按私有会话数据保护。首次使用或验证失效后，登录 SeekFeed，在“RSS 配置 → 热榜采集”打开“人工验证”，完成验证进入帖子列表后返回点击“验证完成，继续采集”。日常只显示启动或停止采集，验证入口在需要时出现。入口 15 分钟到期后自动关闭浏览器，可重新打开；不会自动重启采集。反向代理必须透传 WebSocket 升级头，且保留原始 Host；入口使用与 SeekFeed 相同的 HTTPS 域名。
+已有部署升级时，停止并移除旧浏览器与控制容器，确认不再被容器引用后删除 `seekfeed_browser_profile` 和 `seekfeed_browser_control` 卷、专用浏览器网络与未使用的 Chromium 镜像。仅清理这些已退役资源，保留 `seekfeed_data` 和 `seekfeed_logs`。
 
-正常采集每 300 秒串行读取四个公开列表页，不启动浏览器；失败只退避重试 HTTP，403 或验证页暂停等待人工操作。停止采集会取消 HTTP 进程并关闭可能存在的验证浏览器。人工验证完成后，CF 白名单 Cookie 与浏览器 User-Agent 保存到 `/usr/src/app/data/hot-http-session.json`（0600），随后停止 Chromium 全部子进程；不保存论坛登录 Cookie，不向客户端或日志输出会话值。该文件属于私有应用数据，应与数据库一样保护，不作为垃圾清理。浏览器配置初始地址为 `about:blank`，也兼容 `chrome://newtab/`。健康检查、状态查询不访问源站，升级保留冷却及人工暂停。
-
-若日志在浏览器冷启动后立即显示“采集浏览器暂不可用”，同时私有 CDP 列表显示 `chrome://newtab/`，应升级到兼容新标签页的版本。不要通过反复重启或刷新源站排查；先读取应用日志与容器状态，再按正常间隔验收一次。CF 暂停需要通过人工验证入口处理，重启不会自动解决验证。
-
-`seekfeed-browser-control` 使用同一应用镜像的 `dist/browser-control.js` 入口，仅通过 `seekfeed_browser_control` 卷内的 Unix socket 提供固定浏览器的状态、启动及停止操作，不开放 TCP 端口。只有此控制服务挂载主机 Docker socket，具有管理 Docker 的系统权限，应保留固定端点、Compose 标签校验、无网络、只读文件系统及资源限制；主应用不挂载 Docker socket。控制服务不能作为通用代理使用。
-
-`docker-compose.yml` 为源码开发部署，默认保留 HTTP 适配器。需要与生产一致的浏览器部署时，可先构建镜像，再设置 `SEEKFEED_IMAGE=seekfeed:latest` 使用 `docker-compose.prod.yml`。
+迁移 `018_retire_hot_ranking.sql` 清除热榜表、补全队列及热榜诊断和采集的数字作者 ID；另删除数据卷中的私有 `hot-http-session.json` 文件。核对配置、RSS 帖子、订阅、会话与通知状态后，对数据库执行 checkpoint 和 VACUUM，并移除临时升级备份。已删除数据不随恢复代码自动恢复。
 
 ## 更新与版本核对
 
@@ -75,7 +68,7 @@ docker inspect seekfeed --format '{{index .Config.Labels "org.opencontainers.ima
 
 启动时自动执行未应用的迁移。更新保留数据卷及其中的订阅、配置、会话和头像。正式升级前应记录运行版本并备份；回滚旧镜像前需核对其数据库结构兼容性，必要时恢复对应备份。备份恢复会撤销备份之后的数据变化。
 
-迁移 `015_remove_post_history.sql` 删除互动趋势与帖子修改历史的专用表，不删除当前帖子内容、浏览量、回复量、热度或热度计算使用的近两小时样本。旧版本若依赖已删除的表，恢复时需要使用对应版本的数据库备份。
+迁移 `015_remove_post_history.sql` 删除互动趋势与帖子修改历史的专用表，不删除当前帖子内容。后续迁移 `018` 按退役要求删除热榜计数及样本。旧版本若依赖已删除的表，恢复时需要使用对应版本的数据库备份。
 
 HTML 响应使用 `Cache-Control: no-store`；CSS 与 JavaScript 地址包含发布版本标识，当前版本资源使用长期缓存。Service Worker 仅缓存图标与清单，不缓存页面、API、CSS 或 JavaScript。页面从后台恢复时检查版本：只读页面自动加载新版本，设置页、订阅编辑页与已打开的弹窗提供更新提示，以保留未提交的输入。断网时保留当前页面，不强制刷新。
 
@@ -114,4 +107,4 @@ docker compose -f docker-compose.prod.yml start seekfeed
 docker build -t seekfeed:latest .
 ```
 
-Dockerfile 根据 `bun.lock` 安装依赖，并复制静态资源、采集器及启动迁移所需 SQL。完整发布流程见 [CI/CD](CI-CD.md)。
+Dockerfile 根据 `bun.lock` 安装依赖，并复制静态资源及启动迁移所需 SQL。完整发布流程见 [CI/CD](CI-CD.md)。

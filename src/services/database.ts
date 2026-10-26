@@ -4,7 +4,6 @@ import cadence from '../config/cadence.json';
 import type { BaseConfig, Post, KeywordSub } from '../types';
 import { logger } from '../utils/logger';
 import { getAnalytics } from './analytics';
-import { HotService } from './hot';
 import { getKeywordAnalytics } from './keywordAnalytics';
 import { createFuzzyPostSearch } from '../utils/postSearch';
 import { CollectionInsights } from './collectionInsights';
@@ -14,7 +13,6 @@ export class DatabaseService {
   private static instance: DatabaseService | undefined;
   private queryCache: Map<string, { data: any; timestamp: number; ttl: number }>;
   private readonly CACHE_TTL = 60000; // 1分钟缓存
-  private hotService?: HotService;
 
 
   getCollectionInsights() { return new CollectionInsights(this.db); }
@@ -24,8 +22,6 @@ export class DatabaseService {
     if (result.new || result.updated) this.clearCacheByPattern('posts');
     return result;
   }
-
-  getHotService(): HotService { return this.hotService ??= new HotService(this.db); }
 
   constructor(private db: Database) {
     this.queryCache = new Map();

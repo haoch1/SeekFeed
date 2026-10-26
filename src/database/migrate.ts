@@ -32,6 +32,8 @@ export class DatabaseMigrator {
       // 读取迁移文件
       const migrationFiles = ['001_initial.sql', '002_add_rss_config.sql', '003_add_telegram_mode.sql', '004_subscription_controls.sql', '005_account_preferences.sql', '006_hot_ranking.sql', '007_hot_samples.sql', '008_hot_collector_cooldown.sql', '009_account_avatar.sql', '010_dismissed_matches.sql', '011_forum_author_links.sql', '012_collection_insights.sql', '014_remove_trade_analysis.sql', '015_remove_post_history.sql', '016_hot_browser_collection.sql', '017_hot_collector_control.sql'];
 
+      migrationFiles.push('018_retire_hot_ranking.sql');
+
       for (const filename of migrationFiles) {
         if (executedMigrations.includes(filename)) {
           logger.task.info(`跳过已执行的迁移: ${filename}`);

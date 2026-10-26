@@ -27,12 +27,6 @@ body.is-overlay-open { position: fixed; top: var(--overlay-scroll-top); left: 0;
     .workspace-heading { flex-direction: row; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
     .workspace-heading h1 { font-size: 22px; letter-spacing: -.3px; }
     .workspace-heading h1 > svg { width: 24px; height: 24px; }
-    .hot-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) 44px; gap: 8px; }
-    .hot-filters .select-trigger { width: 100%; min-height: 44px; padding-inline: 8px; gap: 4px; }
-    #hotCategoryTrigger { order: 0; }
-    #hotSortTrigger { order: 1; }
-    .hot-filters #hotRefresh { order: 2; width: 44px; padding: 0; min-height: 44px; }
-    .hot-filters #hotRefresh span { display: none; }
     .heading-actions { display: flex; width: auto; gap: 6px; }
     .heading-actions > .btn { padding-inline: 9px; gap: 6px; }
     .heading-actions .manage-subscriptions { width: 44px; padding: 0; }
@@ -91,8 +85,6 @@ body.is-overlay-open { position: fixed; top: var(--overlay-scroll-top); left: 0;
     .settings-section { padding: 18px 16px; }
     .form-actions { gap: 8px; }
     .form-actions > .btn { padding-inline: 10px; }
-    .verification-actions { display: grid; grid-template-columns: 1fr; }
-    .verification-actions > .btn { min-width: 0; width: 100%; }
     .settings-content { gap: 16px; }
     .form-stack { gap: 20px; }
     .form-hint { font-size: 12px; }
@@ -136,17 +128,6 @@ body.is-overlay-open { position: fixed; top: var(--overlay-scroll-top); left: 0;
     .analytics-topic-row { min-height: 44px; }
     .analytics-chart-tooltip { font-size: 13px; }
     .analytics-chart-tooltip > span { line-height: 1.6; }
-}
-@media (max-width: 560px) {
-    .hot-toolbar { padding: 12px; }
-    .hot-tabs button { min-height: 40px; }
-    .hot-filters .select-trigger { font-size: 13px; }
-    .hot-row { grid-template-columns: 26px minmax(0, 1fr) minmax(0, .8fr) auto; gap: 8px; padding: 16px 12px; }
-    .hot-post { grid-column: 2 / -1; }
-    .hot-post a { font-size: 14px; }
-    .hot-number { font-size: 12px; gap: 4px; }
-    .hot-heat { display: flex; grid-column: 4; color: var(--primary); white-space: nowrap; }
-    .hot-heat::before { content: '热度'; font-size: 11px; color: var(--text-secondary); font-weight: 400; }
 }
 @media (prefers-reduced-motion: reduce) {
     .workspace-sidebar { transition: none; }

@@ -2,7 +2,6 @@ import { beforeEach, afterEach, describe, expect, it } from 'bun:test';
 import { Database } from 'bun:sqlite';
 import { readFileSync } from 'node:fs';
 import { linkForumAuthors, linkForumPosts } from './forumAuthors';
-import { HotService } from './hot';
 import { DatabaseService } from './database';
 import { getAnalytics } from './analytics';
 import { getKeywordAnalytics } from './keywordAnalytics';
@@ -40,22 +39,6 @@ describe('verified public forum profiles', () => {
         evidence(2, 'Alice', 12);
         expect(linkForumAuthors(db, rows)).toEqual(rows);
         expect(linkForumPosts(db, [{ post_id: 2, creator: 'Alice' }], identity)[0].authorId).toBe(12);
-    });
-    it('saves identities atomically with batches and retains them when hot records expire', () => {
-        const hot = new HotService(db);
-        const row = { postId: 1, title: 'title', author: 'Alice', authorId: 9, category: 'tech', categoryLabel: '技术', views: 10, replies: 1, lastActiveAt: now.toISOString(), pinned: false };
-        const batch = { posts: [row], pages: 2, collectedAt: now.toISOString() };
-        hot.saveBatch(batch, now); post(1);
-        expect(hot.ranking('day', '', 'heat', now).posts[0].authorId).toBe(9);
-        for (const id of [0, -1, 1.2, Number.MAX_SAFE_INTEGER + 1, '9', 'javascript:alert(1)']) {
-            expect(() => hot.saveBatch({ ...batch, posts: [{ ...row, authorId: id }] }, now)).toThrow();
-        }
-        hot.saveBatch({ ...batch, posts: [{ ...row, authorId: null }] }, now);
-        expect(linkForumAuthors(db, [{ creator: 'Alice' }])[0].authorId).toBe(9);
-        const later = new Date(now.getTime() + 31 * 86400000);
-        hot.saveBatch({ posts: [{ ...row, postId: 2, author: 'Bob', authorId: 12, lastActiveAt: later.toISOString() }], pages: 2, collectedAt: later.toISOString() }, later);
-        expect(db.query('SELECT * FROM hot_posts WHERE post_id=1').get()).toBeNull();
-        expect(linkForumPosts(db, [{ post_id: 1, creator: 'Alice' }], identity)[0].authorId).toBe(9);
     });
     it('adds links to feed and both author boards without changing counts, matches or local account IDs', () => {
         post(1); post(2); evidence(1, 'Alice', 9);

@@ -114,7 +114,7 @@ describe('account avatar', () => {
         expect(db.getBaseConfig()!.avatar).toBe(avatar);
         expect(db.getBaseConfig()!.password).toBe('unused-test-hash');
         expect(sessions.verifySession(sessionId).valid).toBe(true);
-        const publicPage = await (await app.request('/hot')).text();
+        const publicPage = await (await app.request('/posts')).text();
         expect(publicPage).not.toContain(avatar);
         expect((await app.request('/api/config', { method: 'PUT', headers: headers(), body: JSON.stringify({ avatar }) })).status).toBe(400);
     });
@@ -196,7 +196,7 @@ describe('account settings and session expiry', () => {
         for (const query of ['pushStatus=3', 'pushStatusIn=1,3', 'pushStatusNot=2', 'subId=1', 'pushStatusIn=']) {
             expect((await app.request('/api/posts?' + query)).status).toBe(401);
         }
-        const paths = ['/api/posts', '/api/hot', '/api/stats/overview', '/api/stats/analytics', '/api/stats/subscription-ranking', '/api/config', '/api/subscriptions'];
+        const paths = ['/api/posts', '/api/stats/overview', '/api/stats/analytics', '/api/stats/subscription-ranking', '/api/config', '/api/subscriptions'];
         for (const path of paths) {
             expect((await app.request(path, { headers: { Authorization: 'Bearer forged' } })).status).toBe(401);
         }
@@ -297,10 +297,11 @@ describe('account settings and session expiry', () => {
         expect(db.getKeywordSubById(sub.id!)!.enabled).toBe(1);
     });
 
-    it('opens the hot ranking as home while preserving first-time initialization', async () => {
+    it('opens latest posts as home while preserving first-time initialization', async () => {
         const home = await app.request('/');
         expect(home.status).toBe(302);
-        expect(home.headers.get('Location')).toBe('/hot');
+        expect(home.headers.get('Location')).toBe('/posts');
+        expect((await app.request('/hot')).headers.get('Location')).toBe('/posts');
         expect((await app.request('/posts')).status).toBe(200);
         const fresh = new Hono();
         fresh.use('*', async (c: any, next) => {
@@ -311,20 +312,27 @@ describe('account settings and session expiry', () => {
         expect((await fresh.request('/')).headers.get('Location')).toBe('/init');
     });
 
-    it('publishes safe hot ranking data while protecting collection and rejecting invalid filters', async () => {
-        expect((await app.request('/api/hot')).status).toBe(200);
-        const body = await (await app.request('/api/hot')).json();
-        expect(body.data.posts).toEqual([]);
-        expect(body.data.limit).toBe(30);
-        for (const limit of [30, 50, 100]) {
-            const response = await app.request('/api/hot?limit=' + limit);
-            expect(response.status).toBe(200);
-            expect((await response.json()).data.limit).toBe(30);
+    it('retires every hot API and browser proxy without loading a collector, even with legacy environment variables', async () => {
+        const previous = process.env.HOT_COLLECT_ENABLED;
+        process.env.HOT_COLLECT_ENABLED = 'true';
+        try {
+            expect('getHotService' in db).toBe(false);
+            for (const path of ['/api/hot', '/api/hot?period=week&limit=100', '/api/hot/collection', '/api/hot/collection/start',
+                '/api/hot/collection/restart', '/api/hot/refresh', '/api/hot/verification', '/api/hot/verification/resume',
+                '/hot-verification', '/hot-verification/', '/hot-verification/websockify']) {
+                for (const method of ['GET', 'POST']) {
+                    const response = await app.request(path, { method, headers: headers() });
+                    expect(response.status).toBe(410);
+                    expect((await response.json()).success).toBe(false);
+                }
+            }
+            const html = await (await app.request('/posts')).text();
+            expect(html).not.toMatch(/hotPage|hotCollection|\/js\/hot.js|\/css\/hot.css|href="\/hot"/);
+            expect((await app.request('/api/posts')).status).toBe(200);
+        } finally {
+            if (previous === undefined) delete process.env.HOT_COLLECT_ENABLED;
+            else process.env.HOT_COLLECT_ENABLED = previous;
         }
-        expect(JSON.stringify(body)).not.toContain('unused-test-hash');
-        for (const query of ['period=month', 'sort=unknown', 'category=%3Cscript%3E', 'limit=10', 'limit=31', 'limit=1000', 'limit=-30', 'limit=NaN', 'limit=30.5']) expect((await app.request('/api/hot?' + query)).status).toBe(400);
-        expect((await app.request('/api/hot/refresh', {method:'POST'})).status).toBe(401);
-        expect((await app.request('/api/hot/refresh', {method:'POST',headers:{Authorization:'Bearer forged'}})).status).toBe(401);
     });
 
     it('keeps analytics aggregates public and subscription identifiers and keywords authenticated', async () => {

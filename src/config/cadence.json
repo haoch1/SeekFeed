@@ -1,8 +1,6 @@
 {
   "rssIntervalSeconds": 30,
-  "hotCollectIntervalSeconds": 300,
   "feedRefreshMs": 15000,
-  "hotRefreshMs": 60000,
   "analyticsRefreshMs": 60000,
   "keywordRefreshMs": 60000
 }

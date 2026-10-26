@@ -2,14 +2,14 @@
 
 ## 环境与运行
 
-项目使用 Bun 1.4.3，锁定文件为 `bun.lock`。热榜采集测试需要 Python 3.12 及 `collector/requirements.txt` 中的依赖。
+项目使用 Bun 1.4.3，锁定文件为 `bun.lock`。主分支不需要 Python 或 Chromium；热榜实现与测试见 `codex/archive-hot-ranking`。
 
 ```bash
 bun install --frozen-lockfile
 bun run dev
 ```
 
-默认监听 `http://localhost:3010`。首次访问创建管理员。服务启动时自动执行迁移；RSS 与热榜采集可通过 `RSS_CHECK_ENABLED=false` 和 `HOT_COLLECT_ENABLED=false` 关闭。
+默认监听 `http://localhost:3010`。首次访问创建管理员。服务启动时自动执行迁移；RSS 可通过 `RSS_CHECK_ENABLED=false` 关闭；热榜代码已从主分支移除。
 
 ## 目录
 
@@ -21,15 +21,12 @@ bun run dev
 | `src/services/` | 采集、匹配、通知、统计与存储 |
 | `src/database/migrations/` | 按顺序执行的 SQL 迁移 |
 | `public/css/`、`public/js/` | 主题、布局与浏览器交互 |
-| `collector/` | 热榜采集器与 Python 测试 |
 
 ## 验证
 
 ```bash
 bun test
 bun run build
-python -m pip install -r collector/requirements.txt
-python -m unittest discover -s collector -p 'test_*.py'
 git diff --check
 ```
 
@@ -47,7 +44,7 @@ Bun 构建验证打包与转译，不替代完整的 TypeScript 类型检查。�
 
 使用 TypeScript ES 模块、四空格缩进及分号。API 输入应通过 Schema 或专用校验函数验证；受保护操作必须在服务端检查 Session。数据库修改后应失效相关缓存。
 
-整个项目必须保持低 CPU、低内存：使用现有服务端渲染与原生 JavaScript，不为常规功能增加常驻浏览器、重型前端框架或额外后台服务。自动轮询应暂停隐藏页面，查询缓存必须有容量和有效期上限；采集任务不得重叠。热榜正常路径仅用 HTTP，5 分钟一轮，Chromium 只服务人工验证。性能相关变更需用本地夹具、查询／页面检查及实际资源快照验证，不以高频源站抓取代替测试。
+整个项目必须保持低 CPU、低内存：使用现有服务端渲染与原生 JavaScript，不为常规功能增加常驻浏览器、重型前端框架或额外后台服务。自动轮询应暂停隐藏页面，查询缓存必须有容量和有效期上限；采集任务不得重叠。不恢复热榜采集或浏览器服务，除非用户明确要求。性能相关变更需用本地夹具、查询／页面检查及实际资源快照验证，不以高频源站抓取代替测试。
 
 功能变更需同步更新 README 及对应部署、API、统计或界面文档。文档使用正式、客观的技术表述，明确默认值、限制与适用范围；功能参考集中登记于 README，实际使用的第三方资源保留许可。
 

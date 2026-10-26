@@ -73,7 +73,7 @@ describe('resolved appearance preference', () => {
         expect(root.dataset.theme).toBe('light');
     });
     it('resolves the initial palette in the document head and exposes all three explicit choices', () => {
-        const html = HomePage({ path: '/hot' }).toString();
+        const html = HomePage({ path: '/posts' }).toString();
         expect(html.indexOf('window.SeekFeedTheme =')).toBeLessThan(html.indexOf('</head>'));
         expect(html).toContain('data-theme-option="system"');
         expect(html).toContain('data-theme-option="light"');

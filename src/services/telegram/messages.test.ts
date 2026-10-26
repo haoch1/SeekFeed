@@ -15,7 +15,8 @@ describe('Telegram message layout and escaping', () => {
         expect(telegramHelp).not.toContain('\\-');
         expect(telegramHelp).not.toContain('/hot day');
         expect(telegramHelp).not.toContain('/hot week');
-        expect(telegramHelp).toContain('榜单下方可切换实时、日榜、周榜');
+        expect(telegramHelp + message).not.toContain('/hot');
+        expect(telegramCommands.some(command => command.command === 'hot')).toBe(false);
     });
 
     it('aligns single and double digit post numbers and normalizes presentation without changing stored titles', () => {
@@ -190,9 +191,29 @@ function commandFixture() {
 }
 
 describe('Telegram command layout end to end', () => {
+    it('removes hot entry points and only acknowledges old buttons without reading rankings', async () => {
+        const test = commandFixture();
+        for (const text of ['/start', '/help', '/post']) {
+            const reply = await test.command(text);
+            expect(reply.reply_markup).toBeUndefined();
+            expect(reply.text).not.toContain('/hot');
+        }
+        const before = test.calls.length;
+        await test.command('/hot');
+        await test.command('/hot week');
+        expect(test.calls).toHaveLength(before);
+        const bot = (test.service as any).bot;
+        await bot.handleUpdate({ update_id: 100, callback_query: {
+            id: 'old-hot-button', from: { id: 42, is_bot: false, first_name: 'Tester' }, chat_instance: 'test', data: 'hot:week',
+            message: { message_id: 5, date: 1, chat: { id: 42, type: 'private' }, text: 'Old ranking' },
+        } });
+        expect(test.calls).toHaveLength(before + 1);
+        expect(test.calls.at(-1)).toMatchObject({ method: 'answerCallbackQuery', payload: { text: '热榜功能已停用' } });
+    });
+
     it('unifies every command reply and empty, validation, permission and failure state', async () => {
         const test = commandFixture();
-        for (const text of ['/start', '/help', '/getme', '/list', '/post', '/add DMIT lax', '/add', '/add a b c d', '/del invalid', '/del 999', '/del 10', '/stop', '/resume', '/hot invalid', 'hello']) {
+        for (const text of ['/start', '/help', '/getme', '/list', '/post', '/add DMIT lax', '/add', '/add a b c d', '/del invalid', '/del 999', '/del 10', '/stop', '/resume', 'hello']) {
             const payload = await test.command(text);
             expect(payload.text).toStartWith('<b>SeekFeed · ');
             expect(payload.text).not.toMatch(/\p{Extended_Pictographic}|\u20e3/u);
@@ -201,7 +222,7 @@ describe('Telegram command layout end to end', () => {
         }
         expect(test.config.stop_push).toBe(0);
         expect((await test.command('/list')).text).toContain('<code>#4</code>  DMIT + lax\n监控中 · 技术');
-        for (const text of ['/list', '/post', '/add a', '/del 4', '/stop', '/resume', '/unbind', '/hot', 'hello']) {
+        for (const text of ['/list', '/post', '/add a', '/del 4', '/stop', '/resume', '/unbind', 'hello']) {
             expect((await test.command(text, 99)).text).toContain('没有权限');
         }
         expect((await test.command('/start', 99)).text).toContain('已绑定到其他账号');

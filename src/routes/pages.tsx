@@ -13,6 +13,10 @@ export const pageRoutes = new Hono<{ Variables: Variables }>();
 
 pageRoutes.get('/pwa-check', c => c.html(<PwaCheckPage />));
 
+// Old bookmarks must never proxy to a retired browser service.
+for (const path of ['/hot-verification', '/hot-verification/*']) pageRoutes.all(path, c =>
+  c.json({ success: false, message: '热榜功能已停用' }, 410));
+
 // 首页 - 检查初始化状态，未初始化跳转到初始化页面
 for (const path of ['/', '/hot', '/posts', '/matched', '/subscriptions', '/statistics', '/settings', '/settings/account', '/settings/rss', '/settings/telegram']) pageRoutes.get(path, async (c) => {
   try {
@@ -24,7 +28,7 @@ for (const path of ['/', '/hot', '/posts', '/matched', '/subscriptions', '/stati
       return c.redirect('/init');
     }
     
-    if (path === '/') return c.redirect('/hot');
+    if (path === '/' || path === '/hot') return c.redirect('/posts');
     return c.html(<HomePage path={path === "/settings" ? "/settings/account" : path} />);
   } catch (error) {
     return c.html(<ErrorPage message={`加载页面失败: ${error}`} />);

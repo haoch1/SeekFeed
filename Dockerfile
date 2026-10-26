@@ -4,12 +4,8 @@ WORKDIR /usr/src/app
 
 # 安装系统依赖（用于健康检查）
 RUN apt-get update && apt-get install -y \
-    curl python3 python3-venv \
+    curl \
     && rm -rf /var/lib/apt/lists/*
-COPY collector/requirements.txt /tmp/collector-requirements.txt
-RUN python3 -m venv /opt/collector && \
-    /opt/collector/bin/pip install --no-cache-dir -r /tmp/collector-requirements.txt && \
-    rm /tmp/collector-requirements.txt
 
 # 安装依赖阶段
 FROM base AS install
@@ -38,9 +34,6 @@ RUN bun run build
 
 # 生产阶段
 FROM base AS release
-COPY collector/collect.py collector/browser.py collector/http_session.py /usr/src/app/collector/
-ENV HOT_COLLECTOR_PYTHON=/opt/collector/bin/python
-ENV HOT_COLLECT_ENABLED=true
 
 LABEL org.opencontainers.image.title="SeekFeed"
 LABEL org.opencontainers.image.description="NodeSeek RSS monitoring and Telegram notifications"

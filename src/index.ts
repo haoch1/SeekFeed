@@ -20,7 +20,6 @@ import { telegramRoutes } from './routes/telegram';
 import { telegramPushRoutes } from './routes/telegramPush';
 import { telegramWebhookRoutes } from './routes/telegramWebhook';
 import { pageRoutes } from './routes/pages';
-import { hotVerificationRoutes } from './routes/hotVerification';
 
 // 类型定义
 type Bindings = {}
@@ -194,7 +193,6 @@ app.route('/api', apiRoutes);
 app.route('/telegram', telegramRoutes);
 app.route('/api/push', telegramPushRoutes);
 app.route('/api/webhook', telegramWebhookRoutes);
-app.route('/hot-verification', hotVerificationRoutes);
 app.route('/', pageRoutes);
 
 // 默认 RSS 配置

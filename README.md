@@ -2,20 +2,21 @@
 
 [![SeekFeed CI](https://github.com/haoch1/SeekFeed/actions/workflows/docker-build.yml/badge.svg)](https://github.com/haoch1/SeekFeed/actions/workflows/docker-build.yml)
 
-面向 NodeSeek 社区的自托管监控与分析平台，提供实时热榜、帖子检索、关键词订阅、Telegram 通知和多维统计分析。采用 Bun、Hono、SQLite 与服务端 JSX，前端使用原生 JavaScript 和 SVG，支持明暗主题、移动端布局及 PWA 安装。
+面向 NodeSeek 社区的自托管监控与分析平台，提供帖子检索、关键词订阅、Telegram 通知和多维统计分析。采用 Bun、Hono、SQLite 与服务端 JSX，前端使用原生 JavaScript 和 SVG，支持明暗主题、移动端布局及 PWA 安装。
+
+热榜已从主分支移除，完整实现保存在 [codex/archive-hot-ranking 分支](https://github.com/haoch1/SeekFeed/tree/codex/archive-hot-ranking)。升级将删除热榜及作者补全数据；恢复步骤见 [热榜归档](docs/hot-ranking.md)。
 
 ## 功能概览
 
 | 模块 | 功能 |
 | --- | --- |
-| 热榜 | 实时、日榜与周榜；分类过滤；热度、浏览量与回复量排序；增量采集、时间衰减与失败退避 |
 | 帖子 | RSS 定时采集、手动刷新、包含或容错搜索、分类与作者筛选、分页；最新帖子与命中订阅分别保存筛选条件；命中帖子支持单条删除 |
 | 订阅 | 最多三个关键词组合、正则、作者、分类、屏蔽词；新增、编辑、暂停、恢复与删除 |
 | 统计 | 发帖趋势、分类结构、作者贡献、活跃时段、热门标题词、分类联动和 CSV 导出 |
-| 采集分析 | 作者 ID 渐进补全、采集质量记录、当前帖子内容同步、持久浏览器会话与人工验证入口 |
-| 作者主页 | 热榜、帖子列表及作者榜支持在新标签页打开已确认的 NodeSeek 用户主页；未确认或存在同名歧义时保留作者文本 |
+| 采集分析 | RSS 采集质量记录、当前帖子内容同步 |
+| 作者主页 | 帖子列表及作者榜支持在新标签页打开已确认的 NodeSeek 用户主页；未确认或存在同名歧义时保留作者文本；当前不主动采集数字 ID |
 | 关键词分析 | 指定日期的发帖数量及占比、1／3／6 小时分布、近七天趋势、最多三个词独立对比、共同命中、分类与作者明细 |
-| Telegram | Bot 绑定、Webhook 或 Polling、持久化待发送队列、失败重试、命令交互及热榜切换 |
+| Telegram | Bot 绑定、Webhook 或 Polling、持久化待发送队列、失败重试、命令交互 |
 | 账号 | 单管理员认证、自定义头像、登录有效期、设备列表、单设备退出与全部退出 |
 
 图表包含柱形、折线、环形、热力分布及排行列表，支持悬停、键盘操作和移动端触控。关键词推荐仅填入输入框，分析由“开始分析”或回车提交。
@@ -29,7 +30,6 @@ git clone https://github.com/haoch1/SeekFeed.git
 cd SeekFeed
 cp .env.example .env
 docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml --profile verification create seekfeed-browser
 docker compose -f docker-compose.prod.yml up -d
 ```
 
@@ -49,7 +49,7 @@ docker compose up -d --build
 
 | 身份 | 可访问范围 |
 | --- | --- |
-| 访客 | 热榜、公开帖子、基于论坛公开内容的统计与关键词分析 |
+| 访客 | 公开帖子、基于论坛公开内容的统计与关键词分析 |
 | 管理员 | 访客功能，以及订阅规则、命中订阅、推送状态、通知分析、RSS／Telegram 配置、账号与设备管理 |
 
 受保护接口在服务端校验 Session。伪造、过期或已注销的会话返回 `401`；公开接口剔除订阅及推送字段。PWA 仅缓存静态资源，不缓存账号、配置或 API 响应。
@@ -64,9 +64,6 @@ docker compose up -d --build
 - 总览日期与分类作用于帖子、作者、趋势、分类、活跃时段和标题词；关键词分析使用独立日期与匹配范围。
 - 每个关键词独立计数，同一篇帖子对同一词仅计一次；多个词的交集单独展示。关键词分析采用文本包含匹配，与订阅中的正则规则不同。
 - 当前时段仅统计至查询时刻；未来时段不按零值展示。与上一日比较时使用相同时段，并提示历史覆盖不足。
-- 热榜使用独立采集的浏览与回复样本。实时榜按近期增长与时间衰减计算，日榜和周榜按范围内帖子的累计互动计算；不代表全站穷尽数据。
-- 热榜通过 HTTP 每 300 秒采集两种排序各前两页，保留浏览量、回复数和近期增长热度。Chromium 日常关闭，仅人工验证时按需启动；验证后保存本机 CF 会话并关闭浏览器。日常仅显示启动或停止按钮，遇到 CF 后显示人工验证。
-- 热度为排序分数的整数展示，常规数值主要为三位数。完整公式、采集节流和适用边界见 [热榜规则](docs/hot-ranking.md)。
 - 最新帖子顶部的累计收录数与统计页所选时段数量具有不同范围。通知成功数仅统计实际投递成功的帖子。
 
 详细定义、图表交互与导出范围见 [统计分析](docs/analytics.md)。
@@ -86,13 +83,12 @@ docker compose up -d --build
 | `/start`、`/help` | 绑定账号、查看帮助 |
 | `/list`、`/add 关键词1 关键词2`、`/del 订阅ID` | 查看、新增、删除订阅 |
 | `/post` | 最近十条帖子 |
-| `/hot` | 热榜；通过消息下方按钮切换实时、日榜与周榜 |
 | `/stop`、`/resume` | 暂停、恢复通知 |
 | `/getme`、`/unbind` | 查看绑定状态、解除绑定 |
 
 ## 本地开发
 
-CI 与容器使用 Bun 1.4.3，热榜采集使用 Python 3.12。本地默认关闭热榜采集；启用时需安装 `collector/requirements.txt` 并设置 Python 路径。
+CI 与容器使用 Bun 1.4.3；主分支不再需要 Python 或 Chromium。
 
 ```bash
 bun install --frozen-lockfile
@@ -116,17 +112,13 @@ bun run start
 | `TRUST_PROXY` | `false` | 可信代理 IP 转发开关，部署要求见 Docker 文档 |
 | `RSS_CHECK_ENABLED` | `true` | RSS 自动监控开关 |
 | `RSS_TIMEOUT` | `30000` | RSS 请求超时，单位毫秒 |
-| `HOT_COLLECT_ENABLED` | Docker 为 `true`，本地未配置时关闭 | HTTP 基础间隔 300 秒，两种排序各取前两页；支持启停及 CF 暂停 |
-| `HOT_HTTP_SESSION_PATH` | 生产 Compose 已配置 | 本机私有 CF 会话文件；仅保存白名单 Cookie 和 User-Agent，不保存论坛登录 Cookie |
-| `HOT_BROWSER_ENDPOINT`、`HOT_BROWSER_GUI_URL` | 生产 Compose 已配置 | 私有网络中的浏览器 CDP 与人工验证界面地址，不映射公网端口 |
-| `HOT_COLLECTOR_PYTHON` | Docker 已配置，本地 `python3` | 热榜采集 Python 路径 |
 | `TELEGRAM_WEBHOOK_URL` | 未设置 | 可选的公网 HTTPS Webhook 地址 |
 
 RSS 地址、间隔、代理与 Telegram Token、接收账号在设置页管理。
 
-默认 RSS 抓取间隔为 30 秒，订阅匹配与推送在每轮同步后执行。前台帖子列表每 15 秒检查更新，热榜、统计图表和已提交且展开的关键词分析每 60 秒更新；全局计数和运行状态每 60 秒更新。页面轮询读取本地数据库，不额外触发源站采集；页面不可见时暂停自动更新。刷新周期集中定义于 `src/config/cadence.json`，已保存的 RSS 自定义间隔优先于默认值。
+默认 RSS 抓取间隔为 30 秒，订阅匹配与推送在每轮同步后执行。前台帖子列表每 15 秒检查更新，统计图表和已提交且展开的关键词分析每 60 秒更新；全局计数和运行状态每 60 秒更新。页面轮询读取本地数据库，不额外触发源站采集；页面不可见时暂停自动更新。刷新周期集中定义于 `src/config/cadence.json`，已保存的 RSS 自定义间隔优先于默认值。
 
-项目保持服务端 Hono JSX、原生 JavaScript/SVG 与 SQLite，不引入常驻浏览器处理常规功能。热榜结果缓存最多 24 份、共享查询缓存最多 128 份，统计缓存 60 秒并在相关写入后失效。主容器限制为 256 MiB / 0.5 CPU；人工验证浏览器的临时峰值单独受限，验证结束或 15 分钟到期后回收。
+项目保持服务端 Hono JSX、原生 JavaScript/SVG 与 SQLite，不引入常驻浏览器处理常规功能。共享查询缓存最多 128 份，统计缓存 60 秒并在相关写入后失效。主容器限制为 256 MiB / 0.5 CPU，只运行一个应用容器。
 
 采集质量、身份补全与当前内容同步的定义、保留策略和权限见 [采集与数据质量](docs/collection-insights.md)。
 
@@ -144,10 +136,7 @@ RSS 地址、间隔、代理与 Telegram Token、接收账号在设置页管理�
 | [nodeseek-rss-telegram-bot](https://github.com/AI-XMLY/nodeseek-rss-telegram-bot) | 组合关键词、排除规则与独立订阅开关的功能对照 |
 | [NodeSeekRSSMonitor](https://github.com/Seameee/NodeSeekRSSMonitor) | 关键词和分类监控、备用源及部署架构调研；未引入其 Workers／D1 架构 |
 | [SeekMate parser](https://github.com/mrzhiin/seekmate/blob/main/lib/parser/parser.ts) · [分页查询](https://github.com/mrzhiin/seekmate/blob/main/hooks/services/useInfinitePostsQuery.ts) | NodeSeek 公开列表的字段语义、置顶标记、显式排序与分页契约对照 |
-| [DailyHotApi NodeSeek](https://github.com/imsyy/DailyHotApi/blob/master/src/routes/nodeseek.ts) | RSS 动态与热榜数据源能力的边界对照；未使用其热榜接口 |
-| [Reddit 排序源码](https://github.com/reddit-archive/reddit/blob/master/r2/r2/lib/db/_sorts.pyx) · [Arc news](https://github.com/arclanguage/anarki/blob/master/apps/news/news.arc) | 热榜与时间范围榜的算法思路对照；SeekFeed 使用独立的浏览／回复增长权重 |
 | [Lucide](https://lucide.dev/) | 实际使用的功能图标，许可见 [lucide.txt](licenses/lucide.txt)；品牌 S 标识为本项目资源 |
-| [jlesage/docker-chromium](https://github.com/jlesage/docker-chromium) | 实际使用的持久 Chromium 侧车容器；通过受认证的入口提供人工验证 |
 | [Nodyssey 会话架构](https://github.com/5151561/nodyssey/blob/main/docs/architecture.md) | 浏览器保留真实会话、人工验证期间暂停请求、完成后显式恢复的设计对照 |
 | [Scrapy](https://github.com/scrapy/scrapy) · [Discourse TopTopic](https://github.com/discourse/discourse/blob/main/app/models/top_topic.rb) | 分页任务、限速与周期统计覆盖的方案调研；当前未采用深分页巡检，也未引入对应运行时 |
 | [Miniflux](https://github.com/miniflux/v2/blob/main/internal/storage/entry.go) | 条目内容更新与用户状态分离、保留原发布时间 |

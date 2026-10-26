@@ -4,8 +4,6 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { TelegramBaseService } from './base';
 import type { Post } from '../../types';
 import { logger } from '../../utils/logger';
-import type { HotPeriod } from '../hot';
-import { hotEntryKeyboard, hotRankingKeyboard, hotRankingMessage, hotRankingPreview } from './hot';
 
 export class TelegramWebhookService extends TelegramBaseService {
   private isPolling: boolean = false;
@@ -117,21 +115,8 @@ export class TelegramWebhookService extends TelegramBaseService {
       await this.handlePostCommand(ctx);
     });
 
-    // 处理 /hot 命令
-    this.bot.command('hot', async ctx => {
-      if (!this.checkUserPermission(ctx)) {
-        await this.replyNotice(ctx, '尚未绑定', '您没有权限使用此功能。', '/start  绑定账号');
-        return;
-      }
-      const period = ctx.match.trim() || 'live';
-      if (!['live', 'day', 'week'].includes(period)) {
-        await ctx.reply(telegramNotice('论坛热榜', '/hot  打开热榜，通过榜单下方按钮切换实时、日榜、周榜。'), { parse_mode: 'HTML', reply_markup: hotEntryKeyboard });
-        return;
-      }
-      await this.handleHotCommand(ctx, period as HotPeriod);
-    });
-
-    this.bot.callbackQuery(/^hot:(open|live|day|week)$/, async ctx => this.handleHotCallback(ctx));
+    // Acknowledge old messages without reading ranking data or collecting.
+    this.bot.callbackQuery(/^hot:/, ctx => ctx.answerCallbackQuery({ text: '热榜功能已停用' }));
 
     // 处理 /help 命令（允许所有人查看）
     this.bot.command('help', async (ctx) => {
@@ -425,7 +410,7 @@ export class TelegramWebhookService extends TelegramBaseService {
     }
     const returning = config.chat_id === String(id);
     if (!returning) this.dbService.updateBaseConfig({ chat_id: String(id), bound_user_name: name, bound_user_username: username });
-    await ctx.reply(welcomeMessage(name, username, id, returning), { parse_mode: 'HTML', reply_markup: hotEntryKeyboard });
+    await ctx.reply(welcomeMessage(name, username, id, returning), { parse_mode: 'HTML' });
   }
 
   private async handleStopCommand(ctx: Context): Promise<void> {
@@ -473,36 +458,13 @@ export class TelegramWebhookService extends TelegramBaseService {
     if (!posts.length) { await this.replyNotice(ctx, '最近帖子', '暂无帖子，等待下一次 RSS 同步。'); return; }
     const rows = posts.map((post, index) => recentPostRow(post, index, this.getCategoryName(post.category || '')));
     const messages = telegramListMessages('最近帖子', rows);
-    for (const [index, text] of messages.entries()) {
-      await ctx.reply(text, { parse_mode: 'HTML', link_preview_options: { is_disabled: false, prefer_small_media: true }, ...(index === messages.length - 1 ? { reply_markup: hotEntryKeyboard } : {}) });
-    }
-  }
-
-  private async handleHotCommand(ctx: Context, period: HotPeriod = 'live'): Promise<void> {
-    const data = this.dbService.getHotService().ranking(period);
-    await ctx.reply(hotRankingMessage(data), { parse_mode: 'HTML', reply_markup: hotRankingKeyboard(period), link_preview_options: hotRankingPreview(data) });
-  }
-
-  private async handleHotCallback(ctx: Context): Promise<void> {
-    if (!this.checkUserPermission(ctx)) {
-      await ctx.answerCallbackQuery({ text: '请先绑定账号后使用热榜。', show_alert: true });
-      return;
-    }
-    await ctx.answerCallbackQuery();
-    const action = ctx.callbackQuery?.data?.split(':')[1];
-    if (action === 'open') { await this.handleHotCommand(ctx); return; }
-    if (!['live', 'day', 'week'].includes(action || '')) return;
-    const period = action as HotPeriod;
-    const data = this.dbService.getHotService().ranking(period);
-    try {
-      await ctx.editMessageText(hotRankingMessage(data), { parse_mode: 'HTML', reply_markup: hotRankingKeyboard(period), link_preview_options: hotRankingPreview(data) });
-    } catch (error: any) {
-      if (!String(error?.description || '').includes('message is not modified')) throw error;
+    for (const text of messages) {
+      await ctx.reply(text, { parse_mode: 'HTML', link_preview_options: { is_disabled: false, prefer_small_media: true } });
     }
   }
 
   private async handleHelpCommand(ctx: Context): Promise<void> {
-    await ctx.reply(telegramHelp, { parse_mode: 'HTML', reply_markup: hotEntryKeyboard });
+    await ctx.reply(telegramHelp, { parse_mode: 'HTML' });
   }
 
   private async handleGetMeCommand(ctx: Context): Promise<void> {

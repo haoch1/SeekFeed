@@ -22,14 +22,13 @@ const navAttributes = (path: string, target: string) => ({
     'aria-current': path === target ? 'page' : undefined,
 });
 
-export const DashboardSurface: FC<PropsWithChildren<{ path?: string }>> = ({ children, path = "/hot" }) => (
+export const DashboardSurface: FC<PropsWithChildren<{ path?: string }>> = ({ children, path = "/posts" }) => (
     <div class="workspace-shell">
         <button id="sidebarBackdrop" class="sidebar-backdrop" aria-label="关闭导航" hidden></button>
         <aside class="workspace-sidebar" id="workspaceSidebar" aria-label="主导航">
-            <div class="sidebar-brand-row"><a href="/hot" data-route class="workspace-brand"><span class="brand-icon"><BrandMark /></span><span><strong>SeekFeed</strong></span></a><button id="sidebarClose" type="button" class="icon-btn mobile-menu" aria-label="关闭导航"><Icon name="close" /></button></div>
+            <div class="sidebar-brand-row"><a href="/posts" data-route class="workspace-brand"><span class="brand-icon"><BrandMark /></span><span><strong>SeekFeed</strong></span></a><button id="sidebarClose" type="button" class="icon-btn mobile-menu" aria-label="关闭导航"><Icon name="close" /></button></div>
             <nav class="workspace-nav">
                 <p class="nav-section-label">社区动态</p>
-                <a href="/hot" {...navAttributes(path, '/hot')} data-route><Icon name="flame" />热榜</a>
                 <a href="/posts" id="navLatest" {...navAttributes(path, '/posts')} data-route><Icon name="posts" />最新帖子</a>
                 <a href="/matched" id="navMatched" {...navAttributes(path, '/matched')} data-route data-auth-only><Icon name="bell" />命中订阅</a>
                 <a href="/subscriptions" {...navAttributes(path, '/subscriptions')} data-route data-auth-only><Icon name="list" />订阅管理</a>
@@ -44,7 +43,7 @@ export const DashboardSurface: FC<PropsWithChildren<{ path?: string }>> = ({ chi
         </aside>
         <div class="workspace-main">
             <header class="workspace-topbar">
-                <div class="breadcrumb"><button id="sidebarToggle" class="icon-btn mobile-menu" aria-label="打开导航" aria-expanded="false" aria-controls="workspaceSidebar"><Icon name="menu" /></button><span id="breadcrumbSection">{path.startsWith('/settings') ? '设置' : '社区动态'}</span><span class="breadcrumb-divider">/</span><strong id="breadcrumbCurrent">{({ "/": "热榜", "/posts": "最新帖子", "/hot": "热榜", "/matched": "命中订阅", "/subscriptions": "订阅管理", "/statistics": "统计信息", "/settings/account": "账号与安全", "/settings/rss": "RSS 配置", "/settings/telegram": "Telegram" } as Record<string, string>)[path]}</strong></div>
+                <div class="breadcrumb"><button id="sidebarToggle" class="icon-btn mobile-menu" aria-label="打开导航" aria-expanded="false" aria-controls="workspaceSidebar"><Icon name="menu" /></button><span id="breadcrumbSection">{path.startsWith('/settings') ? '设置' : '社区动态'}</span><span class="breadcrumb-divider">/</span><strong id="breadcrumbCurrent">{({ "/": "最新帖子", "/posts": "最新帖子", "/matched": "命中订阅", "/subscriptions": "订阅管理", "/statistics": "统计信息", "/settings/account": "账号与安全", "/settings/rss": "RSS 配置", "/settings/telegram": "Telegram" } as Record<string, string>)[path]}</strong></div>
                 <div class="header-actions">
                     <a href="https://github.com/haoch1/SeekFeed" target="_blank" rel="noopener noreferrer" class="icon-btn github-link header-tooltip-trigger" aria-label="查看 GitHub 源码（新窗口打开）" aria-describedby="githubLinkHint"><Icon name="github" /><span id="githubLinkHint" class="header-tooltip" role="tooltip">GitHub</span></a>
                     <div class="theme-mode-control"><button id="themeToggleBtn" class="icon-btn header-tooltip-trigger" type="button" aria-label="选择主题" aria-describedby="themeToggleHint" aria-haspopup="menu" aria-expanded="false" aria-controls="themeOptions"><span class="theme-toggle-icon theme-icon-sun"><Icon name="sun" /></span><span class="theme-toggle-icon theme-icon-moon"><Icon name="moon" /></span><span class="theme-toggle-icon theme-icon-system"><Icon name="monitor" /></span><span id="themeToggleHint" class="header-tooltip" role="tooltip">选择主题</span></button><div id="themeOptions" class="theme-options" role="menu" aria-label="外观主题" hidden>{[['system', '跟随系统', 'monitor'], ['light', '浅色模式', 'sun'], ['dark', '深色模式', 'moon']].map(([value, label, icon]) => <button type="button" role="menuitemradio" aria-checked="false" data-theme-option={value} tabindex="-1"><Icon name={icon} /><span>{label}</span><span class="theme-option-check"><Icon name="check" /></span></button>)}</div></div>

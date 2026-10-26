@@ -3,7 +3,7 @@
     "name": "SeekFeed",
     "short_name": "SeekFeed",
     "description": "SeekFeed · NodeSeek 新帖监控与 Telegram 消息通知",
-    "start_url": "/hot",
+    "start_url": "/posts",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#4f46e5",
@@ -29,12 +29,6 @@
         }
     ],
     "shortcuts": [
-        {
-            "name": "热榜",
-            "short_name": "热榜",
-            "description": "打开论坛热榜",
-            "url": "/hot"
-        },
         {
             "name": "最新帖子",
             "short_name": "最新帖子",

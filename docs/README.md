@@ -9,7 +9,7 @@
 | [API](../API.md) | Session、账号、订阅、帖子、统计及通知接口 |
 | [采集与数据质量](collection-insights.md) | 身份补全、当前内容同步与采集诊断 |
 | [统计分析](analytics.md) | 指标口径、时间边界、对比与导出 |
-| [热榜](hot-ranking.md) | 采集频率、增长样本、衰减、评分与限流退避 |
+| [热榜](hot-ranking.md) | 热榜退役、归档分支、数据清理与恢复步骤 |
 | [界面规范](style-guide.md) | 设计变量、组件、交互与移动端约束 |
 | [优化记录](OPTIMIZATION.md) | 功能调研、可靠性改进与已知限制 |
 | [开发指南](../CONTRIBUTING.md) | 本地环境、测试、迁移与提交要求 |

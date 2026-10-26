@@ -55,7 +55,6 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
         <link href={assetUrl('/css/charts.css')} rel="stylesheet" />
         <link href={assetUrl('/css/workspace.css')} rel="stylesheet" />
         <link href={assetUrl('/css/analytics.css')} rel="stylesheet" />
-        <link href={assetUrl('/css/hot.css')} rel="stylesheet" />
         <link href={assetUrl('/css/mobile.css')} rel="stylesheet" />
 
         {/* Establish presentation before the first body paint. APIs still verify the session. */}
