@@ -59,7 +59,8 @@ export function getAnalytics(db: Database, days: number, offset: number, now = n
         COUNT(*) AS count, SUM(push_status IN (1, 3)) AS matched FROM posts WHERE ${scope}
         GROUP BY bucket ORDER BY bucket`).all(from, step, ...cohort) as { bucket: number; count: number; matched: number }[];
     const byBucket = new Map(buckets.map(row => [row.bucket, row]));
-    const trend = Array.from({ length: bucketCount }, (_, bucket) => ({
+    const visibleBuckets = days === -1 ? Array.from({ length: bucketCount }, (_, bucket) => bucket) : buckets.map(row => row.bucket);
+    const trend = visibleBuckets.map(bucket => ({
         time: new Date(start + bucket * step).toISOString(),
         count: byBucket.get(bucket)?.count || 0,
         matched: byBucket.get(bucket)?.matched || 0,

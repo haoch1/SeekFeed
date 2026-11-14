@@ -41,6 +41,9 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             window.SeekFeedControls.chartInspection(box);
             box.innerHTML = empty('所选时段暂无发帖数据');
             box.removeAttribute('tabindex');
+            box.removeAttribute('role');
+            box.removeAttribute('aria-label');
+            delete box.dataset.overflow;
             box.onpointerdown = box.onpointermove = box.onpointerleave = box.onfocus = box.onblur = box.onkeydown = box.onclick = null;
             return;
         }

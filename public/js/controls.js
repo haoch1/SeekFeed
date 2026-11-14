@@ -111,6 +111,7 @@
     const close = () => {
         if (!active) return;
         active.menu.remove();
+        active.menu = null;
         active.button.setAttribute('aria-expanded', 'false');
         active.button.removeAttribute('aria-activedescendant');
         active = null;

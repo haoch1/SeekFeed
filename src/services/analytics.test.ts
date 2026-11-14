@@ -71,6 +71,7 @@ describe('coherent publication-time analytics', () => {
         expect(data.period.from).toBe('2026-10-19T16:00:00.000Z');
         expect(data.totals).toEqual({ posts: 3, matched: 2, pushed: 1, pending: 1, unmatched: 0, unprocessed: 1, authors: 2 });
         expect(data.trend[0].count).toBe(1);
+        expect(data.trend[1].count).toBe(0);
         expect(data.trend[8].count).toBe(1);
         expect(data.trend[9].count).toBe(1);
         expect(data.trend.reduce((sum, row) => sum + row.count, 0)).toBe(3);
@@ -89,6 +90,33 @@ describe('coherent publication-time analytics', () => {
             expect(data.trend.reduce((sum, row) => sum + row.count, 0)).toBe(expected);
             expect(data.topics.sample).toBe(expected);
             expect(data.authors[0].count).toBe(expected);
+        }
+    });
+    it('omits empty dates from daily trends in every range using the selected local timezone', () => {
+        for (const offset of [480, -210]) {
+            const localDay = (date: string) => new Date(Date.parse(date + 'T00:00:00Z') - offset * 60000).toISOString();
+            post(localDay('2026-10-15'), 1, String(offset));
+            post(localDay('2026-10-15'), 2, String(offset));
+            post(localDay('2026-10-18'), 2, String(offset));
+            for (const days of [7, 30, 0]) {
+                const data = getAnalytics(db, days, offset, now, String(offset));
+                expect(data.trend).toEqual([
+                    { time: localDay('2026-10-15'), count: 2, matched: 1 },
+                    { time: localDay('2026-10-18'), count: 1, matched: 0 },
+                ]);
+                expect(data.totals.posts).toBe(3);
+            }
+        }
+    });
+    it('returns an empty daily trend for empty ranges and categories without matching posts', () => {
+        post('not-a-date');
+        post('2026-10-20T05:30:01Z');
+        for (const days of [7, 30, 0]) {
+            expect(getAnalytics(db, days, 480, now).trend).toEqual([]);
+        }
+        post('2026-10-20T00:00:00Z');
+        for (const days of [7, 30, 0]) {
+            expect(getAnalytics(db, days, 480, now, 'trade').trend).toEqual([]);
         }
     });
     it('retains deleted subscription IDs and separates paused and active rule performance', () => {
@@ -157,6 +185,8 @@ describe('coherent publication-time analytics', () => {
         post('2026-10-20T00:00:00Z');
         const data = getAnalytics(db, 0, 480, now);
         expect(data.trend.length).toBeLessThanOrEqual(61);
+        expect(data.trend).toHaveLength(2);
+        expect(data.trend.every(row => row.count > 0)).toBe(true);
         expect(data.trend.reduce((sum, row) => sum + row.count, 0)).toBe(2);
         expect(data.period.stepDays).toBeGreaterThan(1);
     });
