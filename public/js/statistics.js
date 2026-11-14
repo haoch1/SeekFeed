@@ -50,15 +50,18 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
         const max = Math.max(...data.map(row => row.count), 1);
         const slot = Math.max(38, number(max).length * 7 + 22);
         const expanded = !!box.closest('.chart-expanded');
-        const width = expanded || trendStyle === 'line' ? box.clientWidth : Math.max(box.clientWidth, 45 + data.length * slot), height = expanded ? Math.max(228, Math.min(480, innerHeight * .55)) : 228, left = 33, right = width - 12, top = 34, bottom = height - 32;
+        const ceiling = Math.max(4, Math.ceil(max / 4) * 4);
+        const left = Math.max(33, number(ceiling).length * 7 + 12);
+        const width = expanded || trendStyle === 'bar' ? Math.max(box.clientWidth, left + 12 + data.length * slot) : box.clientWidth;
+        const height = expanded ? Math.max(228, Math.min(480, innerHeight * .55)) : 228;
+        const right = width - 12, top = 34, bottom = height - 32;
         box.style.height = `${height + 16}px`;
         box.dataset.overflow = String(width > box.clientWidth + 1);
-        const ceiling = Math.max(4, Math.ceil(max / 4) * 4);
         const step = (right - left) / data.length, barWidth = Math.min(34, step * .64);
         const x = index => left + step * (index + .5);
         const y = value => bottom - value / ceiling * (bottom - top);
         const visibleLabels = new Set();
-        const compactLabels = trendStyle === 'line' || step < slot;
+        const compactLabels = !expanded && (trendStyle === 'line' || step < slot);
         if (compactLabels) {
             const peakIndex = data.findIndex(row => row.count === max);
             for (const index of [peakIndex, data.length - 1, 0, ...data.map((_, i) => i)]) {
