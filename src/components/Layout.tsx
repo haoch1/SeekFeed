@@ -34,7 +34,7 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
         {description && <meta name="twitter:description" content={description} />}
 
         {/* PWA Config */}
-        <meta name="theme-color" content="#18181b" />
+        <meta name="theme-color" content="#4f46e5" />
         <meta name="color-scheme" content="light dark" />
         <meta name="application-name" content="SeekFeed" />
         <meta name="apple-mobile-web-app-title" content="SeekFeed" />
@@ -47,7 +47,7 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
         <link rel="apple-touch-icon" href="/icons/seekfeed-192.png" />
 
         {/* Microsoft */}
-        <meta name="msapplication-TileColor" content="#18181b" />
+        <meta name="msapplication-TileColor" content="#4f46e5" />
         <meta name="msapplication-TileImage" content="/icons/seekfeed-192.png" />
 
         {/* Shared component styles and one theme source */}
