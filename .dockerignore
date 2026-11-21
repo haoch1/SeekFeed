@@ -1,5 +1,7 @@
-# Node modules
+# Dependencies
 node_modules/
+package-lock.json
+pnpm-lock.yaml
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -8,30 +10,26 @@ yarn-error.log*
 .env
 .env.*
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*.local
 
-# Git
+# Git & CI
 .git/
 .gitignore
+.gitattributes
+.github/
 
-# IDE
+# IDE & OS
 .claude/
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# OS
 .DS_Store
 Thumbs.db
 
-# Logs
+# Logs & runtime data
 logs/
 *.log
-
-# Runtime data
 data/
 *.db
 *.db-shm
@@ -42,28 +40,26 @@ pids/
 *.seed
 *.pid.lock
 
-# Coverage directory used by tools like istanbul
+# Build & coverage outputs
 coverage/
-
-# Build outputs
 dist/
 build/
 
-# Docker
+# Docker & scripts not needed in image
 Dockerfile*
 docker-compose*
 .dockerignore
+build-and-push.sh
 
 # Documentation
+docs/
 *.md
-!README.md
 
-# Test files
+# Tests & temp files
 test/
 tests/
 *.test.*
 *.spec.*
-
-# Temporary files
+src/test-db.ts
 tmp/
 temp/

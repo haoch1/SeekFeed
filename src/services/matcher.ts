@@ -18,6 +18,8 @@ export interface MatchResult {
 
 export class MatcherService {
   private static retryCursors = new WeakMap<DatabaseService, number>();
+  private static regexCache = new Map<string, RegExp | null>();
+  private static readonly MAX_REGEX_CACHE = 256;
   constructor(
     private dbService: DatabaseService,
     private telegramService: TelegramPushService | null = null
@@ -90,25 +92,46 @@ export class MatcherService {
   }
 
   /**
+   * 获取或编译缓存的正则表达式（避免每篇帖子重复编译）
+   */
+  private getCompiledRegex(pattern: string, flags: string): RegExp | null {
+    const cacheKey = `${flags}\0${pattern}`;
+    if (MatcherService.regexCache.has(cacheKey)) {
+      return MatcherService.regexCache.get(cacheKey)!;
+    }
+    let compiled: RegExp | null = null;
+    try {
+      // Strip stateful global/sticky flags so cached RegExp.test() stays deterministic.
+      const safeFlags = flags.replace(/[gy]/g, '');
+      compiled = new RegExp(pattern, safeFlags);
+    } catch (error) {
+      logger.warn(`正则表达式语法错误，回退到字符串匹配: /${pattern}/${flags}`, error);
+      compiled = null;
+    }
+    if (MatcherService.regexCache.size >= MatcherService.MAX_REGEX_CACHE) {
+      const oldest = MatcherService.regexCache.keys().next().value;
+      if (oldest !== undefined) MatcherService.regexCache.delete(oldest);
+    }
+    MatcherService.regexCache.set(cacheKey, compiled);
+    return compiled;
+  }
+
+  /**
    * 执行匹配检查（字符串或正则）
    */
-  private performMatch(text: string, keyword: string): boolean {
+  private performMatch(text: string, keyword: string, textLower?: string): boolean {
     const regexInfo = this.isRegexKeyword(keyword);
-    
+
     if (regexInfo.isRegex && regexInfo.pattern) {
-      try {
-        const flags = regexInfo.flags ?? 'i'; // 默认不区分大小写
-        const regex = new RegExp(regexInfo.pattern, flags);
+      const flags = regexInfo.flags ?? 'i'; // 默认不区分大小写
+      const regex = this.getCompiledRegex(regexInfo.pattern, flags);
+      if (regex) {
         return regex.test(text);
-      } catch (error) {
-        logger.warn(`正则表达式语法错误，回退到字符串匹配: ${keyword}`, error);
-        // 回退到字符串匹配
-        return text.toLowerCase().includes(keyword.toLowerCase());
       }
-    } else {
-      // 标准字符串匹配
-      return text.toLowerCase().includes(keyword.toLowerCase());
+      return (textLower ?? text.toLowerCase()).includes(keyword.toLowerCase());
     }
+    // 标准字符串匹配
+    return (textLower ?? text.toLowerCase()).includes(keyword.toLowerCase());
   }
 
   /**
@@ -179,8 +202,10 @@ export class MatcherService {
       }
     }
 
-    const excluded = (subscription.exclude_keywords || '').split(/[,，\n]+/).map(word => word.trim()).filter(Boolean);
-    if (excluded.some(word => `${post.title}\n${post.memo}`.toLowerCase().includes(word.toLowerCase()))) {
+    const titleLower = post.titleLower ?? post.title.toLowerCase();
+    const memoLower = post.memoLower ?? post.memo.toLowerCase();
+    const excluded = (subscription.exclude_keywords || '').split(/[,，\n]+/).map(word => word.trim().toLowerCase()).filter(Boolean);
+    if (excluded.some(word => titleLower.includes(word) || memoLower.includes(word))) {
       return { matched: false, matchedKeywords: [], matchType: 'title', matchDetails: {
         titleMatches: [], contentMatches: [], authorMatches: [], categoryMatches: [],
       } };
@@ -199,29 +224,29 @@ export class MatcherService {
 
     for (const keyword of keywords) {
       if (!keyword) continue;
-      
+
       let keywordMatched = false;
-      
+
       // 检查标题匹配
-      if (this.performMatch(titleText, keyword)) {
+      if (this.performMatch(titleText, keyword, titleLower)) {
         matchDetails.titleMatches.push(keyword);
         keywordMatched = true;
       }
-      
+
       // 检查内容匹配（如果不是仅标题模式）
-      if (!keywordMatched && !config.only_title && this.performMatch(contentText, keyword)) {
+      if (!keywordMatched && !config.only_title && this.performMatch(contentText, keyword, memoLower)) {
         matchDetails.contentMatches.push(keyword);
         keywordMatched = true;
       }
-      
+
       // 检查作者匹配（如果没有指定具体的creator过滤条件）
-      if (!keywordMatched && !config.only_title && !subscription.creator && this.performMatch(creatorText, keyword)) {
+      if (!keywordMatched && !config.only_title && !subscription.creator && this.performMatch(creatorText, keyword, creatorText)) {
         matchDetails.authorMatches.push(keyword);
         keywordMatched = true;
       }
-      
+
       // 检查分类匹配（如果没有指定具体的category过滤条件）
-      if (!keywordMatched && !config.only_title && !subscription.category && this.performMatch(categoryText, keyword)) {
+      if (!keywordMatched && !config.only_title && !subscription.category && this.performMatch(categoryText, keyword, categoryText)) {
         matchDetails.categoryMatches.push(keyword);
         keywordMatched = true;
       }

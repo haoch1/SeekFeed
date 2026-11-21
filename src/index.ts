@@ -1,6 +1,6 @@
-import { getClientInfo } from './utils/clientInfo';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { compress } from 'hono/compress';
 import { serveStatic } from 'hono/bun';
 import { loadEnvConfig, getEnvConfig } from './config/env';
 import { DatabaseService } from './services/database';
@@ -32,8 +32,28 @@ type Variables = {
 
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
+const authServices = new WeakMap<DatabaseService, AuthService>();
+
+// CORS must be registered before routes so matched endpoints receive CORS headers.
+app.use('*', cors({
+  origin: (origin) => {
+    let raw = process.env.CORS_ORIGINS || 'http://localhost:3010';
+    try { raw = getEnvConfig().CORS_ORIGINS; } catch {}
+    const allowed = raw.split(',').map(item => item.trim()).filter(Boolean);
+    if (allowed.includes('*')) return origin || '*';
+    return origin && allowed.includes(origin) ? origin : '';
+  },
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization'],
+}));
+
+app.use('*', compress());
+
 app.use('*', async (c, next) => {
   await next();
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('X-Frame-Options', 'SAMEORIGIN');
+  c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
   if (c.res.headers.get('Content-Type')?.includes('text/html')) c.header('Cache-Control', 'no-store');
 });
 for (const path of ['/css/*', '/js/*']) app.use(path, async (c, next) => {
@@ -67,7 +87,11 @@ app.use('*', async (c, next) => {
   
   if (!c.get('authService')) {
     const dbService = c.get('dbService');
-    const authService = new AuthService(dbService);
+    let authService = authServices.get(dbService);
+    if (!authService) {
+      authService = new AuthService(dbService);
+      authServices.set(dbService, authService);
+    }
     c.set('authService', authService);
   }
   
@@ -161,14 +185,8 @@ app.get('/api/scheduler/status', requireSession, (c) => {
 });
 
 // 手动执行 RSS 任务端点
-app.post('/api/scheduler/rss/run', async (c) => {
+app.post('/api/scheduler/rss/run', requireSession, async (c) => {
   try {
-    const token = c.req.header('Authorization')?.replace(/^Bearer /, '');
-    const verification = token && await c.get('authService').verifySession(token,
-      getClientInfo(c).ipAddress);
-    if (!verification || !verification.valid) {
-      return c.json({ success: false, message: '请先登录' }, 401);
-    }
     const schedulerService = c.get('schedulerService');
     if (!schedulerService) {
       return c.json({
@@ -176,7 +194,7 @@ app.post('/api/scheduler/rss/run', async (c) => {
         message: '定时任务服务未启动'
       }, 503);
     }
-    
+
     const result = await schedulerService.manualRSSTask();
     return c.json(result);
   } catch (error) {
@@ -262,27 +280,20 @@ async function startServer() {
   try {
     // 加载环境配置
     const config = await loadEnvConfig();
-    
-    // 设置 CORS 中间件
-    app.use('*', cors({
-      origin: config.CORS_ORIGINS.split(','),
-      allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowHeaders: ['Content-Type', 'Authorization'],
-    }));
-    
+
     // 初始化数据库
     await initializeDatabase();
-    
+
     // 设置默认 RSS 配置到数据库
     await setupDefaultRssConfig();
-    
+
     logger.server('SeekFeed 服务器启动成功');
     logger.stats({
       '地址': `http://${config.HOST}:${config.PORT}`,
       '环境': config.NODE_ENV,
       '数据库': config.DATABASE_PATH,
     });
-    
+
     return config;
   } catch (error) {
     logger.error('服务器启动失败:', error);
@@ -292,17 +303,7 @@ async function startServer() {
 
 // 初始化应用
 async function initializeApp() {
-  // 加载环境配置
-  const config = await loadEnvConfig();
-  
-  // 设置 CORS 中间件
-  app.use('*', cors({
-    origin: config.CORS_ORIGINS.split(','),
-    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization'],
-  }));
-  
-  return config;
+  return loadEnvConfig();
 }
 
 // 导出应用和配置

@@ -42,6 +42,7 @@ export const createDatabaseConnection = (): Database => {
   db.exec('PRAGMA busy_timeout = 5000');
   db.exec('PRAGMA foreign_keys = ON');
   db.exec('PRAGMA temp_store = MEMORY');
+  db.exec('PRAGMA mmap_size = 33554432');
 
   return db;
 };

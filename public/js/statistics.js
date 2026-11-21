@@ -74,7 +74,7 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
             const path = `M${start},${bottom} V${barTop + radius} Q${start},${barTop} ${start + radius},${barTop} H${end - radius} Q${end},${barTop} ${end},${barTop + radius} V${bottom} Z`;
             const value = number(row.count), labelWidth = Math.max(28, value.length * 7 + 14);
             return `${trendStyle === 'line' ? `<circle class="analytics-post-bar analytics-line-point" data-bar-index="${index}" data-count="${row.count}" cx="${x(index)}" cy="${barTop}" r="3.5"/>` : `<path class="analytics-post-bar" data-bar-index="${index}" data-count="${row.count}" d="${path}"/>`}
-                <g class="analytics-bar-label${compactLabels && !visibleLabels.has(index) ? ' is-compact' : ''}" data-label-index="${index}"><rect x="${x(index) - labelWidth / 2}" y="${barTop - 28}" width="${labelWidth}" height="21" rx="5"/><text class="analytics-bar-value" x="${x(index)}" y="${barTop - 17.5}" text-anchor="middle" dominant-baseline="central">${value}</text></g>`;
+                <g class="analytics-bar-label${compactLabels && !visibleLabels.has(index) ? ' is-compact' : ''}" data-label-index="${index}"${row.count === 0 ? ' data-zero="true"' : ''}><rect x="${x(index) - labelWidth / 2}" y="${barTop - 28}" width="${labelWidth}" height="21" rx="5"/><text class="analytics-bar-value" x="${x(index)}" y="${barTop - 17.5}" text-anchor="middle" dominant-baseline="central">${value}</text></g>`;
         }).join('');
         const grid = Array.from({ length: 5 }, (_, index) => {
             const value = ceiling * index / 4;

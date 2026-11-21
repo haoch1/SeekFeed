@@ -1,28 +1,37 @@
 # SeekFeed
 
 [![SeekFeed CI](https://github.com/haoch1/SeekFeed/actions/workflows/docker-build.yml/badge.svg)](https://github.com/haoch1/SeekFeed/actions/workflows/docker-build.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-4f46e5.svg)](LICENSE)
 
-面向 NodeSeek 社区的自托管监控与分析平台，提供帖子检索、关键词订阅、Telegram 通知和多维统计分析。采用 Bun、Hono、SQLite 与服务端 JSX，前端使用原生 JavaScript 和 SVG，支持明暗主题、移动端布局及 PWA 安装。
+面向 **NodeSeek** 社区的轻量级自托管监控与分析平台。基于 **Bun + Hono + SQLite** 构建，提供 RSS 实时采集、关键词组合订阅、Telegram 即时推送与多维社区统计分析。
 
-热榜已从主分支移除，完整实现保存在 [codex/archive-hot-ranking 分支](https://github.com/haoch1/SeekFeed/tree/codex/archive-hot-ranking)。升级将删除热榜及作者补全数据；恢复步骤见 [热榜归档](docs/hot-ranking.md)。
+> **架构原则**：服务端 Hono JSX 渲染 + 原生 JavaScript / SVG，无重型前端框架、无常驻浏览器，单容器低内存运行（默认限制 256 MiB / 0.5 CPU）。
+>
+> **关于热榜**：热榜功能已从 `main` 分支移除并归档至 [`codex/archive-hot-ranking`](https://github.com/haoch1/SeekFeed/tree/codex/archive-hot-ranking) 分支，说明见 [热榜归档](docs/hot-ranking.md)。
 
-## 功能概览
+---
 
-| 模块 | 功能 |
+## 核心功能
+
+| 模块 | 说明 |
 | --- | --- |
-| 帖子 | RSS 定时采集、手动刷新、包含或容错搜索、分类与作者筛选、分页；最新帖子与命中订阅分别保存筛选条件；命中帖子支持单条删除 |
-| 订阅 | 最多三个关键词组合、正则、作者、分类、屏蔽词；新增、编辑、暂停、恢复与删除 |
-| 统计 | 发帖趋势、分类结构、作者贡献、活跃时段、热门标题词、分类联动和 CSV 导出 |
-| 采集分析 | RSS 采集质量记录、当前帖子内容同步 |
-| 关键词分析 | 指定日期的发帖数量及占比、1／3／6 小时分布、近七天趋势、最多三个词独立对比、共同命中、分类与作者明细 |
-| Telegram | Bot 绑定、Webhook 或 Polling、持久化待发送队列、失败重试、命令交互 |
-| 账号 | 单管理员认证、自定义头像、登录有效期、设备列表、单设备退出与全部退出 |
+| **帖子动态** | RSS 定时采集与手动刷新；支持包含 / 容错搜索、分类与作者筛选、分页浏览；最新帖子与命中订阅独立保存筛选条件，命中帖子支持单条移除 |
+| **关键词订阅** | 支持最多 3 个关键词组合（AND）、正则表达式（`/pattern/flags`、`regex:pattern`）、作者/分类精确限定与屏蔽词排除；支持暂停、恢复与编辑 |
+| **Telegram 通知** | 支持 Webhook 与 Polling 双模式、持久化推送队列、失败退避重试与 Bot 交互命令 |
+| **多维统计** | 发帖趋势（柱状/折线 + 放大查看）、分类占比与明细、作者贡献排行、24 小时活跃热力图、热门标题词、CSV 导出 |
+| **关键词分析** | 指定日期的关键词发帖量与占比、1/3/6 小时分布、近 7 天趋势、最多 3 词对比及共同命中分析 |
+| **采集诊断** | 记录 RSS 同步质量与运行状态，支持当前帖子内容同步 |
+| **账号与安全** | 单管理员认证、自定义头像（256×256 PNG）、可选会话有效期（1 小时 ~ 30 天）、多设备会话查看与独立撤销 |
 
-图表包含柱形、折线、环形、热力分布及排行列表，支持悬停、键盘操作和移动端触控。关键词推荐仅填入输入框，分析由“开始分析”或回车提交。
+界面支持**浅色 / 深色 / 跟随系统**三种外观模式、键盘导航、移动端适配以及 PWA 安装。
 
-## 快速部署
+---
 
-需要 Docker Engine 与 Docker Compose。下载仓库后，在项目目录执行：
+## 快速部署（Docker Compose）
+
+### 使用预构建镜像（推荐）
+
+默认镜像发布于 GHCR（`ghcr.io/haoch1/seekfeed:latest`），原生支持 `linux/amd64` 与 `linux/arm64`：
 
 ```bash
 git clone https://github.com/haoch1/SeekFeed.git
@@ -32,123 +41,93 @@ docker compose -f docker-compose.prod.yml pull
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-默认镜像为 `ghcr.io/haoch1/seekfeed:latest`，支持 `linux/amd64` 和 `linux/arm64`。生产配置绑定 `127.0.0.1:3010`，通过反向代理提供 HTTPS；同机访问地址为 <http://localhost:3010>。首次访问创建管理员，随后配置 RSS 与 Telegram。
+- 默认绑定 `127.0.0.1:3010`（建议配合 Nginx / Caddy / Cloudflare Tunnel 提供 HTTPS）。
+- 同机访问 <http://localhost:3010>，首次打开会引导创建管理员账号，随后可在设置页配置 RSS 源与 Telegram Bot。
+- 数据持久化于 `seekfeed_data` 卷；升级时重新执行 `pull` 和 `up -d`，容器启动会自动执行增量数据库迁移。
 
-数据库存储于 `seekfeed_data` 卷。升级时执行相同的 `pull` 和 `up -d` 命令；启动时自动执行未应用的数据库迁移。备份、恢复、固定版本与代理配置见 [Docker 部署](docs/Docker.md)。
-
-从当前源码构建：
+### 从源码构建
 
 ```bash
 docker compose up -d --build
 ```
 
-## 访问权限与账号
+Dockerfile 采用 `BUILDPLATFORM` 原生跨平台打包 + BuildKit 依赖缓存挂载 + 零 `RUN` 运行阶段，单容器仅包含压缩后的单文件产物、静态资源与迁移 SQL，不携带 `node_modules`。更多部署、备份与反代说明见 [Docker 部署文档](docs/Docker.md)。
 
-本项目采用单管理员模式，不提供多用户数据隔离。
+---
 
-| 身份 | 可访问范围 |
+## 访问权限说明
+
+SeekFeed 采用**单管理员模式**（不提供多用户租户隔离）：
+
+- **访客**：可浏览公开帖子、公开社区统计与关键词分析；所有公开接口均剔除订阅规则与推送状态字段。
+- **管理员**：完整访问订阅管理、命中订阅、推送状态、通知分析、采集诊断、RSS/Telegram 配置及账号设备管理。
+
+---
+
+## 订阅规则与 Telegram 命令
+
+### 匹配规则
+
+- **普通关键词**：忽略大小写，最多 3 个关键词需同时命中。
+- **正则表达式**：`/pattern/` 区分大小写；`/pattern/i` 与 `regex:pattern` 忽略大小写。
+- **过滤与排除**：作者与分类按精确条件过滤；屏蔽词以逗号或换行分隔，命中任一即跳过推送。
+- **容错搜索**：帖子列表筛选支持可选的容错匹配（支持缺字、多字、替换与相邻字符交换，仅作用于列表搜索，不影响订阅与统计）。
+
+### Telegram Bot 命令
+
+在 [@BotFather](https://t.me/BotFather) 创建机器人并在设置页填入 Token 后，向机器人发送 `/start` 完成绑定：
+
+| 命令 | 说明 |
 | --- | --- |
-| 访客 | 公开帖子、基于论坛公开内容的统计与关键词分析 |
-| 管理员 | 访客功能，以及订阅规则、命中订阅、推送状态、通知分析、RSS／Telegram 配置、账号与设备管理 |
+| `/start`、`/help` | 绑定管理员账号 / 查看帮助 |
+| `/list` | 查看当前订阅列表 |
+| `/add 关键词1 关键词2` | 快速新增关键词订阅 |
+| `/del 订阅ID` | 删除指定订阅 |
+| `/post` | 查看最近 10 条帖子 |
+| `/stop`、`/resume` | 暂停 / 恢复推送通知 |
+| `/getme`、`/unbind` | 查看绑定状态 / 解除绑定 |
 
-受保护接口在服务端校验 Session。伪造、过期或已注销的会话返回 `401`；公开接口剔除订阅及推送字段。PWA 仅缓存静态资源，不缓存账号、配置或 API 响应。
+---
 
-访客点击侧栏头像打开登录窗口，悬停或键盘聚焦显示提示。管理员点击头像进入账号设置，右侧图标用于退出登录。头像支持 JPG、PNG、WebP，原图最大 5 MiB；浏览器居中裁剪为 256 × 256 PNG，服务端校验后存入数据库。头像可独立更新或恢复默认，随账号同步。
+## 环境变量配置
 
-当前密码以不可逆哈希保存，接口不返回密码。修改用户名或密码需要验证当前密码，并使全部已有会话失效。登录有效期支持 1 小时、1 天、7 天或 30 天，每个账号最多保留五个活跃会话。
-
-## 数据范围与统计口径
-
-- 总览按 RSS 记录的发帖时间统计，支持今日、近七天、近三十天及全部记录；日期边界按请求指定的时区确定。
-- 总览日期与分类作用于帖子、作者、趋势、分类、活跃时段和标题词；关键词分析使用独立日期与匹配范围。
-- 每个关键词独立计数，同一篇帖子对同一词仅计一次；多个词的交集单独展示。关键词分析采用文本包含匹配，与订阅中的正则规则不同。
-- 当前时段仅统计至查询时刻；未来时段不按零值展示。与上一日比较时使用相同时段，并提示历史覆盖不足。
-- 最新帖子顶部的累计收录数与统计页所选时段数量具有不同范围。通知成功数仅统计实际投递成功的帖子。
-
-详细定义、图表交互与导出范围见 [统计分析](docs/analytics.md)。
-
-## 订阅规则与通知
-
-普通关键词忽略大小写，最多三个关键词需同时命中。`/pattern/` 区分大小写；`/pattern/i` 与 `regex:pattern` 忽略大小写。作者按名称精确匹配，分类按所选分类匹配；屏蔽词由逗号或换行分隔，任一命中即排除。编辑订阅保留原 ID、暂停状态及已记录的历史关联。
-
-帖子列表的“筛选”区域可选择包含匹配或容错匹配，默认包含匹配。容错匹配仅用于标题与作者搜索，支持缺字、多字、替换及相邻字符交换，例如 `vmsis` 可匹配 `vmiss`。四至七字符的词允许一次编辑，八至六十四字符允许两次；不足四字符仅执行包含匹配。查询超过十六个词或存在超过六十四字符的词时，仅执行完整文本包含匹配。该选项不改变订阅命中、推送规则或关键词分析计数，“命中订阅”中的搜索范围仍限于已记录的命中帖子。
-
-暂停保留已入队通知；恢复后继续处理队列，不追溯补发暂停期间未命中的帖子。每轮发送设有上限，失败通知保留重试。单篇帖子记录首个匹配订阅，当前未提供完整的多对多命中历史；进程在发送成功但状态尚未写入时中断，可能造成重复投递。
-
-在 [BotFather](https://t.me/BotFather) 创建机器人并配置 Token，开启命令交互后向 Bot 发送 `/start` 完成绑定。
-
-| 命令 | 功能 |
-| --- | --- |
-| `/start`、`/help` | 绑定账号、查看帮助 |
-| `/list`、`/add 关键词1 关键词2`、`/del 订阅ID` | 查看、新增、删除订阅 |
-| `/post` | 最近十条帖子 |
-| `/stop`、`/resume` | 暂停、恢复通知 |
-| `/getme`、`/unbind` | 查看绑定状态、解除绑定 |
-
-## 本地开发
-
-CI 与容器固定使用 Bun 1.4.3；生产采用 slim 基础镜像，只有打包代码、静态资源和迁移 SQL，不携带 node_modules、Python 或 Chromium。构建与依赖安装仅在构建阶段执行。
-
-```bash
-bun install --frozen-lockfile
-bun run dev
-bun test
-bun run build
-bun run scripts/verify-bundle.ts
-bun run start
-```
-
-默认端口为 3010，数据库为 `data/seekfeed.db`。入口为 `src/seekfeed.ts`，构建产物为 `dist/seekfeed.js`。数据库维护命令及贡献约定见 [开发指南](CONTRIBUTING.md)。
-
-## 配置
-
-完整模板见 [.env.example](.env.example)。显式环境变量优先于该文件。
+完整模板见 [`.env.example`](.env.example)，显式环境变量优先于 `.env` 文件：
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `PORT`、`HOST` | `3010`、`0.0.0.0` | 本地服务监听；Compose 内部固定使用 3010 |
-| `DATABASE_PATH` | `./data/seekfeed.db` | SQLite 文件路径 |
-| `CORS_ORIGINS` | `http://localhost:3010` | 允许的跨域来源，逗号分隔 |
-| `TRUST_PROXY` | `false` | 可信代理 IP 转发开关，部署要求见 Docker 文档 |
-| `RSS_CHECK_ENABLED` | `true` | RSS 自动监控开关 |
-| `RSS_TIMEOUT` | `30000` | RSS 请求超时，单位毫秒 |
+| `PORT` / `HOST` | `3010` / `0.0.0.0` | 服务监听端口与地址 |
+| `DATABASE_PATH` | `./data/seekfeed.db` | SQLite 数据库文件路径 |
+| `CORS_ORIGINS` | `http://localhost:3010` | 允许跨域的来源列表（逗号分隔） |
+| `TRUST_PROXY` | `false` | 反向代理可信 IP 转发开关 |
+| `RSS_CHECK_ENABLED` | `true` | 是否启用后台 RSS 定时采集 |
+| `RSS_TIMEOUT` | `30000` | RSS 请求超时时间（毫秒） |
 | `TELEGRAM_WEBHOOK_URL` | 未设置 | 可选的公网 HTTPS Webhook 地址 |
 
-RSS 地址、间隔、代理与 Telegram Token、接收账号在设置页管理。
+RSS 源地址、抓取间隔（默认 30 秒）、代理及 Telegram 配置均可在 Web 设置页动态修改。
 
-默认 RSS 抓取间隔为 30 秒，订阅匹配与推送在每轮同步后执行。前台帖子列表每 15 秒检查更新，统计图表和已提交且展开的关键词分析每 60 秒更新；全局计数和运行状态每 60 秒更新。页面轮询读取本地数据库，不额外触发源站采集；页面不可见时暂停自动更新。刷新周期集中定义于 `src/config/cadence.json`，已保存的 RSS 自定义间隔优先于默认值。
+---
 
-项目保持服务端 Hono JSX、原生 JavaScript/SVG 与 SQLite，不引入常驻浏览器处理常规功能。共享查询缓存最多 128 份，统计缓存 60 秒并在相关写入后失效。主容器限制为 256 MiB / 0.5 CPU，只运行一个应用容器。
+## 本地开发
 
-采集质量、身份补全与当前内容同步的定义、保留策略和权限见 [采集与数据质量](docs/collection-insights.md)。
+需要安装 [Bun](https://bun.sh/)（CI 与容器固定使用 Bun 1.4.3）：
 
-## 参考项目与资源
+```bash
+bun install --frozen-lockfile
+bun run dev          # 启动热重载开发服务器 (http://localhost:3010)
+bun test             # 运行全部单元测试
+bun run build        # 打包并压缩生产产物至 dist/
+bun run scripts/verify-bundle.ts  # 离线验证无 node_modules 独立运行
+bun run start        # 启动生产构建
+```
 
-以下来源用于功能调研、交互设计或算法对照。设计参考不表示直接引入其运行时、完整页面或排名公式；第三方图标的实际使用及许可另行列明。
+---
 
-| 项目／资源 | 参考范围与采用方式 |
-| --- | --- |
-| [ReUI](https://github.com/keenthemes/reui) · [组件目录](https://reui.io/components) | 侧栏、表单、面板、分段选项、开关、分页与信息层级；采用 Hono JSX 和原生 JavaScript 实现 |
-| [Discourse 社区看板](https://meta.discourse.org/t/better-insights-into-your-community-with-the-redesigned-admin-dashboard/404528) | 社区总览、报告层级与细分分析的组织方式 |
-| [Plausible](https://plausible.io/docs/guided-tour) | 时间范围、筛选联动、指标与明细的关联方式 |
-| [Umami](https://github.com/umami-software/umami) | 紧凑指标与排行展示方式 |
-| [nodeseek-keywords](https://github.com/n-AChegYag/nodeseek-keywords) | 订阅暂停、发送上限、失败重试及 RSS 异常处理的功能对照 |
-| [nodeseek-rss-telegram-bot](https://github.com/AI-XMLY/nodeseek-rss-telegram-bot) | 组合关键词、排除规则与独立订阅开关的功能对照 |
-| [NodeSeekRSSMonitor](https://github.com/Seameee/NodeSeekRSSMonitor) | 关键词和分类监控、备用源及部署架构调研；未引入其 Workers／D1 架构 |
-| [SeekMate parser](https://github.com/mrzhiin/seekmate/blob/main/lib/parser/parser.ts) · [分页查询](https://github.com/mrzhiin/seekmate/blob/main/hooks/services/useInfinitePostsQuery.ts) | NodeSeek 公开列表的字段语义、置顶标记、显式排序与分页契约对照 |
-| [Lucide](https://lucide.dev/) | 实际使用的功能图标，许可见 [lucide.txt](licenses/lucide.txt)；品牌 S 标识为本项目资源 |
-| [Nodyssey 会话架构](https://github.com/5151561/nodyssey/blob/main/docs/architecture.md) | 浏览器保留真实会话、人工验证期间暂停请求、完成后显式恢复的设计对照 |
-| [Scrapy](https://github.com/scrapy/scrapy) · [Discourse TopTopic](https://github.com/discourse/discourse/blob/main/app/models/top_topic.rb) | 分页任务、限速与周期统计覆盖的方案调研；当前未采用深分页巡检，也未引入对应运行时 |
-| [Miniflux](https://github.com/miniflux/v2/blob/main/internal/storage/entry.go) | 条目内容更新与用户状态分离、保留原发布时间 |
+## 文档导航
 
-参考来源的细节分别记录于 [界面规范](docs/style-guide.md)、[优化记录](docs/OPTIMIZATION.md) 与 [热榜归档](docs/hot-ranking.md)。未采用的主题预览不属于当前界面的实现来源。
-
-## 文档与支持
-
-[项目说明](ABOUT.md) · [文档索引](docs/README.md) · [API](API.md) · [部署](docs/Docker.md) · [CI/CD](docs/CI-CD.md) · [统计分析](docs/analytics.md) · [界面规范](docs/style-guide.md) · [开发指南](CONTRIBUTING.md)
-
-故障排查可检查 `/health`、`docker compose -f docker-compose.prod.yml ps` 与 `docker compose -f docker-compose.prod.yml logs --tail=100 seekfeed`。提交问题时应提供版本、操作步骤与已脱敏日志。
+- [项目简介](ABOUT.md) · [文档索引](docs/README.md) · [API 文档](API.md)
+- [Docker 部署](docs/Docker.md) · [CI/CD 说明](docs/CI-CD.md) · [统计口径](docs/analytics.md)
+- [采集与数据质量](docs/collection-insights.md) · [界面规范](docs/style-guide.md) · [开发指南](CONTRIBUTING.md)
 
 ## 许可证
 
-[MIT](LICENSE)。第三方资源遵循各自许可声明。
+基于 [MIT](LICENSE) 协议开源。第三方图标与依赖许可分别位于 [`licenses/`](licenses/) 与构建产物 `dist/THIRD_PARTY_LICENSES.txt`。

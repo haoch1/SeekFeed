@@ -493,11 +493,10 @@ export class DatabaseService {
     `);
     const posts = postsStmt.all(...params, limit, fuzzyTotal === undefined ? offset : 0) as Post[];
     
-    // 查询总数（使用与主查询相同的别名和 JOIN）
+    // 查询总数（whereClause 仅过滤 posts 表字段，无需 JOIN keywords_sub）
     const countStmt = this.db.query(`
       SELECT COUNT(*) as count
       FROM posts p
-      LEFT JOIN keywords_sub ks ON p.sub_id = ks.id
       ${whereClause}
     `);
     const countResult = fuzzyTotal === undefined ? countStmt.get(...params) as { count: number } : null;

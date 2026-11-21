@@ -5,6 +5,7 @@ import { logger } from "../utils/logger";
 import type { Post, RSSItem, ParsedPost, RSSProcessResult } from "../types";
 
 export class RSSService {
+  private static readonly TAG_REGEX_CACHE = new Map<string, RegExp>();
   private readonly TIMEOUT: number;
 
   constructor(private dbService: DatabaseService) {
@@ -35,7 +36,11 @@ export class RSSService {
    * 从 XML 文本中提取标签内容
    */
   private extractTagContent(xml: string, tagName: string): string {
-    const regex = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)</${tagName}>`, "i");
+    let regex = RSSService.TAG_REGEX_CACHE.get(tagName);
+    if (!regex) {
+      regex = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)</${tagName}>`, "i");
+      RSSService.TAG_REGEX_CACHE.set(tagName, regex);
+    }
     const match = xml.match(regex);
     return match ? match[1].trim() : "";
   }
