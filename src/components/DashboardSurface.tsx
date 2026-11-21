@@ -4,11 +4,11 @@ import type { FC, PropsWithChildren } from 'hono/jsx';
 import iconPaths from './icons.json';
 
 export const Icon: FC<{ name: string }> = ({ name }) => (
-    <svg data-icon={name} viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">{raw(iconPaths[name as keyof typeof iconPaths] || iconPaths.info)}</svg>
+    <svg data-icon={name} viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">{raw(iconPaths[name as keyof typeof iconPaths] || iconPaths.info)}</svg>
 );
 
 export const BrandMark: FC = () => (
-    <svg viewBox="0 0 64 64" width="28" height="28" class="brand-mark" aria-hidden="true" focusable="false"><rect width="64" height="64" rx="16" fill="var(--brand-bg, #18181b)" /><path d="M44 18H28a7 7 0 0 0 0 14h8a7 7 0 0 1 0 14H20" fill="none" stroke="var(--brand-fg, #fff)" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
+    <svg viewBox="0 0 64 64" width="36" height="36" class="brand-mark" aria-hidden="true" focusable="false"><rect width="64" height="64" rx="16" fill="#4f46e5" /><path d="M44 18H28a7 7 0 0 0 0 14h8a7 7 0 0 1 0 14H20" fill="none" stroke="#fff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
 );
 
 const categories = [
