@@ -55,13 +55,14 @@
     --text-xl: 26px;
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, .04);
-    --shadow: 0 1px 2px rgba(0, 0, 0, .03), 0 4px 16px rgba(0, 0, 0, .025);
+    --shadow: 0 0 0 .5px rgba(0, 0, 0, .04), 0 2px 8px rgba(0, 0, 0, .035);
     --shadow-pill: 0 1px 3px rgba(0, 0, 0, .10), 0 .5px 1px rgba(0, 0, 0, .05);
-    --shadow-lg: 0 18px 44px rgba(0, 0, 0, .12), 0 1px 3px rgba(0, 0, 0, .06);
+    --shadow-lg: 0 20px 48px rgba(0, 0, 0, .12), 0 0 0 .5px rgba(0, 0, 0, .06);
     --topbar-bg: rgba(245, 245, 247, .76);
     --scrollbar-thumb: rgba(0, 0, 0, .16);
     --scrollbar-thumb-hover: rgba(0, 0, 0, .30);
     --control-press-shade: rgba(0, 0, 0, .08);
+    --card-sheen: none;
 }
 
 [data-theme="dark"] {
@@ -79,7 +80,7 @@
     --primary-alpha: rgba(10, 132, 255, .17);
     --ring-color: rgba(10, 132, 255, .38);
 
-    --bg-primary: #111113;
+    --bg-primary: #0f0f11;
     --bg-sidebar: rgba(22, 22, 24, .92);
     --bg-secondary: rgba(255, 255, 255, .04);
     --bg-control: rgba(255, 255, 255, .075);
@@ -106,13 +107,14 @@
     --danger-alpha: rgba(255, 69, 58, .15);
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, .28);
-    --shadow: 0 1px 2px rgba(0, 0, 0, .24), 0 6px 20px rgba(0, 0, 0, .18);
-    --shadow-pill: 0 1px 4px rgba(0, 0, 0, .42), 0 .5px 1px rgba(0, 0, 0, .25);
-    --shadow-lg: 0 22px 54px rgba(0, 0, 0, .58), 0 0 0 .5px rgba(255, 255, 255, .10);
-    --topbar-bg: rgba(17, 17, 19, .76);
-    --scrollbar-thumb: rgba(255, 255, 255, .16);
-    --scrollbar-thumb-hover: rgba(255, 255, 255, .30);
+    --shadow: inset 0 .5px 0 rgba(255, 255, 255, .07), 0 0 0 .5px rgba(255, 255, 255, .06), 0 4px 18px rgba(0, 0, 0, .24);
+    --shadow-pill: inset 0 .5px 0 rgba(255, 255, 255, .10), 0 1px 4px rgba(0, 0, 0, .42);
+    --shadow-lg: inset 0 .5px 0 rgba(255, 255, 255, .10), 0 22px 54px rgba(0, 0, 0, .58), 0 0 0 .5px rgba(255, 255, 255, .10);
+    --topbar-bg: rgba(15, 15, 17, .76);
+    --scrollbar-thumb: rgba(255, 255, 255, .18);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, .32);
     --control-press-shade: rgba(255, 255, 255, .10);
+    --card-sheen: inset 0 .5px 0 rgba(255, 255, 255, .07);
 }
 
 /* Base Reset & Apple Typography */
@@ -159,7 +161,7 @@ html[data-auth="session"] [data-guest-only] { display: none !important; }
 }
 .btn:active:not(:disabled) { transform: scale(.985); }
 
-.btn-primary { background: var(--ink-cta); color: var(--ink-cta-text); border-color: transparent; box-shadow: 0 1px 2px rgba(0, 113, 227, .22); }
+.btn-primary { background: var(--ink-cta); color: var(--ink-cta-text); border-color: transparent; box-shadow: inset 0 .5px 0 rgba(255, 255, 255, .24), 0 1px 2px rgba(0, 113, 227, .24); }
 .btn-primary:hover { background: var(--ink-cta-hover); }
 .btn-primary:active:not(:disabled) { background: var(--ink-cta-active); }
 
@@ -464,12 +466,13 @@ html[data-auth="session"] [data-guest-only] { display: none !important; }
 .delivery-status[data-status="1"] { color: var(--warning); }
 .delivery-status[data-status="1"]::before { background: var(--warning); }
 
-.post-actions .icon-btn { width: 30px; height: 30px; opacity: .65; }
+.post-actions .icon-btn { width: 30px; height: 30px; opacity: .6; transition: opacity .14s ease, background-color .14s ease, color .14s ease, transform .14s ease; }
 .post-card:hover .post-actions .icon-btn { opacity: 1; }
 .post-action-buttons { display: flex; align-items: center; gap: 4px; }
 .post-actions .delete-matched { color: var(--text-muted); }
 .post-actions .delete-matched:hover, .post-actions .delete-matched:focus-visible { color: var(--danger); background: var(--danger-alpha); opacity: 1; }
-.post-actions svg { width: 15px; height: 15px; }
+.post-actions a.icon-btn:hover svg { transform: translate(1px, -1px); }
+.post-actions svg { width: 15px; height: 15px; transition: transform .14s ease; }
 
 /* Pagination */
 .pagination-wrapper {
@@ -743,7 +746,9 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--primary); }
     background: var(--bg-elevated); color: var(--text-primary);
     backdrop-filter: saturate(180%) blur(24px); -webkit-backdrop-filter: saturate(180%) blur(24px);
     box-shadow: var(--shadow-lg);
+    animation: popover-in .14s cubic-bezier(.22, 1, .36, 1);
 }
+@keyframes popover-in { from { opacity: 0; transform: translateY(-3px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 .select-option {
     display: flex; align-items: center; justify-content: space-between; gap: 14px;
     min-height: 34px; padding: 6px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: var(--text-sm);

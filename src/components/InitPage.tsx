@@ -24,17 +24,15 @@ export const InitPage: FC = () => {
           <div class="form-card setup-card">
             <div class="setup-intro">
               <span class="brand-icon"><BrandMark /></span>
-              <h2 style="font-size: 20px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px;">
-                欢迎使用 SeekFeed
-              </h2>
-              <p style="font-size: 14px; color: var(--text-muted);">
+              <h1>欢迎使用 SeekFeed</h1>
+              <p class="setup-description">
                 首次使用需要创建管理员账号
               </p>
             </div>
 
             <form id="initForm" class="form-stack">
               <div class="form-group">
-                <label for="username" class="form-label" style="color: var(--text-primary); font-weight: 600;">
+                <label for="username" class="form-label">
                   用户名
                 </label>
                 <FieldInput
@@ -51,7 +49,7 @@ export const InitPage: FC = () => {
               </div>
 
               <div class="form-group">
-                <label for="password" class="form-label" style="color: var(--text-primary); font-weight: 600;">
+                <label for="password" class="form-label">
                   密码
                 </label>
                 <FieldInput
@@ -67,7 +65,7 @@ export const InitPage: FC = () => {
               </div>
 
               <div class="form-group">
-                <label for="confirmPassword" class="form-label" style="color: var(--text-primary); font-weight: 600;">
+                <label for="confirmPassword" class="form-label">
                   确认密码
                 </label>
                 <FieldInput

@@ -6,12 +6,12 @@ body.is-overlay-open { position: fixed; top: var(--overlay-scroll-top); left: 0;
     html { scrollbar-gutter: auto; scroll-padding-top: 76px; }
     .workspace-content { padding: 20px max(12px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
     .workspace-topbar { height: calc(60px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left)); gap: 8px; }
-    .breadcrumb { min-width: 0; gap: 8px; font-size: 12px; }
+    .breadcrumb { min-width: 0; gap: 8px; font-size: var(--text-sm, 14px); }
     .breadcrumb strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .header-actions { flex-shrink: 0; }
-    .workspace-sidebar { width: min(300px, calc(100% - 48px)); height: 100dvh; padding: max(16px, env(safe-area-inset-top)) 12px max(16px, env(safe-area-inset-bottom)); overscroll-behavior: contain; transform: translateX(-100%); transition: transform .2s; z-index: 150; }
+    .workspace-sidebar { width: min(300px, calc(100% - 48px)); height: 100dvh; padding: max(16px, env(safe-area-inset-top)) 12px max(16px, env(safe-area-inset-bottom)); overscroll-behavior: contain; transform: translateX(-100%); transition: transform .22s cubic-bezier(.22, 1, .36, 1); z-index: 150; }
     .workspace-sidebar.open { transform: translateX(0); }
-    .sidebar-backdrop:not([hidden]) { display: block; position: fixed; inset: 0; z-index: 140; background: #09090b66; border: 0; }
+    .sidebar-backdrop:not([hidden]) { display: block; position: fixed; inset: 0; z-index: 140; background: rgba(0, 0, 0, .38); backdrop-filter: blur(4px); border: 0; }
     .workspace-main { margin-left: 0; width: 100%; }
     .mobile-menu { display: inline-flex; }
     .sidebar-brand-row { align-items: center; gap: 8px; padding-bottom: 16px; flex-shrink: 0; }
