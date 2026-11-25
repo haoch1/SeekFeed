@@ -1,6 +1,7 @@
 import { FieldInput } from './Controls';
 import { raw } from 'hono/html';
 import type { FC, PropsWithChildren } from 'hono/jsx';
+import type { Post } from '../types';
 import iconPaths from './icons.json';
 
 export const Icon: FC<{ name: string }> = ({ name }) => (
@@ -15,14 +16,43 @@ const categories = [
     ['daily', '日常'], ['tech', '技术'], ['info', '情报'], ['review', '测评'],
     ['trade', '交易'], ['carpool', '拼车'], ['promotion', '推广'], ['life', '生活'],
     ['dev', 'Dev'], ['photo-share', '贴图'], ['expose', '曝光'], ['inside', '内版'], ['sandbox', '沙盒'],
-];
+] as const;
+
+type PublicPost = Pick<Post, 'post_id' | 'title' | 'memo' | 'category' | 'creator' | 'pub_date'>;
+
+export interface InitialFeed {
+    posts: PublicPost[];
+    total: number;
+    totalPages: number;
+}
+
+const categoryNames = new Map<string, string>(categories);
+const initialPostDate = new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Shanghai',
+});
+
+const PublicPostCard: FC<{ post: PublicPost }> = ({ post }) => {
+    const href = 'https://www.nodeseek.com/post-' + Number(post.post_id) + '-1';
+    const category = post.category ? post.category.split(',').map(value => categoryNames.get(value.trim()) || value.trim()).join('、') : '未分类';
+    const date = new Date(post.pub_date);
+    return (
+        <article class="post-card" data-post-id={post.post_id}>
+            <div class="post-content">
+                <div class="post-header"><h3 class="post-title"><a href={href} target="_blank" rel="noopener noreferrer" title={post.title}>{post.title}</a></h3></div>
+                <p class="post-memo">{post.memo}</p>
+                <div class="post-meta"><span class="post-category">{category}</span><span class="post-author">{post.creator}</span><time class="post-date" datetime={post.pub_date}>{Number.isNaN(date.getTime()) ? '时间未知' : initialPostDate.format(date)}</time></div>
+            </div>
+            <div class="post-actions"><div class="post-action-buttons"><a class="icon-btn" href={href} target="_blank" rel="noopener noreferrer" aria-label="打开帖子"><Icon name="external" /></a></div></div>
+        </article>
+    );
+};
 
 const navAttributes = (path: string, target: string) => ({
     class: path === target ? 'nav-item selected' : 'nav-item',
     'aria-current': path === target ? 'page' : undefined,
 });
 
-export const DashboardSurface: FC<PropsWithChildren<{ path?: string }>> = ({ children, path = "/posts" }) => (
+export const DashboardSurface: FC<PropsWithChildren<{ path?: string; initialFeed?: InitialFeed }>> = ({ children, path = "/posts", initialFeed }) => (
     <div class="workspace-shell">
         <button id="sidebarBackdrop" class="sidebar-backdrop" aria-label="关闭导航" hidden></button>
         <aside class="workspace-sidebar" id="workspaceSidebar" aria-label="主导航">
@@ -52,7 +82,7 @@ export const DashboardSurface: FC<PropsWithChildren<{ path?: string }>> = ({ chi
             <main class="workspace-content" id="mainContent"><section id="feedPage" class="route-page" hidden={path !== "/posts" && path !== "/matched"}>
                 <div class="workspace-heading"><div><h1 id="pageTitle"><Icon name={path === "/matched" ? "bell" : "posts"} /><span>{path === "/matched" ? "命中订阅" : "最新帖子"}</span></h1></div><div class="heading-actions" data-auth-only><a href="/subscriptions" data-route class="btn btn-secondary manage-subscriptions" aria-label="管理订阅" title="管理订阅"><Icon name="list" /><span>管理订阅</span></a><button id="syncNowBtn" class="btn btn-primary"><Icon name="sync" /><span>立即刷新</span></button></div></div>
                 <section class="metric-strip" aria-label="监控统计">
-                    <div class="metric"><Icon name="posts" /><div><span>已收录帖子</span><strong id="overviewTotal">—</strong></div></div>
+                    <div class="metric"><Icon name="posts" /><div><span>已收录帖子</span><strong id="overviewTotal">{initialFeed?.total.toLocaleString('zh-CN') ?? '—'}</strong></div></div>
                     <div class="metric" data-auth-only><Icon name="target" /><div><span>命中订阅</span><strong id="overviewMatched">—</strong></div></div>
                     <div class="metric" data-auth-only><Icon name="send" /><div><span>已成功推送</span><strong id="overviewPushed">—</strong></div></div>
                 </section>
@@ -68,8 +98,11 @@ export const DashboardSurface: FC<PropsWithChildren<{ path?: string }>> = ({ chi
                     </div>
                     <div id="filterPanel" class="filter-panel" style="display:none"><div class="filter-panel-inner"><button id="subscribedOnlyChip" class="toggle-chip" type="button" aria-pressed="false" style="display:none"><span class="toggle-chip-label">只看订阅</span></button><select data-1p-ignore="true" data-op-ignore="true" id="filterSubscription" class="filter-select" aria-label="订阅筛选" style="display:none"><option value="">全部订阅</option></select><select data-1p-ignore="true" data-op-ignore="true" id="filterSearchMode" class="filter-select" aria-label="搜索匹配方式" title="仅影响标题与作者搜索；订阅命中和推送规则保持精准匹配"><option value="contains">包含匹配</option><option value="fuzzy">容错匹配</option></select><FieldInput type="text" id="filterCreator" placeholder="作者筛选" aria-label="作者筛选" class="filter-input" /><button id="clearFiltersBtn" class="btn btn-text">清除筛选</button></div></div>
                     <div id="feedError" class="inline-error" role="alert" hidden>列表更新失败，已保留当前内容。请点击刷新重试。</div>
-                    <div id="postsList" class="posts-list" aria-live="polite" aria-busy="true"><div class="skeleton-wrapper">{[1, 2, 3, 4, 5].map(() => <div class="post-skeleton"><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-line"></div></div>)}</div></div>
-                    <div id="emptyState" class="empty-state" style="display:none"><Icon name="search" /><div class="empty-title">暂无文章</div><div class="empty-desc">同步 RSS 或调整筛选条件后再试。</div></div>
+                    <div id="postsList" class="posts-list" aria-live="polite" aria-busy={initialFeed ? 'false' : 'true'} data-initial-total={initialFeed?.total} data-initial-pages={initialFeed?.totalPages}>
+                        {initialFeed ? initialFeed.posts.map(post => <PublicPostCard post={post} />)
+                            : <div class="skeleton-wrapper">{[1, 2, 3, 4, 5].map(() => <div class="post-skeleton"><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-line"></div></div>)}</div>}
+                    </div>
+                    <div id="emptyState" class="empty-state" style={initialFeed && !initialFeed.posts.length ? '' : 'display:none'}><Icon name="search" /><div class="empty-title">暂无文章</div><div class="empty-desc">同步 RSS 或调整筛选条件后再试。</div></div>
                     <div id="pagination" class="pagination-wrapper" data-feed-pagination="bottom" style="display:none"><span id="paginationInfo" class="pagination-info"></span><nav class="pagination-controls" aria-label="下方帖子分页"><button type="button" id="prevPageBtn" class="pagination-btn" data-page-step="-1" aria-label="上一页"><Icon name="chevron-left" /></button><div id="pageNumbers" class="page-numbers"></div><button type="button" id="nextPageBtn" class="pagination-btn" data-page-step="1" aria-label="下一页"><Icon name="chevron-right" /></button></nav></div>
                 </section>
                 <p id="syncDetail" class="sync-detail" aria-live="polite" data-auth-only></p>

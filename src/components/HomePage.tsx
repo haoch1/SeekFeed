@@ -6,17 +6,25 @@ import { FieldInput } from './Controls';
 import type { FC } from "hono/jsx";
 import { Layout } from "./Layout";
 import { DashboardSurface, Icon } from "./DashboardSurface";
+import type { InitialFeed } from './DashboardSurface';
 import cadence from '../config/cadence.json';
+import { assetUrl } from '../config/assets';
 
-export const HomePage: FC<{ path?: string }> = ({ path = "/posts" }) => {
+const featureScripts = {
+  analytics: ['/js/category-breakdown.js', '/js/keyword-statistics.js', '/js/statistics.js', '/js/chart-viewer.js'].map(assetUrl),
+  rss: ['/js/collection-insights.js'].map(assetUrl),
+};
+
+export const HomePage: FC<{ path?: string; initialFeed?: InitialFeed }> = ({ path = "/posts", initialFeed }) => {
   if (path === '/') path = '/posts';
   return (
     <Layout
       title="SeekFeed · NodeSeek 社区动态"
       description="浏览 NodeSeek 最新帖子与社区数据分析。"
-      scriptSrc={["/js/collection-insights.js", "/js/category-breakdown.js", "/js/keyword-statistics.js", "/js/statistics.js", "/js/home.js"]}
+      scriptSrc="/js/home.js"
+      preloadScripts={path === '/statistics' || path === '/subscriptions' ? featureScripts.analytics : path === '/settings/rss' ? featureScripts.rss : []}
     >
-      <DashboardSurface path={path}>
+      <DashboardSurface path={path} initialFeed={initialFeed}>
 
       {/* 订阅管理页面 */}
       <section id="subscriptionsPage" class="route-page" hidden={path !== "/subscriptions"}><div class="workspace-heading"><div><h1><Icon name="list" /><span>订阅管理</span></h1></div></div>
@@ -172,6 +180,7 @@ export const HomePage: FC<{ path?: string }> = ({ path = "/posts" }) => {
 
       {/* Toast 容器 */}
       <div id="toastContainer" class="toast-container"></div>
+      <script id="seekfeedFeatureScripts" type="application/json" dangerouslySetInnerHTML={{ __html: JSON.stringify(featureScripts) }} />
     </Layout>
   );
 };

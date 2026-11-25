@@ -294,9 +294,10 @@ describe('account settings and session expiry', () => {
     });
 
     it('opens latest posts as home while preserving first-time initialization', async () => {
+        db.createPost({ post_id: 101, title: 'First <post> & details', memo: '', category: 'tech', creator: 'alice', pub_date: '2026-01-02T01:00:00Z', push_status: 3 });
         const home = await app.request('/');
-        expect(home.status).toBe(302);
-        expect(home.headers.get('Location')).toBe('/posts');
+        expect(home.status).toBe(200);
+        expect(await home.text()).toContain('First &lt;post&gt; &amp; details');
         expect((await app.request('/hot')).headers.get('Location')).toBe('/posts');
         expect((await app.request('/posts')).status).toBe(200);
         const fresh = new Hono();

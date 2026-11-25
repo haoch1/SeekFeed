@@ -44,12 +44,20 @@ try {
     db.query('INSERT INTO posts(post_id,title,memo,category,creator,pub_date,push_status) VALUES(?,?,?,?,?,?,?)')
         .run(123, 'DMIT offline fixture', 'RSS excerpt', 'tech', '<Alice & Co>', now, 3);
     assert.equal((db.query("SELECT COUNT(*) n FROM sqlite_master WHERE type='table' AND (name LIKE 'hot_%' OR name LIKE 'author_backfill%' OR name='forum_post_authors')").get() as { n: number }).n, 0);
+    assert(db.query("SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_posts_publication_time'").get());
     const migrations = (db.query('SELECT COUNT(*) n FROM migrations').get() as { n: number }).n;
     db.close();
     for (const path of ['/posts', '/statistics', '/api/posts', '/api/stats/analytics?days=0', '/api/stats/keywords?q=DMIT&date=' + now.slice(0, 10)]) {
         const response = await fetch(origin + path);
         assert.equal(response.status, 200, path);
         if (path.startsWith('/api/')) assert.equal((await response.json()).success, true);
+        if (path === '/posts') {
+            const html = await response.text();
+            assert(html.includes('data-initial-total="1"') && html.includes('DMIT offline fixture'));
+            assert(html.includes('&lt;Alice &amp; Co&gt;'));
+            assert(!html.includes('class="delivery-status"'));
+            assert.equal(response.headers.get('Cache-Control'), 'no-store');
+        }
     }
     const quality = await fetch(origin + '/api/collection/quality', { headers: auth });
     assert.equal(quality.status, 200);

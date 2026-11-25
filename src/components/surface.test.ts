@@ -9,8 +9,12 @@ describe('server rendered workspace', () => {
         const html = HomePage({ path: '/posts' }).toString();
         expect(html).toContain(`name="seekfeed-version" content="${ASSET_VERSION}"`);
         const urls = [...html.matchAll(/(?:href|src)="(\/(?:css|js)\/[^\"]+)"/g)].map(match => match[1]);
-        expect(urls.length).toBeGreaterThan(8);
+        expect(urls).toContain('/js/home.js?v=' + ASSET_VERSION);
+        expect(urls).toContain('/js/controls.js?v=' + ASSET_VERSION);
         expect(urls.every(url => url.endsWith(`?v=${ASSET_VERSION}`))).toBe(true);
+        expect(urls.some(url => url.startsWith('/js/statistics.js?'))).toBe(false);
+        const statistics = HomePage({ path: '/statistics' }).toString();
+        expect(statistics).toContain(`rel="preload" href="/js/statistics.js?v=${ASSET_VERSION}" as="script"`);
     });
     it('provides the shared refresh policy before browser workflows initialize', () => {
         const html = HomePage({ path: '/settings/rss' }).toString();

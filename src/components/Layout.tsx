@@ -9,12 +9,14 @@ interface LayoutProps {
   title?: string;
   description?: string;
   scriptSrc?: string | string[];
+  preloadScripts?: string[];
 }
 
 export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
   title = "SeekFeed",
   description,
   scriptSrc,
+  preloadScripts = [],
   children,
 }) => {
   return (
@@ -50,6 +52,8 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
         <meta name="msapplication-TileColor" content="#1d1d1f" />
         <meta name="msapplication-TileImage" content="/icons/seekfeed-192.png" />
 
+        {preloadScripts.map(src => <link rel="preload" href={src} as="script" />)}
+
         {/* Shared component styles and one theme source */}
         <link href={assetUrl('/css/skeleton.css')} rel="stylesheet" />
         <link href={assetUrl('/css/charts.css')} rel="stylesheet" />
@@ -67,12 +71,11 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
         {/* Restore account presentation before any external application script can delay parsing. */}
         <script dangerouslySetInnerHTML={{ __html: 'window.SeekFeedIdentity.render();' }} />
         <script id="seekfeedIcons" type="application/json" dangerouslySetInnerHTML={{ __html: JSON.stringify(iconPaths).replace(/</g, '\\u003c') }} />
-        <script src={assetUrl('/js/controls.js')}></script>
-        <script src={assetUrl('/js/chart-viewer.js')}></script>
+        <script src={assetUrl('/js/controls.js')} defer></script>
         {/* PWA Scripts */}
         <script src={assetUrl('/js/pwa-register.js')} defer></script>
 
-        {scriptSrc && (Array.isArray(scriptSrc) ? scriptSrc : [scriptSrc]).map(src => <script src={assetUrl(src)}></script>)}
+        {scriptSrc && (Array.isArray(scriptSrc) ? scriptSrc : [scriptSrc]).map(src => <script src={assetUrl(src)} defer></script>)}
       </body>
     </html>
   );

@@ -269,7 +269,7 @@ document.addEventListener("DOMContentLoaded", function () {
     el('postsList').setAttribute('aria-busy', 'false');
   }
 
-  function restoreFeedState(path) {
+  function restoreFeedState(path, keepInitialPosts = false) {
     const state = feedStates.get(path);
     currentFilters = { ...(state?.filters || {}) };
     currentPage = requestedPage = state?.page || 1;
@@ -281,12 +281,29 @@ document.addEventListener("DOMContentLoaded", function () {
     el('filterPanel').style.display = state?.expanded ? 'block' : 'none';
     el('filterToggleBtn').setAttribute('aria-expanded', String(Boolean(state?.expanded)));
     setMatched(path === '/matched' || Boolean(currentFilters.pushStatusIn));
-    el('postsList').replaceChildren();
+    if (!keepInitialPosts) el('postsList').replaceChildren();
     el('postsList').style.minHeight = '';
     renderedFilters = '';
     latestSeenPostId = null;
     el('newPostsBtn').hidden = true;
     window.SeekFeedControls.refreshSelects();
+  }
+
+  function useInitialFeed() {
+    const list = el('postsList');
+    const { initialTotal, initialPages } = list.dataset;
+    if (initialTotal === undefined) return false;
+    delete list.dataset.initialTotal;
+    delete list.dataset.initialPages;
+    for (const time of list.querySelectorAll('.post-date')) {
+      const localDate = formatPostDate(time.dateTime);
+      if (time.textContent !== localDate) time.textContent = localDate;
+    }
+    latestSeenPostId = Number(list.firstElementChild?.dataset.postId) || null;
+    renderedFilters = JSON.stringify(currentFilters);
+    pageCount = Math.max(1, Number(initialPages));
+    updatePagination(1, Number(initialPages), Number(initialTotal));
+    return true;
   }
 
   async function loadPosts(page = currentPage, filters = currentFilters, quiet = false) {
@@ -352,6 +369,7 @@ document.addEventListener("DOMContentLoaded", function () {
         for (const selector of ['.post-header', '.post-memo', '.post-meta', '.delivery-status']) {
           const old = item.querySelector(selector), next = updated.querySelector(selector);
           if (old && next && old.outerHTML !== next.outerHTML) old.replaceWith(next);
+          if (!old && next && selector === '.delivery-status') item.querySelector('.post-actions').prepend(next);
         }
         item.dataset.signature = updated.dataset.signature;
       }
@@ -374,6 +392,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   async function refreshFeed() {
     if (liveRefreshing || document.hidden || el('feedPage').hidden || Drawer.activeDrawer || el('postsList').getAttribute('aria-busy') === 'true') return;
+    if (currentFilters.search || currentFilters.creator) return;
     liveRefreshing = true;
     try {
       if (currentPage === 1) await loadPosts(1, currentFilters, true);
@@ -390,6 +409,14 @@ document.addEventListener("DOMContentLoaded", function () {
     } finally { liveRefreshing = false; }
   }
 
+  const postDateFormatter = new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+  function formatPostDate(value) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '时间未知' : postDateFormatter.format(date);
+  }
+
   function createPostElement(post) {
     const item = document.createElement("article");
     item.className = "post-card";
@@ -399,10 +426,9 @@ document.addEventListener("DOMContentLoaded", function () {
     const tags = (isLoggedIn ? [post.sub_keyword1, post.sub_keyword2, post.sub_keyword3] : []).filter(Boolean)
       .map(word => `<span class="tag tag-blue">${escapeHtml(word)}</span>`).join("");
     const status = { 0: "待匹配", 1: "待推送", 2: "未命中", 3: "已推送" }[post.push_status] || "未知";
-    const date = new Date(post.pub_date);
-    const time = Number.isNaN(date.getTime()) ? "时间未知" : new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+    const time = formatPostDate(post.pub_date);
     const canDeleteMatch = isLoggedIn && activePath === '/matched' && [1, 3].includes(Number(post.push_status));
-    item.innerHTML = `<div class="post-content"><div class="post-header"><h3 class="post-title"><a href="${href}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(post.title)}">${escapeHtml(post.title)}</a></h3></div><p class="post-memo">${escapeHtml(post.memo || "")}</p><div class="post-meta"><span class="post-category">${escapeHtml(getCategoryName(post.category))}</span><span class="post-author">${escapeHtml(post.creator)}</span><span class="post-date">${time}</span>${tags ? `<span class="post-sub-tags">${tags}</span>` : ""}</div></div><div class="post-actions">${isLoggedIn ? `<span class="delivery-status" data-status="${Number(post.push_status)}">${status}</span>` : ''}<div class="post-action-buttons"><a class="icon-btn" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="打开帖子">${renderIcon("external")}</a>${canDeleteMatch ? `<button type="button" class="icon-btn delete-matched" aria-label="从命中订阅删除" title="删除命中帖子">${renderIcon('trash')}</button>` : ''}</div></div>`;
+    item.innerHTML = `<div class="post-content"><div class="post-header"><h3 class="post-title"><a href="${href}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(post.title)}">${escapeHtml(post.title)}</a></h3></div><p class="post-memo">${escapeHtml(post.memo || "")}</p><div class="post-meta"><span class="post-category">${escapeHtml(getCategoryName(post.category))}</span><span class="post-author">${escapeHtml(post.creator)}</span><time class="post-date" datetime="${escapeHtml(post.pub_date)}">${time}</time>${tags ? `<span class="post-sub-tags">${tags}</span>` : ""}</div></div><div class="post-actions">${isLoggedIn ? `<span class="delivery-status" data-status="${Number(post.push_status)}">${status}</span>` : ''}<div class="post-action-buttons"><a class="icon-btn" href="${href}" target="_blank" rel="noopener noreferrer" aria-label="打开帖子">${renderIcon("external")}</a>${canDeleteMatch ? `<button type="button" class="icon-btn delete-matched" aria-label="从命中订阅删除" title="删除命中帖子">${renderIcon('trash')}</button>` : ''}</div></div>`;
     item.querySelector('.delete-matched')?.addEventListener('click', async event => {
       const button = event.currentTarget;
       if (matchedPostActions.has(post.post_id)) return;
@@ -598,13 +624,67 @@ document.addEventListener("DOMContentLoaded", function () {
   // ============================================
   // 统计图表
   // ============================================
-  const analytics = window.SeekFeedStatistics({ apiRequest, escapeHtml, renderIcon, getCategoryName, isLoggedIn });
+  const featureScripts = JSON.parse(el('seekfeedFeatureScripts').textContent);
+  const loadedScripts = new Map();
+  let analytics;
+  function loadFeature(name) {
+    return Promise.all(featureScripts[name].map(src => {
+      if (loadedScripts.has(src)) return loadedScripts.get(src);
+      const script = document.createElement('script');
+      script.src = src;
+      const ready = new Promise((resolve, reject) => {
+        script.onload = resolve;
+        script.onerror = () => {
+          loadedScripts.delete(src);
+          script.remove();
+          reject(new Error('页面脚本加载失败'));
+        };
+      });
+      loadedScripts.set(src, ready);
+      document.head.append(script);
+      return ready;
+    }));
+  }
+
+  async function loadAnalytics(path) {
+    try {
+      if (!analytics) {
+        await loadFeature('analytics');
+        if (!analytics) {
+          const instance = window.SeekFeedStatistics({ apiRequest, escapeHtml, renderIcon, getCategoryName, isLoggedIn });
+          instance.init();
+          analytics = instance;
+        }
+      }
+      if (activePath !== path) return;
+      if (path === '/statistics') await analytics.load();
+      else await analytics.loadNotifications();
+    } catch {
+      if (activePath !== path) return;
+      if (path === '/statistics') {
+        el('analyticsContent').setAttribute('aria-busy', 'false');
+        el('analyticsError').hidden = false;
+        el('analyticsPeriodLabel').textContent = '暂时无法读取统计';
+      } else {
+        el('subscriptionAnalyticsScope').textContent = '统计加载失败，请重新打开订阅管理。';
+      }
+    }
+  }
+
+  async function loadCollectionQuality() {
+    try {
+      await loadFeature('rss');
+      await window.SeekFeedInsights.quality();
+    } catch {
+      el('collectionQuality').textContent = '采集记录读取失败，请重新加载。';
+    }
+  }
 
   // ============================================
   // RSS 配置
   // ============================================
   async function loadRssConfig() {
-    window.SeekFeedInsights.quality();
+    loadCollectionQuality();
     const result = await apiRequest("/api/rss/config");
     if (result?.success) {
       document.getElementById("rssUrl").value = result.data.rss_url || "";
@@ -614,7 +694,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function initRssConfig() {
-    el('collectionQualityRefresh')?.addEventListener('click', event => window.SeekFeedControls.pending(event.currentTarget, () => window.SeekFeedInsights.quality()));
+    el('collectionQualityRefresh')?.addEventListener('click', event => window.SeekFeedControls.pending(event.currentTarget, loadCollectionQuality));
     // 保存配置
     document.getElementById("rssConfigForm")?.addEventListener("submit", pendingSubmit(async (e) => {
       e.preventDefault();
@@ -974,7 +1054,7 @@ document.addEventListener("DOMContentLoaded", function () {
         item.querySelector('.subscription-state').textContent = enabled === 0 ? '已暂停' : '监控中';
         btn.dataset.enabled = String(enabled === 0 ? 1 : 0);
         btn.innerHTML = `${renderIcon(enabled === 0 ? 'play' : 'pause')}${enabled === 0 ? '恢复' : '暂停'}`;
-        Toast.success(enabled === 0 ? '订阅已暂停' : '订阅已恢复'); loadFilterSubscriptions(); analytics.loadNotifications();
+        Toast.success(enabled === 0 ? '订阅已暂停' : '订阅已恢复'); loadFilterSubscriptions(); loadAnalytics('/subscriptions');
       } else Toast.error(result?.message || "修改失败");
     }));
     container.querySelectorAll(".delete-sub").forEach(btn => btn.addEventListener("click", async () => {
@@ -995,7 +1075,7 @@ document.addEventListener("DOMContentLoaded", function () {
         item.remove();
         filterSubscriptions();
         if (!container.querySelector('.subscription-item')) loadSubscriptions();
-        Toast.success("订阅已删除"); loadFilterSubscriptions(); updateStats(); analytics.loadNotifications();
+        Toast.success("订阅已删除"); loadFilterSubscriptions(); loadAnalytics('/subscriptions');
       } else Toast.error(result?.message || "删除失败");
     }));
   }
@@ -1020,7 +1100,7 @@ document.addEventListener("DOMContentLoaded", function () {
       try { result = await apiRequest(editId ? `/api/subscriptions/${editId}` : "/api/subscriptions", { method: editId ? "PUT" : "POST", body: JSON.stringify(data) }); }
       finally { el('cancelSubscriptionEdit').disabled = false; }
       if (!result?.success) return Toast.error(result?.message || (editId ? "修改失败" : "添加失败"));
-      Toast.success(editId ? '订阅已更新' : '订阅已添加'); cancelSubscriptionEdit(); loadSubscriptions(); loadFilterSubscriptions(); updateStats(); analytics.loadNotifications();
+      Toast.success(editId ? '订阅已更新' : '订阅已添加'); cancelSubscriptionEdit(); loadSubscriptions(); loadFilterSubscriptions(); loadAnalytics('/subscriptions');
     }));
   }
   const routeMap = {
@@ -1030,9 +1110,8 @@ document.addEventListener("DOMContentLoaded", function () {
   };
   let activePath = null;
   let routeAnimation;
-  let routeRequest = 0;
   const routeScroll = new Map();
-  async function navigate(path, push = true) {
+  function navigate(path, push = true) {
     window.SeekFeedControls.dismissCharts();
     if (path === '/') {
       path = '/posts';
@@ -1047,55 +1126,43 @@ document.addEventListener("DOMContentLoaded", function () {
       }
       LoginModal.open(); return;
     }
-    const id = ++routeRequest;
-    const root = document.documentElement;
     const content = el('mainContent');
-    const opacity = getComputedStyle(content).opacity;
     window.SeekFeedTheme.cancelTransition();
     routeAnimation?.cancel();
     const animate = activePath && activePath !== path && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const apply = () => {
-      if (id !== routeRequest) return;
-      if (activePath) routeScroll.set(activePath, scrollY);
-      if (isFeedPath(activePath) && activePath !== path) saveFeedState(activePath);
-      if (push && location.pathname !== path) history.pushState({}, '', path);
-      window.SeekFeedControls.closeSelect();
-      document.querySelectorAll('.route-page').forEach(page => page.hidden = page.id !== `${name}Page`);
-      document.querySelectorAll('.workspace-nav [data-route]').forEach(link => {
-        const selected = link.pathname === path;
-        link.classList.toggle('selected', selected);
-        if (selected) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
-      });
-      el('breadcrumbSection').textContent = path.startsWith('/settings') ? '设置' : '社区动态';
-      el('breadcrumbCurrent').textContent = title;
-      document.title = `${title} · SeekFeed`;
-      if (name === 'feed') {
-        if (activePath !== path) restoreFeedState(path);
-        loadPosts(currentPage);
-      }
-      if (name === 'subscriptions') { loadSubscriptions(); loadMatchingScope(); analytics.loadNotifications(); }
-      if (name === 'rss') loadRssConfig();
-      if (name === 'telegram') loadTelegramConfig();
-      if (name === 'stats') analytics.load();
-      if (name === 'account') loadAccount();
-      activePath = path;
-      window.scrollTo({ top: routeScroll.get(path) || 0, behavior: 'instant' });
-      if (push) document.querySelector(`#${name}Page h1`)?.focus({ preventScroll: true });
-    };
-    // Finish fading the current DOM before switching content. No overlapping snapshots
-    // or text translation: matching headings stay sharp even during rapid navigation.
-    root.classList.remove('route-transition');
+    const previousPath = activePath;
+    if (previousPath) routeScroll.set(previousPath, scrollY);
+    if (isFeedPath(previousPath) && previousPath !== path) saveFeedState(previousPath);
+    if (push && location.pathname !== path) history.pushState({}, '', path);
+    window.SeekFeedControls.closeSelect();
+    document.querySelectorAll('.route-page').forEach(page => page.hidden = page.id !== `${name}Page`);
+    document.querySelectorAll('.workspace-nav [data-route]').forEach(link => {
+      const selected = link.pathname === path;
+      link.classList.toggle('selected', selected);
+      if (selected) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+    });
+    el('breadcrumbSection').textContent = path.startsWith('/settings') ? '设置' : '社区动态';
+    el('breadcrumbCurrent').textContent = title;
+    document.title = `${title} · SeekFeed`;
+    activePath = path;
+    if (name === 'feed') {
+      const serverRendered = !previousPath && path === '/posts' && el('postsList').dataset.initialTotal !== undefined;
+      if (previousPath !== path) restoreFeedState(path, serverRendered);
+      const hasInitialFeed = serverRendered && useInitialFeed();
+      if (!hasInitialFeed || isLoggedIn) loadPosts(currentPage, currentFilters, hasInitialFeed);
+      if (isLoggedIn || Object.values(currentFilters).some(Boolean)) updateStats(true);
+      updateMonitor(true);
+    }
+    if (name === 'subscriptions') { loadSubscriptions(); loadMatchingScope(); loadAnalytics(path); }
+    if (name === 'rss') { loadRssConfig(); updateMonitor(true); }
+    if (name === 'telegram') loadTelegramConfig();
+    if (name === 'stats') loadAnalytics(path);
+    if (name === 'account') loadAccount();
+    window.scrollTo({ top: routeScroll.get(path) || 0, behavior: 'instant' });
+    if (push) document.querySelector(`#${name}Page h1`)?.focus({ preventScroll: true });
     if (animate && content.animate) {
-      routeAnimation = content.animate([{ opacity }, { opacity: 0 }], { duration: 100, fill: 'forwards', easing: 'ease-out' });
-      routeAnimation.id = 'route-leave';
-      try { await routeAnimation.finished; } catch { return; }
-      if (id !== routeRequest) return;
-      apply();
-      routeAnimation.cancel();
-      routeAnimation = content.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: 'cubic-bezier(.2,.7,.2,1)' });
+      routeAnimation = content.animate([{ opacity: .88 }, { opacity: 1 }], { duration: 120, easing: 'ease-out' });
       routeAnimation.id = 'route-enter';
-    } else {
-      apply();
     }
   }
   function initSettingsDropdown() {
@@ -1141,7 +1208,6 @@ document.addEventListener("DOMContentLoaded", function () {
       updatePagination(currentPage, pageCount, paginationTotal);
     });
     document.querySelectorAll('[data-auth-only]').forEach(item => item.style.display = isLoggedIn ? '' : 'none');
-    document.querySelector('.metric-strip').classList.toggle('is-public', !isLoggedIn);
     document.querySelectorAll('[data-route]').forEach(link => link.addEventListener('click', e => {
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
       e.preventDefault(); closeSidebar();
@@ -1403,19 +1469,21 @@ document.addEventListener("DOMContentLoaded", function () {
     initSettingsDropdown();
     initLoginModal();
     initLogout();
-    analytics.init();
+    el('retryAnalytics').addEventListener('click', () => { if (!analytics) loadAnalytics('/statistics'); });
 
     initAccount();
     navigate(location.pathname, false);
     // 加载初始数据
-    updateStats();
     loadFilterSubscriptions();
-    updateMonitor();
     let lastStatusRefresh = Date.now();
     const liveTick = () => {
       if (document.hidden) return;
-      if (Date.now() - lastStatusRefresh >= 60000) { lastStatusRefresh = Date.now(); updateMonitor(true); updateStats(true); }
-      refreshFeed(); analytics.tick();
+      if (Date.now() - lastStatusRefresh >= 60000) {
+        lastStatusRefresh = Date.now();
+        if (isFeedPath(activePath) || activePath === '/settings/rss') updateMonitor(true);
+        if (isFeedPath(activePath) && (isLoggedIn || Object.values(currentFilters).some(Boolean))) updateStats(true);
+      }
+      refreshFeed(); analytics?.tick();
     };
     setInterval(liveTick, window.SeekFeedCadence.feedRefreshMs);
     document.addEventListener('visibilitychange', liveTick);

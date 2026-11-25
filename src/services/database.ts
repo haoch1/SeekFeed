@@ -493,14 +493,10 @@ export class DatabaseService {
     `);
     const posts = postsStmt.all(...params, limit, fuzzyTotal === undefined ? offset : 0) as Post[];
     
-    // 查询总数（whereClause 仅过滤 posts 表字段，无需 JOIN keywords_sub）
-    const countStmt = this.db.query(`
-      SELECT COUNT(*) as count
-      FROM posts p
-      ${whereClause}
-    `);
-    const countResult = fuzzyTotal === undefined ? countStmt.get(...params) as { count: number } : null;
-    const total = fuzzyTotal ?? countResult?.count ?? 0;
+    // 无筛选时复用总数。筛选只依赖帖子字段，无需查询订阅表。
+    const total = fuzzyTotal ?? (whereClause
+      ? (this.db.query(`SELECT COUNT(*) as count FROM posts p ${whereClause}`).get(...params) as { count: number }).count
+      : this.getPostsCount());
     const totalPages = Math.ceil(total / limit);
     
     return {
@@ -715,7 +711,7 @@ export class DatabaseService {
 
     const stmt = this.db.query(`
       SELECT COUNT(*) as count FROM posts
-      WHERE datetime(pub_date) >= datetime(?)
+      WHERE julianday(pub_date) >= julianday(?)
     `);
     const result = stmt.get(todayStart) as { count: number };
     const count = result?.count || 0;

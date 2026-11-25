@@ -178,9 +178,13 @@ apiRoutes.get('/stats/analytics', createQueryValidationMiddleware(analyticsQuery
 });
 
 apiRoutes.get('/stats/overview', (c) => {
-    const stats = c.get('dbService').getComprehensiveStats();
-    const { total_posts, today_posts, last_update } = stats;
-    return c.json(createSuccessResponse(c.get('sessionData') ? stats : { total_posts, today_posts, last_update }));
+    const db = c.get('dbService');
+    const stats = c.get('sessionData') ? db.getComprehensiveStats() : {
+        total_posts: db.getPostsCount(),
+        today_posts: db.getTodayPostsCount(),
+        last_update: db.getLastUpdateTime(),
+    };
+    return c.json(createSuccessResponse(stats));
 });
 
 const keywordAnalyticsQuery = z.object({

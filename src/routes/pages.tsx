@@ -28,8 +28,10 @@ for (const path of ['/', '/hot', '/posts', '/matched', '/subscriptions', '/stati
       return c.redirect('/init');
     }
     
-    if (path === '/' || path === '/hot') return c.redirect('/posts');
-    return c.html(<HomePage path={path === "/settings" ? "/settings/account" : path} />);
+    if (path === '/hot') return c.redirect('/posts');
+    const page = path === '/' ? '/posts' : path === '/settings' ? '/settings/account' : path;
+    const initialFeed = page === '/posts' ? c.get('dbService').getPostsWithPagination(1, 10) : undefined;
+    return c.html(<HomePage path={page} initialFeed={initialFeed} />);
   } catch (error) {
     return c.html(<ErrorPage message={`加载页面失败: ${error}`} />);
   }
