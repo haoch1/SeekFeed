@@ -1,7 +1,7 @@
 # SeekFeed
 
 [![SeekFeed CI](https://github.com/haoch1/SeekFeed/actions/workflows/docker-build.yml/badge.svg)](https://github.com/haoch1/SeekFeed/actions/workflows/docker-build.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-4f46e5.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-0066cc.svg)](LICENSE)
 
 面向 **NodeSeek** 社区的轻量级自托管监控与分析平台。基于 **Bun + Hono + SQLite** 构建，提供 RSS 实时采集、关键词组合订阅、Telegram 即时推送与多维社区统计分析。
 

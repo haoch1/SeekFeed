@@ -4,7 +4,7 @@
         <tile>
             <square150x150logo src="/icons/seekfeed-192.png"/>
             <square310x310logo src="/icons/seekfeed-512.png"/>
-            <TileColor>#4f46e5</TileColor>
+            <TileColor>#0066cc</TileColor>
         </tile>
     </msapplication>
 </browserconfig>

@@ -26,10 +26,11 @@ describe('resolved appearance preference', () => {
         expect(theme.getPreference()).toBe('system');
         expect(root.dataset.theme).toBe('light');
         expect(root.style.colorScheme).toBe('only light');
+        expect(metas.get('meta[name="theme-color"]')).toBe('#f5f5f7');
         media.matches = true; events.get('system')!();
         expect(root.dataset.theme).toBe('dark');
         expect(root.style.colorScheme).toBe('only dark');
-        expect(metas.get('meta[name="theme-color"]')).toBe('#101012');
+        expect(metas.get('meta[name="theme-color"]')).toBe('#17181c');
         media.matches = false; events.get('visibilitychange')!();
         expect(root.dataset.theme).toBe('light');
     });

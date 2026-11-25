@@ -2,18 +2,19 @@
 
 :root, [data-theme="light"] {
     color-scheme: light;
-    --brand-bg: #1d1d1f;
-    --brand-fg: #ffffff;
-    --ink-cta: #1d1d1f;
-    --ink-cta-hover: #333336;
-    --ink-cta-active: #000000;
+    --system-blue: #0088ff;
+    --brand-bg: var(--ink-cta);
+    --brand-fg: var(--ink-cta-text);
+    --ink-cta: #0066cc;
+    --ink-cta-hover: #005bb8;
+    --ink-cta-active: #004c9e;
     --ink-cta-text: #ffffff;
 
-    --primary: #1d1d1f;
-    --primary-dark: #000000;
-    --primary-light: #424245;
-    --primary-alpha: rgba(0, 0, 0, .068);
-    --ring-color: rgba(0, 0, 0, .18);
+    --primary: #005bb8;
+    --primary-dark: #004c9e;
+    --primary-light: #53a8ff;
+    --primary-alpha: rgba(0, 102, 204, .10);
+    --ring-color: rgba(0, 102, 204, .38);
 
     --bg-primary: #f5f5f7;
     --bg-sidebar: rgba(245, 245, 247, .88);
@@ -25,8 +26,8 @@
     --bg-active: rgba(0, 0, 0, .068);
 
     --text-primary: #1d1d1f;
-    --text-secondary: #6e6e73;
-    --text-muted: #86868b;
+    --text-secondary: #55565e;
+    --text-muted: #6b6d76;
 
     --border-color: rgba(0, 0, 0, .08);
     --border-light: rgba(0, 0, 0, .055);
@@ -47,12 +48,12 @@
     --radius-xl: 18px;
     --radius-pill: 999px;
 
-    --text-xs: .8125rem;
+    --text-xs: .75rem;
     --text-sm: .875rem;
-    --text-base: 1rem;
-    --text-lg: 1.375rem;
-    --text-xl: 1.75rem;
-    --text-page: clamp(1.5rem, 1.375rem + .4vw, 1.75rem);
+    --text-base: .9375rem;
+    --text-lg: 1.25rem;
+    --text-xl: 1.5rem;
+    --text-page: clamp(1.375rem, 1.25rem + .35vw, 1.5rem);
     --text-chart: .75rem;
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, .04);
@@ -68,31 +69,30 @@
 
 [data-theme="dark"] {
     color-scheme: dark;
-    --brand-bg: #f5f5f7;
-    --brand-fg: #1d1d1f;
-    --ink-cta: #f5f5f7;
-    --ink-cta-hover: #e5e5ea;
-    --ink-cta-active: #d1d1d6;
-    --ink-cta-text: #1d1d1f;
+    --system-blue: #0091ff;
+    --ink-cta: #70b9ff;
+    --ink-cta-hover: #95cbff;
+    --ink-cta-active: #59abf7;
+    --ink-cta-text: #0d2238;
 
-    --primary: #f5f5f7;
-    --primary-dark: #ffffff;
-    --primary-light: #d1d1d6;
-    --primary-alpha: rgba(255, 255, 255, .11);
-    --ring-color: rgba(255, 255, 255, .24);
+    --primary: #79bfff;
+    --primary-dark: #59abf7;
+    --primary-light: #a5d3ff;
+    --primary-alpha: rgba(112, 185, 255, .15);
+    --ring-color: rgba(112, 185, 255, .48);
 
-    --bg-primary: #0f0f11;
-    --bg-sidebar: rgba(22, 22, 24, .92);
+    --bg-primary: #17181c;
+    --bg-sidebar: rgba(29, 31, 36, .95);
     --bg-secondary: rgba(255, 255, 255, .04);
     --bg-control: rgba(255, 255, 255, .075);
-    --bg-card: #1c1c1e;
-    --bg-elevated: rgba(44, 44, 46, .92);
+    --bg-card: #22242a;
+    --bg-elevated: rgba(45, 47, 53, .94);
     --bg-hover: rgba(255, 255, 255, .065);
     --bg-active: rgba(255, 255, 255, .11);
 
     --text-primary: #f5f5f7;
-    --text-secondary: #a1a1a6;
-    --text-muted: #6e6e73;
+    --text-secondary: #b1b3bc;
+    --text-muted: #979aa4;
 
     --border-color: rgba(255, 255, 255, .09);
     --border-light: rgba(255, 255, 255, .06);
@@ -111,7 +111,7 @@
     --shadow: inset 0 .5px 0 rgba(255, 255, 255, .07), 0 0 0 .5px rgba(255, 255, 255, .06), 0 4px 18px rgba(0, 0, 0, .24);
     --shadow-pill: inset 0 .5px 0 rgba(255, 255, 255, .10), 0 1px 4px rgba(0, 0, 0, .42);
     --shadow-lg: inset 0 .5px 0 rgba(255, 255, 255, .10), 0 22px 54px rgba(0, 0, 0, .58), 0 0 0 .5px rgba(255, 255, 255, .10);
-    --topbar-bg: rgba(15, 15, 17, .76);
+    --topbar-bg: rgba(23, 24, 28, .9);
     --scrollbar-thumb: rgba(255, 255, 255, .18);
     --scrollbar-thumb-hover: rgba(255, 255, 255, .32);
     --control-press-shade: rgba(255, 255, 255, .10);
@@ -681,7 +681,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--primary); }
 .settings-section:first-child > .form-stack > .form-actions { margin-top: auto; padding-top: 6px; }
 
 .account-profile { display: flex; align-items: center; gap: 16px; padding-bottom: 20px; margin-bottom: 20px; border-bottom: 1px solid var(--border-light); }
-.profile-avatar { width: 60px; height: 60px; flex: 0 0 60px; font-size: 22px; font-weight: 600; color: var(--primary); background: var(--primary-alpha); border: 0; border-radius: 50%; }
+.profile-avatar { width: 60px; height: 60px; flex: 0 0 60px; font-size: var(--text-lg); font-weight: 600; color: var(--primary); background: var(--primary-alpha); border: 0; border-radius: 50%; }
 .account-profile-content { min-width: 0; }
 .account-profile-content > strong { display: block; font-size: var(--text-sm); font-weight: 600; margin-bottom: 8px; }
 .account-avatar-actions { display: flex; gap: 8px; flex-wrap: wrap; }

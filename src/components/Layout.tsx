@@ -36,7 +36,7 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
         {description && <meta name="twitter:description" content={description} />}
 
         {/* PWA Config */}
-        <meta name="theme-color" content="#1d1d1f" />
+        <meta name="theme-color" content="#f5f5f7" />
         <meta name="color-scheme" content="light dark" />
         <meta name="application-name" content="SeekFeed" />
         <meta name="apple-mobile-web-app-title" content="SeekFeed" />
@@ -46,10 +46,10 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
         <link rel="icon" type="image/svg+xml" href={assetUrl('/icons/seekfeed.svg')} />
 
         {/* Apple Touch Icons */}
-        <link rel="apple-touch-icon" href="/icons/seekfeed-192.png" />
+        <link rel="apple-touch-icon" href={assetUrl('/icons/seekfeed-192.png')} />
 
         {/* Microsoft */}
-        <meta name="msapplication-TileColor" content="#1d1d1f" />
+        <meta name="msapplication-TileColor" content="#0066cc" />
         <meta name="msapplication-TileImage" content="/icons/seekfeed-192.png" />
 
         {preloadScripts.map(src => <link rel="preload" href={src} as="script" />)}

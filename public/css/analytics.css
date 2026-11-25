@@ -35,10 +35,10 @@
 details[open] > summary svg { transform: rotate(180deg); }
 .match-rule-details > div { margin-top: 8px; padding: 12px 14px; border: 1px solid var(--border-light); background: var(--bg-secondary); border-radius: var(--radius-md); }
 :is(#statsPage, #subscriptionAnalytics, .chart-dialog) {
-    --chart-accent: #0071e3;
-    --chart-accent-soft: rgba(0, 113, 227, .10);
+    --chart-accent: var(--system-blue);
+    --chart-accent-soft: var(--primary-alpha);
     --analytics-pushed: #248a3d;
-    --analytics-color-0: #0071e3;
+    --analytics-color-0: var(--chart-accent);
     --analytics-color-1: #30b0c7;
     --analytics-color-2: #34c759;
     --analytics-color-3: #af52de;
@@ -49,13 +49,10 @@ details[open] > summary svg { transform: rotate(180deg); }
     --analytics-color-8: #8e8e93;
 }
 [data-theme="dark"] :is(#statsPage, #subscriptionAnalytics, .chart-dialog) {
-    --chart-accent: #0a84ff;
-    --chart-accent-soft: rgba(10, 132, 255, .17);
     --analytics-pushed: #30d158;
     --analytics-pending: #ff9f0a;
     --analytics-unmatched: #2c2c2e;
     --analytics-unprocessed: #8e8e93;
-    --analytics-color-0: #0a84ff;
     --analytics-color-1: #40c8e0;
     --analytics-color-2: #30d158;
     --analytics-color-3: #bf5af2;
@@ -69,7 +66,7 @@ details[open] > summary svg { transform: rotate(180deg); }
 .analytics-period { display: inline-flex; padding: 3px; border: 0; border-radius: var(--radius-md); background: var(--bg-control, rgba(0, 0, 0, .045)); flex-shrink: 0; gap: 2px; }
 .analytics-period .chart-range-btn { min-height: 28px; border: 0; border-radius: 7px; padding: 4px 12px; color: var(--text-secondary); background: transparent; font-size: var(--text-xs, 12px); font-weight: 500; white-space: nowrap; transition: background-color .15s ease, color .15s ease, box-shadow .15s ease; }
 .analytics-period .chart-range-btn:hover { color: var(--text-primary); }
-.analytics-period .chart-range-btn.active { background: var(--bg-card); color: var(--text-primary); font-weight: 600; box-shadow: var(--shadow-pill, var(--shadow-sm)); }
+.analytics-period .chart-range-btn.active { background: var(--bg-card); color: var(--primary); font-weight: 600; box-shadow: var(--shadow-pill, var(--shadow-sm)); }
 .analytics-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: -6px 0 16px; color: var(--text-muted); font-size: var(--text-xs, 12px); min-height: 18px; }
 .analytics-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
 .analytics-toolbar-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; }
@@ -106,15 +103,15 @@ details[open] > summary svg { transform: rotate(180deg); }
 .analytics-bar-label { pointer-events: none; }
 .analytics-bar-label.is-compact:not([data-active]), .analytics-bar-label[data-zero="true"]:not([data-active]) { visibility: hidden; }
 .analytics-bar-label rect { fill: var(--chart-accent-soft); stroke: color-mix(in srgb, var(--chart-accent) 22%, transparent); stroke-width: 1px; }
-.analytics-plot .analytics-bar-value { fill: var(--chart-accent); font-weight: 600; font-variant-numeric: tabular-nums; }
-.analytics-bar-label[data-active] rect { fill: var(--chart-accent); stroke: var(--chart-accent); }
-.analytics-bar-label[data-active] .analytics-bar-value { fill: #ffffff; }
+.analytics-plot .analytics-bar-value { fill: var(--primary); font-weight: 600; font-variant-numeric: tabular-nums; }
+.analytics-bar-label[data-active] rect { fill: var(--ink-cta); stroke: var(--ink-cta); }
+.analytics-bar-label[data-active] .analytics-bar-value { fill: var(--ink-cta-text); }
 @media (prefers-reduced-motion: no-preference) {
     .analytics-post-bar { transition: fill-opacity .16s ease; }
     .analytics-bar-label rect, .analytics-bar-value { transition: fill .16s ease, stroke .16s ease; }
 }
 .analytics-grid-line { stroke: var(--border-color); stroke-dasharray: 3 4; }
-.analytics-post-bar { fill: var(--chart-accent); fill-opacity: .86; }
+.analytics-post-bar { fill: var(--chart-accent); fill-opacity: .94; }
 .analytics-post-bar[data-active] { fill-opacity: 1; }
 .analytics-trend-line { fill: none; stroke: var(--chart-accent); stroke-width: 2.25; stroke-linejoin: round; stroke-linecap: round; }
 .analytics-line-area { fill: var(--chart-accent); fill-opacity: .08; }
@@ -141,7 +138,7 @@ details[open] > summary svg { transform: rotate(180deg); }
 .category-breakdown-ring circle { fill: none; stroke: var(--category-color); stroke-width: 17; cursor: pointer; }
 .category-breakdown-ring circle.is-muted { opacity: .2; }
 .category-breakdown-ring > div { position: absolute; inset: 22px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; pointer-events: none; }
-.category-breakdown-ring strong { font-size: 25px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.5px; }
+.category-breakdown-ring strong { font-size: var(--text-xl); font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.5px; }
 .category-breakdown-ring > div > span { max-width: 100%; margin-top: 4px; font-size: var(--text-chart); color: var(--text-secondary); line-height: 1.5; overflow-wrap: anywhere; }
 .category-breakdown-legend { min-width: 0; width: 100%; }
 .category-breakdown-columns, .category-breakdown-row { display: grid; grid-template-columns: minmax(0, 1fr) 74px 56px; gap: 8px; align-items: center; }
@@ -405,7 +402,6 @@ details[open] > summary svg { transform: rotate(180deg); }
     .keyword-query-options > .btn { flex-basis: 100%; justify-content: center; }
     .keyword-comparison { grid-template-columns: minmax(0, 1fr); gap: 8px; }
     .keyword-summary { padding: 12px; }
-    .keyword-summary strong { font-size: 25px; }
     .keyword-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
     .keyword-panel { padding: 16px; }
     .keyword-panels { gap: 14px; }
@@ -440,7 +436,7 @@ details[open] > summary svg { transform: rotate(180deg); }
     .analytics-kpi-label { gap: 6px; }
     .analytics-icon { width: 26px; height: 26px; }
     .analytics-icon svg { width: 15px; height: 15px; }
-    .analytics-value { font-size: 27px; margin: 12px 0 8px; }
+    .analytics-value { margin: 12px 0 8px; }
     .analytics-card { padding: 16px; }
     .analytics-card-heading { gap: 8px; }
     .analytics-legend { gap: 10px; }

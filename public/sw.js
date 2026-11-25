@@ -1,5 +1,5 @@
 // Only static assets are cached. Sessions and configuration never enter CacheStorage.
-const STATIC_CACHE = 'seekfeed-static-v3';
+const STATIC_CACHE = 'seekfeed-static-v4';
 const STATIC_ASSETS = [
     '/manifest.json',
     '/icons/seekfeed.svg', '/icons/ui.svg', '/icons/seekfeed-192.png', '/icons/seekfeed-512.png',

@@ -17,7 +17,7 @@
         // Declare the palette actually rendered; avoid a second automatic recoloring pass.
         root.style.colorScheme = `only ${theme}`;
         document.querySelector('meta[name="color-scheme"]')?.setAttribute('content', `only ${theme}`);
-        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#101012' : '#f4f5f7');
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#17181c' : '#f5f5f7');
         const label = `主题：${names[preference]}${preference === 'system' ? `（当前${theme === 'dark' ? '深色' : '浅色'}）` : ''}`;
         document.getElementById('themeToggleBtn')?.setAttribute('aria-label', label);
         const hint = document.getElementById('themeToggleHint');
