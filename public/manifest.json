@@ -5,8 +5,8 @@
     "description": "SeekFeed · NodeSeek 新帖监控与 Telegram 消息通知",
     "start_url": "/posts",
     "display": "standalone",
-    "background_color": "#ffffff",
-    "theme_color": "#4f46e5",
+    "background_color": "#f5f5f7",
+    "theme_color": "#1d1d1f",
     "scope": "/",
     "lang": "zh-CN",
     "categories": [
