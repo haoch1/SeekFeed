@@ -8,7 +8,7 @@ export const Icon: FC<{ name: string }> = ({ name }) => (
 );
 
 export const BrandMark: FC = () => (
-    <svg viewBox="0 0 64 64" width="28" height="28" class="brand-mark" aria-hidden="true" focusable="false"><rect width="64" height="64" rx="16" fill="var(--brand-bg, #18181b)" /><path d="M44 18H28a7 7 0 0 0 0 14h8a7 7 0 0 1 0 14H20" fill="none" stroke="var(--brand-fg, #fff)" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
+    <svg viewBox="0 0 64 64" width="30" height="30" class="brand-mark" aria-hidden="true" focusable="false"><rect width="64" height="64" rx="16" fill="var(--brand-bg, #0071e3)" /><path d="M44 18H28a7 7 0 0 0 0 14h8a7 7 0 0 1 0 14H20" fill="none" stroke="var(--brand-fg, #fff)" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
 );
 
 const categories = [
