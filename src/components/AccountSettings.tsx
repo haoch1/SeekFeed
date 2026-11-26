@@ -1,19 +1,22 @@
 import type { FC } from 'hono/jsx';
 import { FieldInput } from './Controls';
 import { Icon } from './DashboardSurface';
+import { SettingsLoadError, SkeletonForm, SkeletonRows } from './Skeleton';
 
 export const AccountSettings: FC<{ active?: boolean }> = ({ active = false }) => (
     <section id="accountPage" class="route-page" hidden={!active}>
         <div class="workspace-heading"><div><h1><Icon name="settings" /><span>账号与安全</span></h1></div></div>
         <div class="settings-content page-body">
-            <section class="settings-section">
+            <section id="accountDetails" class="settings-section" aria-busy="true">
                 <div class="section-heading"><h2>账号信息</h2><p>头像单独保存。修改用户名或密码需要验证当前密码，保存后请重新登录。</p></div>
-                <div class="account-profile">
+                <SkeletonForm fields={4} profile />
+                <SettingsLoadError />
+                <div class="account-profile" data-loading-content>
                     <span class="profile-avatar" data-account-avatar aria-hidden="true" style="visibility:hidden">S</span>
                     <div class="account-profile-content"><strong>账号头像</strong><div class="account-avatar-actions"><button id="avatarUploadBtn" type="button" class="btn btn-secondary btn-xs">更换头像</button><button id="avatarRemoveBtn" type="button" class="btn btn-text btn-xs" disabled>恢复默认</button></div><p id="avatarHelp" class="form-hint">支持 JPG、PNG、WebP，最大 5 MB，自动居中裁剪。</p></div>
                     <input id="avatarFile" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="avatarHelp" hidden />
                 </div>
-                <form id="accountForm" class="form-stack" method="post">
+                <form id="accountForm" class="form-stack" data-loading-content method="post">
                     <div class="form-group"><label class="form-label" for="accountUsername">用户名</label><FieldInput id="accountUsername" class="input-field" required minlength="3" maxlength="50" spellcheck="false" /></div>
                     <div class="form-group"><label class="form-label" for="accountCurrentPassword">当前密码</label><FieldInput id="accountCurrentPassword" type="text" class="input-field" spellcheck="false" required maxlength="50" placeholder="输入当前密码" /></div>
                     <div class="form-group"><label class="form-label" for="accountNewPassword">新密码</label><FieldInput id="accountNewPassword" type="text" class="input-field" spellcheck="false" minlength="8" maxlength="50" placeholder="不修改密码时留空" /><span class="form-hint">8–50 个字符，建议使用随机生成的强密码。</span></div>
@@ -21,16 +24,22 @@ export const AccountSettings: FC<{ active?: boolean }> = ({ active = false }) =>
                     <div class="form-actions"><button class="btn btn-primary" type="submit">保存账号信息</button></div>
                 </form>
             </section>
-            <section class="settings-section">
+            <section id="accountSessionSettings" class="settings-section" aria-busy="true">
                 <div class="section-heading"><h2>登录有效期</h2><p>从每次登录时开始计算。更改后对新登录的会话生效。</p></div>
-                <form id="sessionSettingsForm" class="form-stack" method="post">
+                <SkeletonForm fields={1} />
+                <SettingsLoadError />
+                <form id="sessionSettingsForm" class="form-stack" data-loading-content method="post">
                     <div class="form-group"><label class="form-label" for="sessionHours">保持登录</label><select id="sessionHours" class="input-field" data-1p-ignore="true" data-op-ignore="true"><option value="1">1 小时</option><option value="24">1 天</option><option value="168">7 天</option><option value="720">30 天</option></select></div>
                     <div class="form-actions"><button class="btn btn-primary" type="submit">保存有效期</button></div>
                 </form>
             </section>
             <section class="settings-section account-devices">
                 <div class="section-heading"><h2 id="sessionsTitle">登录设备</h2><p>最多保留 5 个活跃会话，可单独退出某台设备。</p></div>
-                <div id="sessionsList" class="sessions-list" aria-live="polite" tabindex="0" role="region" aria-labelledby="sessionsTitle"></div>
+                <div id="sessionsList" class="sessions-list" aria-busy="true" aria-live="polite" tabindex="0" role="region" aria-labelledby="sessionsTitle">
+                    <SkeletonRows kind="session" />
+                    <SettingsLoadError />
+                    <div id="sessionItems" data-loading-content></div>
+                </div>
                 <div class="form-actions"><button id="logoutAllBtn" class="btn btn-danger" type="button"><Icon name="logout" />退出所有设备</button></div>
             </section>
         </div>

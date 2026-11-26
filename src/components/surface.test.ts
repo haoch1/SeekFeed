@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { HomePage } from './HomePage';
+import { InitPage } from './InitPage';
+import { PwaCheckPage } from './PwaCheckPage';
 import { readFileSync } from 'node:fs';
 import cadence from '../config/cadence.json';
 import { ASSET_VERSION } from '../config/assets';
@@ -58,5 +60,18 @@ describe('server rendered workspace', () => {
             const selected = [...html.matchAll(/<a href="([^"]+)"[^>]*class="nav-item selected"[^>]*aria-current="page"/g)];
             expect(selected.map(match => match[1])).toEqual([path === '/' ? '/posts' : path]);
         }
+    });
+    it('renders loading regions in the initial HTML and immediately shows a ready feed', () => {
+        const html = HomePage({ path: '/matched' }).toString();
+        for (const id of ['feedResults', 'analyticsContent', 'subscriptionResults', 'subscriptionAnalytics',
+            'rssConfigPanel', 'collectionQuality', 'accountDetails', 'sessionsList', 'telegramDelivery', 'telegramStatusPanel']) {
+            expect(html).toMatch(new RegExp(`id="${id}"[^>]*aria-busy="true"`));
+        }
+        expect(html).toContain('data-skeleton="true" aria-hidden="true"');
+        const fed = HomePage({ path: '/posts', initialFeed: { posts: [], total: 0, totalPages: 0 } }).toString();
+        expect(fed).toContain('id="feedResults" aria-busy="false"');
+        expect(fed).not.toMatch(/id="emptyState"[^>]*display:none/);
+        expect(InitPage({}).toString()).toContain('id="initFields" aria-busy="true"');
+        expect(PwaCheckPage({}).toString()).toContain('id="pwaWorker" class="skeleton-value" aria-busy="true"');
     });
 });

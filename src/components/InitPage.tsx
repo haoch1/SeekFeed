@@ -2,6 +2,7 @@ import { FieldInput } from './Controls';
 import type { FC } from "hono/jsx";
 import { Layout } from "./Layout";
 import { BrandMark } from "./DashboardSurface";
+import { SkeletonForm } from './Skeleton';
 
 export const InitPage: FC = () => {
   return (
@@ -30,7 +31,9 @@ export const InitPage: FC = () => {
               </p>
             </div>
 
-            <form id="initForm" class="form-stack">
+            <div id="initFields" aria-busy="true">
+            <SkeletonForm fields={3} />
+            <form id="initForm" class="form-stack" data-loading-content>
               <div class="form-group">
                 <label for="username" class="form-label">
                   用户名
@@ -83,8 +86,9 @@ export const InitPage: FC = () => {
               <button type="submit" class="btn btn-primary" style="width: 100%;">
                 初始化系统
               </button>
-              <div id="initMessage" class="login-message" role="status" aria-live="polite" style="display: none;"></div>
             </form>
+            </div>
+            <div id="initMessage" class="login-message" role="status" aria-live="polite" style="display: none;"></div>
           </div>
         </main>
       </div>

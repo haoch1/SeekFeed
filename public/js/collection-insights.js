@@ -6,9 +6,8 @@ window.SeekFeedInsights = (() => {
     const source = { rss: 'RSS' };
     const authHeaders = () => { const token = localStorage.getItem('sessionId'); return token ? { Authorization: `Bearer ${token}` } : {}; };
     async function quality() {
-        const box = document.getElementById('collectionQuality');
+        const box = document.getElementById('collectionQualityResults');
         if (!box || box.closest('section').hidden) return;
-        box.setAttribute('aria-busy', 'true');
         try {
             // Separate request: refreshing diagnostics never triggers remote collection.
             const response = await fetch('/api/collection/quality', { cache: 'no-store', headers: authHeaders(), signal: AbortSignal.timeout(15000) });
@@ -21,7 +20,6 @@ window.SeekFeedInsights = (() => {
             }).join('')}</div>
             <div class="insight-table-scroll"><table class="insight-table"><thead><tr><th>时间</th><th>来源</th><th>状态</th><th>有效 / 返回</th><th>新增 / 更新</th><th>耗时</th><th>诊断</th></tr></thead><tbody>${data.recent.map(row => `<tr><td>${esc(time(row.started_at))}</td><td>${source[row.source] || '未知'}</td><td><span class="insight-state" data-state="${esc(row.status)}">${({ success: '正常', partial: '部分异常', failed: '失败' })[row.status] || '未知'}</span></td><td>${num(row.accepted)} / ${num(row.received)}</td><td>${num(row.inserted)} / ${num(row.updated)}</td><td>${(row.duration_ms / 1000).toFixed(1)}s</td><td>${esc(row.http_status ? 'HTTP ' + row.http_status : row.error_code || (row.invalid ? row.invalid + ' 条无效' : '—'))}</td></tr>`).join('') || '<tr><td colspan="7">尚无采集记录</td></tr>'}</tbody></table></div>`;
         } catch { box.innerHTML = '<p class="insight-note" role="status">采集记录读取失败，请重新加载。</p>'; }
-        finally { box.setAttribute('aria-busy', 'false'); }
     }
     return { quality };
 })();

@@ -408,8 +408,6 @@ html:not([data-auth="session"]) .metric-strip { grid-template-columns: 1fr; max-
 
 /* Post Rows — Calm Apple List Rhythm */
 .posts-list { display: block; overflow-anchor: none; }
-.posts-list[aria-busy="true"] { cursor: progress; }
-.posts-list[aria-busy="true"]:has(.post-card) { pointer-events: none; }
 
 .post-card, .post-card.matched, .post-card.matched-not-pushed {
     display: flex; align-items: center; gap: 20px;
@@ -512,11 +510,6 @@ html:not([data-auth="session"]) .metric-strip { grid-template-columns: 1fr; max-
 .empty-title { font-size: var(--text-base); font-weight: 600; margin-bottom: 4px; color: var(--text-primary); }
 .empty-desc { font-size: var(--text-xs); color: var(--text-secondary); }
 .empty-state-small { border: 1px dashed var(--border-color); border-radius: var(--radius-lg); padding: 44px 20px; }
-.post-skeleton { padding: 18px 22px; border-bottom: 1px solid var(--border-light); }
-.skeleton-title { height: 16px; width: 58%; margin-bottom: 10px; }
-.skeleton-line { height: 11px; width: 82%; }
-.skeleton-list-item { display: flex; gap: 10px; margin: 12px 0; }
-
 /* Forms, Subscriptions & Settings */
 .page-body { max-width: none; }
 #statsPage .page-body { max-width: none; }

@@ -3,6 +3,7 @@ import { TelegramSettings } from './TelegramSettings';
 import { SubscriptionAnalytics } from './SubscriptionAnalytics';
 import { StatisticsPage } from './StatisticsPage';
 import { FieldInput } from './Controls';
+import { SettingsLoadError, Skeleton, SkeletonForm, SkeletonRows } from './Skeleton';
 import type { FC } from "hono/jsx";
 import { Layout } from "./Layout";
 import { DashboardSurface, Icon } from "./DashboardSurface";
@@ -39,7 +40,7 @@ export const HomePage: FC<{ path?: string; initialFeed?: InitialFeed }> = ({ pat
                 <FieldInput type="text" id="keyword3" class="input-field" placeholder="关键词3（同时命中）" aria-label="关键词3" maxlength="100" />
               </div>
             </div>
-            <details class="match-rules match-rule-details"><summary><span>不区分大小写，多个关键词需同时命中。</span><span class="match-rule-toggle">规则说明<Icon name="chevron-down" /></span></summary><div><p><span id="subscriptionMatchScope">正在读取匹配范围…</span> <a href="/settings/telegram" data-route>调整范围</a></p><p>摘要由 RSS 提供，可能不含完整正文。正则表达式按所填标志匹配。</p><p>作者、分类与关键词需同时满足；留空则不限。屏蔽词命中标题或摘要时不通知。</p></div></details>
+            <details class="match-rules match-rule-details"><summary><span>不区分大小写，多个关键词需同时命中。</span><span class="match-rule-toggle">规则说明<Icon name="chevron-down" /></span></summary><div><p><span id="subscriptionMatchScope" class="skeleton-value" aria-busy="true"></span> <a href="/settings/telegram" data-route>调整范围</a></p><p>摘要由 RSS 提供，可能不含完整正文。正则表达式按所填标志匹配。</p><p>作者、分类与关键词需同时满足；留空则不限。屏蔽词命中标题或摘要时不通知。</p></div></details>
             {/* 第二行：作者和分类 */}
             <div class="sub-form-row">
               <div class="sub-form-group">
@@ -74,19 +75,11 @@ export const HomePage: FC<{ path?: string; initialFeed?: InitialFeed }> = ({ pat
           </form>
 
           {/* 订阅列表 */}
-          <section class="subscriptions-panel-shell" aria-labelledby="subscriptionsListTitle"><div class="subscriptions-panel">
+          <section class="subscriptions-panel-shell" aria-labelledby="subscriptionsListTitle"><div class="subscriptions-panel" id="subscriptionResults" aria-busy="true">
           <div class="subscriptions-panel-heading"><h2 id="subscriptionsListTitle">我的订阅</h2><div class="search-box"><Icon name="search" /><FieldInput type="search" id="subscriptionSearch" class="input-field" placeholder="搜索订阅" aria-label="搜索订阅 ID、关键词或作者" /></div></div>
-          <div id="subscriptionsList" class="subscriptions-list" tabindex="0" role="region" aria-label="订阅列表">
-            <div class="skeleton-wrapper">
-              {[1, 2, 3].map(() => (
-                <div class="skeleton-list-item">
-                  <div class="skeleton skeleton-badge"></div>
-                  <div class="skeleton skeleton-line"></div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <p id="subscriptionSearchEmpty" class="subscription-search-empty" hidden>没有匹配的订阅</p>
+          <SkeletonRows kind="subscription" />
+          <div id="subscriptionsList" class="subscriptions-list" data-loading-content aria-live="polite" tabindex="0" role="region" aria-label="订阅列表"></div>
+          <p id="subscriptionSearchEmpty" class="subscription-search-empty" data-loading-content hidden>没有匹配的订阅</p>
           </div></section>
         </div>
         <SubscriptionAnalytics />
@@ -95,7 +88,10 @@ export const HomePage: FC<{ path?: string; initialFeed?: InitialFeed }> = ({ pat
       {/* RSS 配置页面 */}
       <section id="rssPage" class="route-page" hidden={path !== "/settings/rss"}><div class="workspace-heading"><div><h1><Icon name="rss" /><span>RSS 配置</span></h1></div></div>
         <div class="page-body">
-          <form id="rssConfigForm" class="form-stack" method="post">
+          <div id="rssConfigPanel" aria-busy="true">
+          <SkeletonForm fields={3} hints />
+          <SettingsLoadError />
+          <form id="rssConfigForm" class="form-stack" data-loading-content method="post">
             <div class="form-group">
               <label for="rssUrl" class="form-label">RSS 源地址</label>
               <FieldInput type="url" id="rssUrl" class="input-field" placeholder="https://rss.nodeseek.com/" />
@@ -120,15 +116,21 @@ export const HomePage: FC<{ path?: string; initialFeed?: InitialFeed }> = ({ pat
               </button>
             </div>
           </form>
+          </div>
           <div class="rss-sync-section"><div class="section-heading"><h2>手动同步</h2><p>保存源配置后，可立即抓取新帖。自动监控会按照设定的间隔持续运行。</p></div>
-            <dl class="diagnostic-list rss-diagnostics"><div><dt>自动监控</dt><dd id="rssRunningStatus">读取状态中</dd></div><div><dt>抓取频率</dt><dd id="rssRunningInterval">—</dd></div><div><dt>上次成功同步</dt><dd id="rssLastSuccess">—</dd></div></dl>
+            <dl class="diagnostic-list rss-diagnostics"><div><dt>自动监控</dt><dd id="rssRunningStatus" class="skeleton-value" aria-busy="true"></dd></div><div><dt>抓取频率</dt><dd id="rssRunningInterval" class="skeleton-value" aria-busy="true"></dd></div><div><dt>上次成功同步</dt><dd id="rssLastSuccess" class="skeleton-value" aria-busy="true"></dd></div></dl>
             <button id="fetchRssBtn" class="btn btn-primary">
               <Icon name="sync" />
               立即刷新
             </button>
           </div>
         </div>
-        <div class="settings-card collection-card"><div class="section-heading collection-heading"><div><h2>采集质量</h2><p>RSS 运行记录。刷新记录不会触发源站请求。</p></div><button id="collectionQualityRefresh" type="button" class="icon-btn" aria-label="刷新采集记录"><Icon name="sync" /></button></div><div id="collectionQuality" aria-live="polite"><p class="insight-note">正在读取采集记录…</p></div></div>
+        <div class="settings-card collection-card"><div class="section-heading collection-heading"><div><h2>采集质量</h2><p>RSS 运行记录。刷新记录不会触发源站请求。</p></div><button id="collectionQualityRefresh" type="button" class="icon-btn" aria-label="刷新采集记录"><Icon name="sync" /></button></div>
+          <div id="collectionQuality" aria-busy="true">
+            <div class="skeleton-collection" data-skeleton aria-hidden="true"><Skeleton /><Skeleton kind="hint" /><div class="skeleton-row"><Skeleton /><Skeleton kind="chip" /></div><div class="skeleton-row"><Skeleton /><Skeleton kind="chip" /></div></div>
+            <div id="collectionQualityResults" data-loading-content aria-live="polite"></div>
+          </div>
+        </div>
       </section>
 
       <TelegramSettings active={path === "/settings/telegram"} />

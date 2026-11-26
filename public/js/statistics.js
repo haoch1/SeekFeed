@@ -292,23 +292,41 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
     async function load(silent = false) {
         const request = ++requestId;
         inflight = true; lastLoad = Date.now();
-        el('analyticsExport').disabled = true;
+        const panel = el('analyticsContent'), label = el('analyticsPeriodLabel');
+        if (!silent || !currentData) {
+            panel.setAttribute('aria-busy', 'true');
+            label.textContent = '';
+            label.setAttribute('aria-busy', 'true');
+            el('analyticsExport').disabled = true;
+            el('analyticsError').hidden = true;
+        }
         const query = new URLSearchParams({ days: String(days), offset: String(offset), category });
-        if (!silent) el('analyticsContent').setAttribute('aria-busy', 'true');
         const result = await apiRequest(`/api/stats/analytics?${query}`, { silent: true });
         if (request !== requestId) return;
         inflight = false;
-        el('analyticsContent').setAttribute('aria-busy', 'false');
-        el('analyticsError').hidden = !!result?.success;
-        if (!result?.success) { el('analyticsPeriodLabel').textContent = currentData ? '更新失败，显示上次数据' : '暂时无法读取统计'; return; }
+        panel.toggleAttribute('data-unavailable', !currentData && !result?.success);
+        panel.setAttribute('aria-busy', 'false');
+        label.setAttribute('aria-busy', 'false');
+        el('analyticsError').hidden = Boolean(result?.success);
+        if (!result?.success) {
+            el('analyticsExport').disabled = !currentData;
+            label.textContent = currentData ? '更新失败，显示上次数据' : '暂时无法读取统计';
+            return;
+        }
         render(result.data);
     }
 
-    let notificationDays = 7, notificationLoad = 0, notificationBusy = false, notificationRequest = 0;
-    async function loadNotifications() {
+    let notificationDays = 7, notificationLoad = 0, notificationBusy = false, notificationRequest = 0, notificationsReady = false;
+    async function loadNotifications(silent = false) {
         if (!isLoggedIn) return;
         const request = ++notificationRequest;
         notificationBusy = true; notificationLoad = Date.now();
+        const panel = el('subscriptionAnalytics'), scope = el('subscriptionAnalyticsScope');
+        if (!silent || !notificationsReady) {
+            panel.setAttribute('aria-busy', 'true');
+            scope.textContent = '';
+            scope.setAttribute('aria-busy', 'true');
+        }
         const query = `days=${notificationDays}&offset=${offset}`;
         const [result, ranking] = await Promise.all([
             apiRequest(`/api/stats/analytics?${query}`, { silent: true }),
@@ -316,12 +334,17 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
         ]);
         if (request !== notificationRequest) return;
         notificationBusy = false;
-        if (!result?.success || !ranking?.success) {
-            el('subscriptionAnalyticsScope').textContent = '统计更新失败，稍后自动重试';
+        const loaded = result?.success && ranking?.success;
+        panel.toggleAttribute('data-unavailable', !notificationsReady && !loaded);
+        panel.setAttribute('aria-busy', 'false');
+        scope.setAttribute('aria-busy', 'false');
+        if (!loaded) {
+            scope.textContent = '统计更新失败，稍后自动重试';
             return;
         }
+        notificationsReady = true;
         const data = result.data;
-        el('subscriptionAnalyticsScope').textContent = rangeText(data.period);
+        scope.textContent = rangeText(data.period);
         el('analyticsSubscriptionsCount').textContent = `${number(data.subscriptions.active)} 条监控中 · ${number(data.subscriptions.total)} 条订阅`;
         renderDelivery(data);
         renderRanking(ranking.data.ranking);
@@ -392,7 +415,7 @@ window.SeekFeedStatistics = function ({ apiRequest, escapeHtml: esc, renderIcon:
         tick() {
             if (!el('statsPage').hidden) keywordAnalysis.tick();
             if (!el('statsPage').hidden && !inflight && Date.now() - lastLoad >= window.SeekFeedCadence.analyticsRefreshMs) load(true);
-            if (!el('subscriptionsPage').hidden && !notificationBusy && Date.now() - notificationLoad >= window.SeekFeedCadence.analyticsRefreshMs) loadNotifications();
+            if (!el('subscriptionsPage').hidden && !notificationBusy && Date.now() - notificationLoad >= window.SeekFeedCadence.analyticsRefreshMs) loadNotifications(true);
         },
     };
 };

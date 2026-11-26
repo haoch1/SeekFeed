@@ -11,10 +11,10 @@ export const PwaCheckPage: FC = () => (
                 <h1>PWA 状态检查</h1>
                 <p class="setup-description">在浏览器菜单中选择安装应用，即可添加到桌面。</p>
                 <dl class="diagnostic-list">
-                    <div><dt>应用名称</dt><dd id="pwaName">检查中</dd></div>
-                    <div><dt>安全上下文</dt><dd id="pwaSecure">检查中</dd></div>
-                    <div><dt>静态资源缓存</dt><dd id="pwaWorker">检查中</dd></div>
-                    <div><dt>显示模式</dt><dd id="pwaMode">检查中</dd></div>
+                    <div><dt>应用名称</dt><dd id="pwaName" class="skeleton-value" aria-busy="true"></dd></div>
+                    <div><dt>安全上下文</dt><dd id="pwaSecure" class="skeleton-value" aria-busy="true"></dd></div>
+                    <div><dt>静态资源缓存</dt><dd id="pwaWorker" class="skeleton-value" aria-busy="true"></dd></div>
+                    <div><dt>显示模式</dt><dd id="pwaMode" class="skeleton-value" aria-busy="true"></dd></div>
                 </dl>
                 <p class="form-hint">消息通知通过 Telegram 发送。RSS 监控在服务端运行，关闭浏览器也会继续执行。</p>
                 <a href="/" class="btn btn-primary">返回控制台</a>

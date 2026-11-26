@@ -1,4 +1,5 @@
 import { FieldInput } from './Controls';
+import { PostSkeleton } from './Skeleton';
 import { raw } from 'hono/html';
 import type { FC, PropsWithChildren } from 'hono/jsx';
 import type { Post } from '../types';
@@ -82,12 +83,12 @@ export const DashboardSurface: FC<PropsWithChildren<{ path?: string; initialFeed
             <main class="workspace-content" id="mainContent"><section id="feedPage" class="route-page" hidden={path !== "/posts" && path !== "/matched"}>
                 <div class="workspace-heading"><div><h1 id="pageTitle"><Icon name={path === "/matched" ? "bell" : "posts"} /><span>{path === "/matched" ? "命中订阅" : "最新帖子"}</span></h1></div><div class="heading-actions" data-auth-only><a href="/subscriptions" data-route class="btn btn-secondary manage-subscriptions" aria-label="管理订阅" title="管理订阅"><Icon name="list" /><span>管理订阅</span></a><button id="syncNowBtn" class="btn btn-primary"><Icon name="sync" /><span>立即刷新</span></button></div></div>
                 <section class="metric-strip" aria-label="监控统计">
-                    <div class="metric"><Icon name="posts" /><div><span>已收录帖子</span><strong id="overviewTotal">{initialFeed?.total.toLocaleString('zh-CN') ?? '—'}</strong></div></div>
-                    <div class="metric" data-auth-only><Icon name="target" /><div><span>命中订阅</span><strong id="overviewMatched">—</strong></div></div>
-                    <div class="metric" data-auth-only><Icon name="send" /><div><span>已成功推送</span><strong id="overviewPushed">—</strong></div></div>
+                    <div class="metric"><Icon name="posts" /><div><span>已收录帖子</span><strong id="overviewTotal" class="skeleton-value" aria-busy={initialFeed ? 'false' : 'true'}>{initialFeed?.total.toLocaleString('zh-CN')}</strong></div></div>
+                    <div class="metric" data-auth-only><Icon name="target" /><div><span>命中订阅</span><strong id="overviewMatched" class="skeleton-value" aria-busy="true"></strong></div></div>
+                    <div class="metric" data-auth-only><Icon name="send" /><div><span>已成功推送</span><strong id="overviewPushed" class="skeleton-value" aria-busy="true"></strong></div></div>
                 </section>
                 <section class="feed-panel" aria-label="帖子动态">
-                    <div class="feed-panel-heading"><h2>帖子动态</h2><div class="feed-live-actions"><button type="button" id="newPostsBtn" class="btn btn-secondary btn-xs" hidden><Icon name="arrow-up" />有新帖，查看最新</button><span id="monitorStatus" class="monitor-status" data-auth-only><i></i><span>读取监控状态</span></span></div></div>
+                    <div class="feed-panel-heading"><h2>帖子动态</h2><div class="feed-live-actions"><button type="button" id="newPostsBtn" class="btn btn-secondary btn-xs" hidden><Icon name="arrow-up" />有新帖，查看最新</button><span id="monitorStatus" class="monitor-status" data-auth-only><i></i><span class="skeleton-value" aria-busy="true"></span></span></div></div>
                     <div class="feed-toolbar">
                         <div class="search-box"><Icon name="search" /><FieldInput type="search" id="searchInput" placeholder="搜索标题、作者…" aria-label="搜索标题、作者" class="search-input" /><button id="clearSearchBtn" class="search-clear" aria-label="清除搜索" style="display:none"><Icon name="close" /></button></div>
                         <select data-1p-ignore="true" data-op-ignore="true" id="filterCategory" class="filter-select" aria-label="分类筛选"><option value="">全部分类</option>{categories.map(([value, label]) => <option value={value}>{label}</option>)}</select>
@@ -98,11 +99,13 @@ export const DashboardSurface: FC<PropsWithChildren<{ path?: string; initialFeed
                     </div>
                     <div id="filterPanel" class="filter-panel" style="display:none"><div class="filter-panel-inner"><button id="subscribedOnlyChip" class="toggle-chip" type="button" aria-pressed="false" style="display:none"><span class="toggle-chip-label">只看订阅</span></button><select data-1p-ignore="true" data-op-ignore="true" id="filterSubscription" class="filter-select" aria-label="订阅筛选" style="display:none"><option value="">全部订阅</option></select><select data-1p-ignore="true" data-op-ignore="true" id="filterSearchMode" class="filter-select" aria-label="搜索匹配方式" title="仅影响标题与作者搜索；订阅命中和推送规则保持精准匹配"><option value="contains">包含匹配</option><option value="fuzzy">容错匹配</option></select><FieldInput type="text" id="filterCreator" placeholder="作者筛选" aria-label="作者筛选" class="filter-input" /><button id="clearFiltersBtn" class="btn btn-text">清除筛选</button></div></div>
                     <div id="feedError" class="inline-error" role="alert" hidden>列表更新失败，已保留当前内容。请点击刷新重试。</div>
-                    <div id="postsList" class="posts-list" aria-live="polite" aria-busy={initialFeed ? 'false' : 'true'} data-initial-total={initialFeed?.total} data-initial-pages={initialFeed?.totalPages}>
-                        {initialFeed ? initialFeed.posts.map(post => <PublicPostCard post={post} />)
-                            : <div class="skeleton-wrapper">{[1, 2, 3, 4, 5].map(() => <div class="post-skeleton"><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-line"></div></div>)}</div>}
+                    <div id="feedResults" aria-busy={initialFeed ? 'false' : 'true'} aria-live="polite">
+                        <PostSkeleton />
+                        <div id="postsList" class="posts-list" data-loading-content data-initial-total={initialFeed?.total} data-initial-pages={initialFeed?.totalPages}>
+                            {initialFeed?.posts.map(post => <PublicPostCard post={post} />)}
+                        </div>
+                        <div id="emptyState" class="empty-state" data-loading-content style={initialFeed && !initialFeed.posts.length ? '' : 'display:none'}><Icon name="search" /><div class="empty-title">暂无文章</div><div class="empty-desc">同步 RSS 或调整筛选条件后再试。</div></div>
                     </div>
-                    <div id="emptyState" class="empty-state" style={initialFeed && !initialFeed.posts.length ? '' : 'display:none'}><Icon name="search" /><div class="empty-title">暂无文章</div><div class="empty-desc">同步 RSS 或调整筛选条件后再试。</div></div>
                     <div id="pagination" class="pagination-wrapper" data-feed-pagination="bottom" style="display:none"><span id="paginationInfo" class="pagination-info"></span><nav class="pagination-controls" aria-label="下方帖子分页"><button type="button" id="prevPageBtn" class="pagination-btn" data-page-step="-1" aria-label="上一页"><Icon name="chevron-left" /></button><div id="pageNumbers" class="page-numbers"></div><button type="button" id="nextPageBtn" class="pagination-btn" data-page-step="1" aria-label="下一页"><Icon name="chevron-right" /></button></nav></div>
                 </section>
                 <p id="syncDetail" class="sync-detail" aria-live="polite" data-auth-only></p>

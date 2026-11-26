@@ -1,14 +1,17 @@
 import type { FC } from 'hono/jsx';
 import { Icon } from './DashboardSurface';
 import { FieldInput } from './Controls';
+import { SettingsLoadError, SkeletonForm, SkeletonRows } from './Skeleton';
 
 export const TelegramSettings: FC<{ active?: boolean }> = ({ active = false }) => (
     <section id="telegramPage" class="route-page" hidden={!active}>
         <div class="workspace-heading"><div><h1><Icon name="send" /><span>Telegram</span></h1></div></div>
         <div class="page-body settings-content">
-            <section class="settings-section" aria-labelledby="telegramDeliveryTitle">
+            <section id="telegramDelivery" class="settings-section" aria-busy="true" aria-labelledby="telegramDeliveryTitle">
                 <div class="section-heading"><h4 id="telegramDeliveryTitle">推送设置</h4></div>
-                <form id="telegramConfigForm" class="form-stack" method="post">
+                <SkeletonForm fields={3} hints />
+                <SettingsLoadError />
+                <form id="telegramConfigForm" class="form-stack" data-loading-content method="post">
                     <div class="form-group">
                         <label for="botToken" class="form-label">Bot Token</label>
                         <div class="secret-field"><FieldInput type="password" id="botToken" class="input-field" placeholder="从 @BotFather 获取" spellcheck="false" aria-describedby="botTokenHint" /><button type="button" class="secret-toggle icon-btn" data-toggle-secret="botToken" aria-label="显示 Bot Token" aria-pressed="false"><Icon name="eye" /></button></div>
@@ -26,27 +29,31 @@ export const TelegramSettings: FC<{ active?: boolean }> = ({ active = false }) =
                     <div class="form-actions"><button type="button" id="testTelegramBtn" class="btn btn-secondary"><Icon name="send" />测试推送</button><button type="submit" class="btn btn-primary">保存配置</button></div>
                 </form>
             </section>
-            <section class="settings-section" aria-labelledby="telegramInteractionTitle">
+            <section id="telegramInteraction" class="settings-section" aria-busy="true" aria-labelledby="telegramInteractionTitle">
                 <div class="section-heading"><h4 id="telegramInteractionTitle">命令交互</h4></div>
-                <fieldset class="mode-fieldset"><legend class="form-label">连接方式</legend>
+                <SkeletonForm fields={1} />
+                <SettingsLoadError />
+                <fieldset class="mode-fieldset" data-loading-content><legend class="form-label">连接方式</legend>
                     <div class="mode-selector" id="telegramModeSelector">
                         <label class="mode-option"><FieldInput type="radio" name="telegramMode" value="disabled" checked /><span class="mode-label"><Icon name="pause" />关闭</span></label>
                         <label class="mode-option"><FieldInput type="radio" name="telegramMode" value="polling" /><span class="mode-label"><Icon name="sync" />Polling</span></label>
                         <label class="mode-option"><FieldInput type="radio" name="telegramMode" value="webhook" /><span class="mode-label"><Icon name="send" />Webhook</span></label>
                     </div>
                 </fieldset>
-                <div id="disabledModePanel" class="mode-panel"><p class="form-hint">停用 Bot 命令交互后，已配置的消息推送仍可使用。</p><button type="button" id="disableTelegramBtn" class="btn btn-secondary">停用命令交互</button></div>
-                <div id="webhookModePanel" class="mode-panel" style="display:none">
+                <div id="disabledModePanel" class="mode-panel" data-loading-content><p class="form-hint">停用 Bot 命令交互后，已配置的消息推送仍可使用。</p><button type="button" id="disableTelegramBtn" class="btn btn-secondary">停用命令交互</button></div>
+                <div id="webhookModePanel" class="mode-panel" data-loading-content style="display:none">
                     <form id="webhookConfigForm" class="form-stack" method="post">
                         <div class="form-group"><label for="webhookUrl" class="form-label">Webhook URL</label><FieldInput type="url" id="webhookUrl" class="input-field" placeholder="https://your-domain.com/telegram/webhook" spellcheck="false" /><span class="form-hint">使用 HTTPS 公网地址，Telegram 会向此地址发送命令。</span></div>
                         <div class="form-actions"><button type="button" id="testWebhookBtn" class="btn btn-secondary">测试连接</button><button type="button" id="clearWebhookBtn" class="btn btn-danger">清除</button><button type="submit" class="btn btn-primary">保存 Webhook</button></div>
                     </form>
                 </div>
-                <div id="pollingModePanel" class="mode-panel" style="display:none"><p class="form-hint">主动从 Telegram 获取命令，适用于没有公网地址的环境。</p><div id="pollingStatusIndicator" class="inline-status">Polling 未运行</div><div class="form-actions"><button type="button" id="startPollingBtn" class="btn btn-primary">启动 Polling</button><button type="button" id="stopPollingBtn" class="btn btn-danger" style="display:none">停止 Polling</button></div></div>
+                <div id="pollingModePanel" class="mode-panel" data-loading-content style="display:none"><p class="form-hint">主动从 Telegram 获取命令，适用于没有公网地址的环境。</p><div id="pollingStatusIndicator" class="inline-status">Polling 未运行</div><div class="form-actions"><button type="button" id="startPollingBtn" class="btn btn-primary">启动 Polling</button><button type="button" id="stopPollingBtn" class="btn btn-danger" style="display:none">停止 Polling</button></div></div>
             </section>
-            <section id="telegramStatusPanel" class="settings-section" aria-labelledby="telegramStatusTitle">
+            <section id="telegramStatusPanel" class="settings-section" aria-busy="true" aria-labelledby="telegramStatusTitle">
                 <div class="section-heading"><h4 id="telegramStatusTitle">连接状态</h4></div>
-                <dl class="connection-status"><div><dt><Icon name="send" />Bot 连接</dt><dd id="telegramBotStatus">检查中</dd></div><div><dt><Icon name="sync" />Webhook</dt><dd id="telegramWebhookStatus">检查中</dd></div><div><dt><Icon name="user" />账号绑定</dt><dd id="telegramBindingStatus">检查中</dd></div></dl>
+                <SkeletonRows />
+                <SettingsLoadError />
+                <dl class="connection-status" data-loading-content><div><dt><Icon name="send" />Bot 连接</dt><dd id="telegramBotStatus"></dd></div><div><dt><Icon name="sync" />Webhook</dt><dd id="telegramWebhookStatus"></dd></div><div><dt><Icon name="user" />账号绑定</dt><dd id="telegramBindingStatus"></dd></div></dl>
             </section>
         </div>
     </section>

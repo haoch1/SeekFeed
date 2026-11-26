@@ -1,6 +1,7 @@
 import type { FC } from 'hono/jsx';
 import { Icon } from './DashboardSurface';
 import { FieldInput } from './Controls';
+import { Skeleton, SkeletonChart } from './Skeleton';
 
 const ChartExpand: FC<{ target: string; label: string }> = ({ target, label }) => (
     <button type="button" class="icon-btn chart-expand-button header-tooltip-trigger" data-chart-expand={target} aria-haspopup="dialog" aria-label={`放大查看${label}`} aria-describedby={`${target}ExpandHint`}><Icon name="expand" /><span id={`${target}ExpandHint`} class="header-tooltip" role="tooltip">放大查看</span></button>
@@ -24,11 +25,18 @@ export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
                 ))}
             </div>
         </div>
-        <div class="analytics-meta"><span id="analyticsPeriodLabel">正在读取统计…</span><span id="analyticsTimezone"></span></div>
+        <div class="analytics-meta"><span id="analyticsPeriodLabel" class="skeleton-value" aria-busy="true"></span><span id="analyticsTimezone"></span></div>
         <div class="analytics-toolbar"><div class="analytics-toolbar-filters"><select id="analyticsCategoryFilter" class="input-field" aria-label="总览统计分类"><option value="">全部分类</option></select><button type="button" id="analyticsClearCategory" class="btn btn-secondary btn-xs" hidden>清除筛选</button><span class="analytics-caption">总览随分类筛选 · 关键词分析独立统计</span></div><button type="button" id="analyticsExport" class="btn btn-secondary btn-xs" disabled>导出 CSV</button></div>
         <div id="analyticsError" class="analytics-error" role="status" hidden><span>统计加载失败。</span><button type="button" class="btn btn-secondary btn-xs" id="retryAnalytics">重试</button></div>
         <div id="analyticsContent" class="analytics-content" aria-busy="true">
-            <div class="analytics-kpis">
+            <div class="analytics-kpis" data-skeleton aria-hidden="true">
+                {[0, 1, 2, 3].map(() => <div class="analytics-kpi"><Skeleton /><Skeleton kind="kpi-value" /><Skeleton kind="hint" /></div>)}
+            </div>
+            <div class="analytics-top-grid" data-skeleton aria-hidden="true">
+                <div class="analytics-card"><div class="analytics-card-heading"><Skeleton /></div><Skeleton kind="hint" /><SkeletonChart /></div>
+                <div class="analytics-card"><div class="analytics-card-heading"><Skeleton /></div><SkeletonChart ring /></div>
+            </div>
+            <div class="analytics-kpis" data-loading-content>
                 {[
                     ['posts', '收录帖子', 'posts', 'analyticsPosts', 'analyticsPostsDetail'],
                     ['authors', '活跃作者', 'user', 'analyticsAuthors', 'analyticsAuthorsDetail'],
@@ -41,10 +49,10 @@ export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
                     </article>
                 ))}
             </div>
-            <div class="analytics-top-grid">
+            <div class="analytics-top-grid" data-loading-content>
                 <article class="analytics-card analytics-trend">
                     <div class="analytics-card-heading"><div><h2>发帖趋势</h2><span id="analyticsTrendUnit" class="analytics-caption">按小时</span></div><div class="chart-heading-actions"><ChartStyle id="analyticsTrendStyle" label="趋势图样式" selected="bar" /><ChartExpand target="analyticsTrend" label="发帖趋势" /></div></div>
-                    <div class="analytics-trend-readout" id="analyticsTrendReadout" aria-live="off">正在读取数据</div><div id="analyticsTrend" class="analytics-plot"></div>
+                    <div class="analytics-trend-readout" id="analyticsTrendReadout" aria-live="off"></div><div id="analyticsTrend" class="analytics-plot"></div>
                 </article>
                 <article class="analytics-card analytics-status">
                     <div class="analytics-card-heading"><h2>分类占比</h2><a href="#analyticsCategoryCard" class="analytics-text-link" id="analyticsCategoryLink">查看全部</a></div>
@@ -67,8 +75,10 @@ export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
                     </div>
                 </form>
                 <div id="keywordSuggestions" class="keyword-suggestions" aria-label="快速分析热门标题词"></div>
-                <p id="keywordAnalysisStatus" class="keyword-analysis-status" role="status">输入关键词，查看全天与各时段的发帖分布。</p>
-                <div id="keywordAnalysisResults" class="keyword-analysis-results" hidden>
+                <div id="keywordAnalysisOutput" aria-busy="false">
+                <div class="skeleton-keyword" data-skeleton aria-hidden="true"><Skeleton /><SkeletonChart /></div>
+                <p id="keywordAnalysisStatus" class="keyword-analysis-status" data-loading-content role="status">输入关键词，查看全天与各时段的发帖分布。</p>
+                <div id="keywordAnalysisResults" class="keyword-analysis-results" data-loading-content hidden>
                     <div class="keyword-share-heading"><h3>发帖占比</h3><span id="keywordShareContext" class="analytics-caption"></span></div>
                     <div id="keywordComparison" class="keyword-comparison" role="group" aria-label="选择关键词的分类、作者与详细指标"></div>
                     <p id="keywordShareNote" class="analytics-caption keyword-share-note"></p>
@@ -99,23 +109,25 @@ export const StatisticsPage: FC<{ active: boolean }> = ({ active }) => (
                     </div>
                 </div>
                 </div>
+                </div>
             </article>
-            <article id="analyticsCategoryCard" class="analytics-card">
+            <div class="analytics-card" data-skeleton aria-hidden="true"><Skeleton />{[0, 1, 2].map(() => <div class="skeleton-row"><Skeleton /><Skeleton kind="chip" /></div>)}</div>
+            <article id="analyticsCategoryCard" class="analytics-card" data-loading-content>
                 <div class="analytics-card-heading"><div><h2>分类分析</h2><span id="analyticsCategoryCount" class="analytics-caption">所有分类</span></div><div class="analytics-category-search"><Icon name="search" /><FieldInput type="search" id="analyticsCategorySearch" class="input-field" placeholder="搜索分类" aria-label="搜索统计分类" /></div></div>
                 <div class="analytics-category-table-wrap" tabindex="0" role="region" aria-label="全部分类统计，可滚动查看更多分类"><table class="analytics-category-table"><thead><tr><th>分类</th><th>帖子</th><th>作者</th><th>占比</th></tr></thead><tbody id="analyticsCategoryRows"></tbody></table></div>
                 <div id="analyticsCategoryEmpty" class="analytics-table-empty" hidden>没有符合条件的分类</div>
             </article>
-            <div class="analytics-bottom-grid">
+            <div class="analytics-bottom-grid" data-loading-content>
                 <article class="analytics-card"><div class="analytics-card-heading"><div><h2>作者贡献</h2><span class="analytics-caption">按发帖量分组</span></div></div><div id="analyticsAuthorDistribution" class="analytics-contribution"></div></article>
                 <article class="analytics-card"><div class="analytics-card-heading"><h2>活跃作者</h2><select id="analyticsAuthorLimit" class="input-field" aria-label="活跃作者数量">{[5, 10, 20, 50].map(limit => <option value={limit}>TOP {limit}</option>)}</select></div><div id="analyticsAuthorList" class="analytics-ranked-list" tabindex="0" role="region" aria-label="活跃作者排名，可滚动查看更多"></div></article>
             </div>
-            <article class="analytics-card analytics-activity">
+            <article class="analytics-card analytics-activity" data-loading-content>
                 <div class="analytics-card-heading"><div><h2>发帖时段</h2><span id="analyticsActivityScope" class="analytics-caption">按星期与小时汇总</span></div><div class="chart-heading-actions"><span id="analyticsActivityReadout" class="analytics-caption">—</span><ChartExpand target="analyticsActivity" label="发帖时段" /></div></div>
                 <div class="analytics-heatmap-scroll"><div id="analyticsActivity" class="analytics-heatmap" tabindex="0" role="group" aria-label="发帖时段热力图，点按或使用方向键查看数据，可横向滚动"></div></div>
                 <div class="analytics-heatmap-footer"><span id="analyticsPeak">—</span><span class="analytics-heatmap-scale">少<i data-level="0"></i><i data-level="1"></i><i data-level="2"></i><i data-level="3"></i><i data-level="4"></i>多</span></div>
             </article>
-            <article class="analytics-card"><div class="analytics-card-heading"><h2>热门标题词</h2><span id="analyticsTopicSample" class="analytics-caption">—</span></div><div id="analyticsTopics" class="analytics-topics"></div></article>
-            <details class="analytics-definitions"><summary>统计口径<Icon name="chevron-down" /></summary><p>所有图表按所选时区的发帖时间统计，日均值按所选自然日计算；分类列表包含所选时段内所有实际出现的分类。作者贡献按每位作者的发帖量分组。标题词按包含该词的帖子计数，至少出现 2 篇，仅分析最近 5,000 篇标题。</p></details>
+            <article class="analytics-card" data-loading-content><div class="analytics-card-heading"><h2>热门标题词</h2><span id="analyticsTopicSample" class="analytics-caption">—</span></div><div id="analyticsTopics" class="analytics-topics"></div></article>
+            <details class="analytics-definitions" data-loading-content><summary>统计口径<Icon name="chevron-down" /></summary><p>所有图表按所选时区的发帖时间统计，日均值按所选自然日计算；分类列表包含所选时段内所有实际出现的分类。作者贡献按每位作者的发帖量分组。标题词按包含该词的帖子计数，至少出现 2 篇，仅分析最近 5,000 篇标题。</p></details>
         </div>
     </section>
 );

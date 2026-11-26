@@ -1,6 +1,7 @@
 // 初始化页面 JavaScript
 document.addEventListener('DOMContentLoaded', function() {
   const initForm = document.getElementById('initForm');
+  const initFields = document.getElementById('initFields');
   const messageDiv = document.getElementById('initMessage');
 
   // 显示消息
@@ -15,32 +16,24 @@ document.addEventListener('DOMContentLoaded', function() {
     messageDiv.style.display = 'none';
   }
 
-  // 检查数据库状态
-  async function checkDatabaseStatus() {
+  async function prepareForm() {
     try {
-      const response = await fetch('/api/db/status');
+      const response = await fetch('/api/db/status', { signal: AbortSignal.timeout(15000) });
       const result = await response.json();
-      
-      if (result.success) {
-        const { tablesExist, initialized } = result.data;
-        
-        if (!tablesExist) {
-          showMessage('正在初始化数据库...', 'info');
-          await initializeDatabase();
-        } else if (initialized) {
-          showMessage('系统已经初始化，正在跳转到首页...', 'info');
-          setTimeout(() => {
-            window.location.href = '/';
-          }, 1500);
-          return false; // 阻止表单显示
-        }
+      if (!result.success) throw new Error('系统状态不可用');
+      const { tablesExist, initialized } = result.data;
+      if (initialized) {
+        window.location.replace('/');
+        return;
       }
-      return true; // 允许表单显示
+      const ready = tablesExist || await initializeDatabase();
+      initFields.toggleAttribute('data-unavailable', !ready);
     } catch (error) {
       console.error('检查数据库状态失败:', error);
       showMessage('检查系统状态失败，请刷新页面重试', 'error');
-      return false;
+      initFields.setAttribute('data-unavailable', '');
     }
+    initFields.setAttribute('aria-busy', 'false');
   }
 
   // 初始化数据库
@@ -69,13 +62,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  // 页面加载时检查数据库状态
-  checkDatabaseStatus().then(canShowForm => {
-    if (!canShowForm) {
-      initForm.style.display = 'none';
-      return;
-    }
-  });
+  prepareForm();
 
   // 表单提交处理
   initForm.addEventListener('submit', async function(e) {

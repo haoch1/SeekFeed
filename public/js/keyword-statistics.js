@@ -43,7 +43,7 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
         ++request;
         controller?.abort();
         busy = false;
-        el('keywordAnalysisResults').setAttribute('aria-busy', 'false');
+        el('keywordAnalysisOutput').setAttribute('aria-busy', 'false');
     }
     function compareVisible(index, visible) {
         el('analysisCompareField' + index).hidden = el('analysisCompare' + index).hidden = !visible;
@@ -320,9 +320,9 @@ window.SeekFeedKeywordAnalysis = function ({ apiRequest, escapeHtml: esc, getCat
     async function load(silent=false) {
         if(!config || collapsed)return;
         const id=++request;busy=true;lastLoad=Date.now();controller?.abort();controller=new AbortController();
-        if(!silent)el('keywordAnalysisResults').setAttribute('aria-busy','true');
+        if(!silent || !data)el('keywordAnalysisOutput').setAttribute('aria-busy','true');
         const result=await apiRequest('/api/stats/keywords?'+new URLSearchParams(config),{signal:controller.signal,silent:true});
-        if(id!==request)return;busy=false;el('keywordAnalysisResults').setAttribute('aria-busy','false');
+        if(id!==request)return;busy=false;el('keywordAnalysisOutput').setAttribute('aria-busy','false');
         if(!result?.success){el('keywordAnalysisStatus').dataset.error='true';el('keywordAnalysisStatus').textContent='分析读取失败，请重试。'+(data?'已保留上次结果。':'');return;}
         const active=data?.series[selected]?.term;
         const signature=value=>JSON.stringify(value&&{...value,to:null});

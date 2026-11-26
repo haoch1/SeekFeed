@@ -7,6 +7,11 @@ document.addEventListener("DOMContentLoaded", function () {
   const isLoggedIn = !!sessionId;
   const identity = window.SeekFeedIdentity;
   let currentAvatar = null, identityUsername = null, avatarBusy = false, identityVersion = 0;
+  let accountRequest;
+  function readAccount() {
+    accountRequest ??= apiRequest('/auth/account', { silent: true }).finally(() => { accountRequest = undefined; });
+    return accountRequest;
+  }
   function renderAccountAvatars() {
     identity.render();
     const remove = document.getElementById('avatarRemoveBtn');
@@ -36,7 +41,7 @@ document.addEventListener("DOMContentLoaded", function () {
     renderAccountAvatars();
     const refreshProfile = async () => {
       const version = identityVersion;
-      const result = await apiRequest('/auth/account', { silent: true });
+      const result = await readAccount();
       if (result?.success && version === identityVersion) showIdentity(result.data.username, sessionId, result.data.avatar);
     };
     if (isLoggedIn) refreshProfile();
@@ -255,6 +260,19 @@ document.addEventListener("DOMContentLoaded", function () {
   const isFeedPath = path => path === '/posts' || path === '/matched';
   const el = id => document.getElementById(id);
 
+  function setValue(element, value) {
+    element.textContent = value;
+    element.setAttribute('aria-busy', 'false');
+  }
+
+  function setFeedBusy(busy) {
+    el('feedResults').setAttribute('aria-busy', String(busy));
+    document.querySelectorAll('[data-feed-pagination]').forEach(pager => {
+      if (busy) pager.setAttribute('aria-busy', 'true');
+      else pager.removeAttribute('aria-busy');
+    });
+  }
+
   function saveFeedState(path) {
     const pendingSearch = searchTimer || creatorTimer;
     clearTimeout(searchTimer); clearTimeout(creatorTimer);
@@ -266,7 +284,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     postsController?.abort();
     ++postsRequest;
-    el('postsList').setAttribute('aria-busy', 'false');
+    setFeedBusy(false);
   }
 
   function restoreFeedState(path, keepInitialPosts = false) {
@@ -308,7 +326,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   async function loadPosts(page = currentPage, filters = currentFilters, quiet = false) {
     const list = el("postsList");
-    if (quiet && (list.getAttribute('aria-busy') === 'true' || list.contains(document.activeElement) || document.activeElement?.closest('[data-feed-pagination]'))) return;
+    if (quiet && (el('feedResults').getAttribute('aria-busy') === 'true' || list.contains(document.activeElement) || document.activeElement?.closest('[data-feed-pagination]'))) return;
     const anchor = quiet && window.scrollY > 0 ? [...list.querySelectorAll('.post-card')].find(item => item.getBoundingClientRect().bottom > 0) : null;
     const anchorId = anchor?.dataset.postId;
     const anchorTop = anchor?.getBoundingClientRect().top;
@@ -325,22 +343,23 @@ document.addEventListener("DOMContentLoaded", function () {
     requestedPage = page;
     currentFilters = { ...filters };
     if (!quiet) {
-      el("postsList").setAttribute("aria-busy", "true");
-      document.querySelectorAll('[data-feed-pagination]').forEach(pager => pager.setAttribute('aria-busy', 'true'));
+      el('feedError').hidden = true;
+      setFeedBusy(true);
     }
     const params = new URLSearchParams({ page: String(page), limit: "10",
       ...Object.fromEntries(Object.entries(currentFilters).filter(([, value]) => value !== "" && value !== undefined)) });
     const result = await apiRequest(`/api/posts?${params}`, { signal: postsController.signal, silent: quiet });
     if (request !== postsRequest) return;
-    el("postsList").setAttribute("aria-busy", "false");
-    document.querySelectorAll('[data-feed-pagination]').forEach(pager => pager.removeAttribute('aria-busy'));
+    setFeedBusy(false);
     if (!result?.success) {
       requestedPage = currentPage;
       if (list.querySelector('.post-card')) {
         if (!quiet) el('feedError').hidden = false;
         return;
       }
-      el("postsList").replaceChildren();
+      list.replaceChildren();
+      const total = el('overviewTotal');
+      if (!isLoggedIn && total.getAttribute('aria-busy') === 'true') setValue(total, '—');
       el("emptyState").style.display = "block";
       el("emptyState").querySelector(".empty-title").textContent = "加载失败";
       el("emptyState").querySelector(".empty-desc").textContent = "请检查网络连接，然后点击刷新重试。";
@@ -386,12 +405,12 @@ document.addEventListener("DOMContentLoaded", function () {
     el("emptyState").querySelector(".empty-title").textContent = activePath === '/matched' ? "暂无命中帖子" : "暂无文章";
     el("emptyState").querySelector(".empty-desc").textContent = Object.values(currentFilters).some(Boolean) ? "没有符合条件的帖子，试试清除筛选。" : "同步 RSS 后，最新帖子会显示在这里。";
     updatePagination(selected, totalPages, total);
-    if (!isLoggedIn && !Object.values(currentFilters).some(Boolean)) el("overviewTotal").textContent = total.toLocaleString();
+    if (!isLoggedIn && !Object.values(currentFilters).some(Boolean)) setValue(el('overviewTotal'), total.toLocaleString());
     return true;
   }
 
   async function refreshFeed() {
-    if (liveRefreshing || document.hidden || el('feedPage').hidden || Drawer.activeDrawer || el('postsList').getAttribute('aria-busy') === 'true') return;
+    if (liveRefreshing || document.hidden || el('feedPage').hidden || Drawer.activeDrawer || el('feedResults').getAttribute('aria-busy') === 'true') return;
     if (currentFilters.search || currentFilters.creator) return;
     liveRefreshing = true;
     try {
@@ -601,11 +620,12 @@ document.addEventListener("DOMContentLoaded", function () {
   }
   async function updateStats(quiet = false) {
     const result = await apiRequest("/api/stats/overview", { silent: quiet });
-    if (!result?.success) return;
-    const data = result.data;
-    const fields = { overviewTotal: data.total_posts,
-      overviewMatched: data.visible_matched_posts, overviewPushed: data.pushed_posts };
-    Object.entries(fields).forEach(([id, value]) => el(id).textContent = Number(value || 0).toLocaleString());
+    const fields = { overviewTotal: 'total_posts', overviewMatched: 'visible_matched_posts', overviewPushed: 'pushed_posts' };
+    for (const [id, key] of Object.entries(fields)) {
+      const field = el(id);
+      if (result?.success) setValue(field, Number(result.data[key] || 0).toLocaleString());
+      else if (field.getAttribute('aria-busy') === 'true') setValue(field, '—');
+    }
   }
   async function updateMonitor(quiet = false) {
     if (!isLoggedIn) return;
@@ -613,11 +633,11 @@ document.addEventListener("DOMContentLoaded", function () {
     const status = result?.data?.rssTask;
     const label = el("monitorStatus");
     label.dataset.state = !status ? "error" : status.lastError ? "error" : status.running ? "running" : "paused";
-    label.querySelector("span").textContent = !status ? "状态不可用" : status.busy ? "正在同步" : status.lastError ? "同步异常，等待重试" : status.running ? `监控中 · 每 ${status.intervalSeconds} 秒` : "自动监控已关闭";
+    setValue(label.querySelector('span'), !status ? '状态不可用' : status.busy ? '正在同步' : status.lastError ? '同步异常，等待重试' : status.running ? `监控中 · 每 ${status.intervalSeconds} 秒` : '自动监控已关闭');
     label.title = status?.lastError || "";
-    el("rssRunningStatus").textContent = !status ? "状态不可用" : status.lastError ? "同步异常，等待重试" : status.busy ? "正在同步" : status.running ? "运行中" : "已关闭";
-    el("rssRunningInterval").textContent = status?.intervalSeconds ? `每 ${status.intervalSeconds} 秒` : "—";
-    el("rssLastSuccess").textContent = status?.lastSuccessAt ? new Date(status.lastSuccessAt).toLocaleString("zh-CN", { hour12: false }) : "暂无记录";
+    setValue(el('rssRunningStatus'), !status ? '状态不可用' : status.lastError ? '同步异常，等待重试' : status.busy ? '正在同步' : status.running ? '运行中' : '已关闭');
+    setValue(el('rssRunningInterval'), status?.intervalSeconds ? `每 ${status.intervalSeconds} 秒` : '—');
+    setValue(el('rssLastSuccess'), status?.lastSuccessAt ? new Date(status.lastSuccessAt).toLocaleString('zh-CN', { hour12: false }) : '暂无记录');
     el("syncDetail").textContent = status?.lastSuccessAt ? `上次同步 ${new Date(status.lastSuccessAt).toLocaleString("zh-CN", { hour12: false })}` : "";
   }
 
@@ -649,6 +669,13 @@ document.addEventListener("DOMContentLoaded", function () {
   async function loadAnalytics(path) {
     try {
       if (!analytics) {
+        const overview = path === '/statistics';
+        const panel = el(overview ? 'analyticsContent' : 'subscriptionAnalytics');
+        const label = el(overview ? 'analyticsPeriodLabel' : 'subscriptionAnalyticsScope');
+        panel.setAttribute('aria-busy', 'true');
+        label.textContent = '';
+        label.setAttribute('aria-busy', 'true');
+        if (overview) el('analyticsError').hidden = true;
         await loadFeature('analytics');
         if (!analytics) {
           const instance = window.SeekFeedStatistics({ apiRequest, escapeHtml, renderIcon, getCategoryName, isLoggedIn });
@@ -663,34 +690,66 @@ document.addEventListener("DOMContentLoaded", function () {
       if (activePath !== path) return;
       if (path === '/statistics') {
         el('analyticsContent').setAttribute('aria-busy', 'false');
+        el('analyticsContent').setAttribute('data-unavailable', '');
         el('analyticsError').hidden = false;
-        el('analyticsPeriodLabel').textContent = '暂时无法读取统计';
+        setValue(el('analyticsPeriodLabel'), '暂时无法读取统计');
       } else {
-        el('subscriptionAnalyticsScope').textContent = '统计加载失败，请重新打开订阅管理。';
+        el('subscriptionAnalytics').setAttribute('aria-busy', 'false');
+        el('subscriptionAnalytics').setAttribute('data-unavailable', '');
+        setValue(el('subscriptionAnalyticsScope'), '统计加载失败，请重新打开订阅管理。');
       }
     }
   }
 
+  let loadingCollection = false;
   async function loadCollectionQuality() {
+    if (loadingCollection) return;
+    loadingCollection = true;
+    const panel = el('collectionQuality');
+    panel.setAttribute('aria-busy', 'true');
     try {
       await loadFeature('rss');
       await window.SeekFeedInsights.quality();
     } catch {
-      el('collectionQuality').textContent = '采集记录读取失败，请重新加载。';
+      el('collectionQualityResults').textContent = '采集记录读取失败，请重新加载。';
+    } finally {
+      loadingCollection = false;
+      panel.setAttribute('aria-busy', 'false');
+    }
+  }
+
+  const settingsReads = new Set();
+  async function loadSettings(ids, read) {
+    const key = ids[0];
+    if (settingsReads.has(key)) return;
+    settingsReads.add(key);
+    const panels = ids.map(el);
+    panels.forEach(panel => panel.setAttribute('aria-busy', 'true'));
+    let loaded = false;
+    try {
+      loaded = await read();
+    } finally {
+      settingsReads.delete(key);
+      for (const panel of panels) {
+        panel.toggleAttribute('data-unavailable', !loaded);
+        panel.setAttribute('aria-busy', 'false');
+      }
     }
   }
 
   // ============================================
   // RSS 配置
   // ============================================
-  async function loadRssConfig() {
+  function loadRssConfig() {
     loadCollectionQuality();
-    const result = await apiRequest("/api/rss/config");
-    if (result?.success) {
-      document.getElementById("rssUrl").value = result.data.rss_url || "";
-      document.getElementById("rssInterval").value = result.data.rss_interval_seconds || window.SeekFeedCadence.rssIntervalSeconds;
-      document.getElementById("rssProxy").value = result.data.rss_proxy || "";
-    }
+    return loadSettings(['rssConfigPanel'], async () => {
+      const result = await apiRequest('/api/rss/config');
+      if (!result?.success) return false;
+      el('rssUrl').value = result.data.rss_url || '';
+      el('rssInterval').value = result.data.rss_interval_seconds || window.SeekFeedCadence.rssIntervalSeconds;
+      el('rssProxy').value = result.data.rss_proxy || '';
+      return true;
+    });
   }
 
   function initRssConfig() {
@@ -742,53 +801,35 @@ document.addEventListener("DOMContentLoaded", function () {
   // ============================================
   // Telegram 配置
   // ============================================
-  async function loadTelegramConfig() {
-    const result = await apiRequest("/api/config");
-    if (result?.success) {
-      document.getElementById("botToken").value = result.data.bot_token || "";
-      document.getElementById("chatId").value = result.data.chat_id || "";
-      document.getElementById("stopPush").checked = result.data.stop_push === 1;
-      document.getElementById("onlyTitle").checked = result.data.only_title === 1;
-    }
-    if (!el("webhookUrl").value) el("webhookUrl").value = `${location.origin}/telegram/webhook`;
-    // 同时加载交互模式状态
-    await loadTelegramInteractionStatus();
+  function loadTelegramConfig() {
+    if (!el('webhookUrl').value) el('webhookUrl').value = `${location.origin}/telegram/webhook`;
+    loadTelegramInteractionStatus();
+    return loadSettings(['telegramDelivery'], async () => {
+      const result = await apiRequest('/api/config');
+      if (!result?.success) return false;
+      el('botToken').value = result.data.bot_token || '';
+      el('chatId').value = result.data.chat_id || '';
+      el('stopPush').checked = result.data.stop_push === 1;
+      el('onlyTitle').checked = result.data.only_title === 1;
+      return true;
+    });
   }
 
-  async function loadTelegramInteractionStatus() {
-    const result = await apiRequest("/api/webhook/status");
-    if (!result?.success) return;
-
-    const data = result.data;
-    const mode = data.telegram_mode || "disabled";
-    const pollingActive = data.polling_active || false;
-
-    // 同步模式选择器
-    const radio = document.querySelector(`input[name="telegramMode"][value="${mode}"]`);
-    if (radio) radio.checked = true;
-
-    // 切换面板显示
-    updateTelegramModeUI(mode, pollingActive);
-
-    // 更新状态面板
-    const statusPanel = document.getElementById("telegramStatusPanel");
-    if (statusPanel) {
-      statusPanel.style.display = "block";
-      const botStatus = document.getElementById("telegramBotStatus");
-      const webhookStatus = document.getElementById("telegramWebhookStatus");
-      const bindingStatus = document.getElementById("telegramBindingStatus");
-      if (botStatus) botStatus.textContent = data.connected ? "已连接" : data.configured ? "连接失败" : "未配置";
-      if (webhookStatus) {
-        if (pollingActive) {
-          webhookStatus.textContent = "Polling 运行中";
-        } else if (data.webhook_set) {
-          webhookStatus.textContent = "已设置";
-        } else {
-          webhookStatus.textContent = "未设置";
-        }
-      }
-      if (bindingStatus) bindingStatus.textContent = data.bound ? "已绑定" : "未绑定";
-    }
+  function loadTelegramInteractionStatus() {
+    return loadSettings(['telegramInteraction', 'telegramStatusPanel'], async () => {
+      const result = await apiRequest('/api/webhook/status');
+      if (!result?.success) return false;
+      const data = result.data;
+      const mode = data.telegram_mode || 'disabled';
+      const pollingActive = Boolean(data.polling_active);
+      const radio = document.querySelector(`input[name="telegramMode"][value="${mode}"]`);
+      if (radio) radio.checked = true;
+      updateTelegramModeUI(mode, pollingActive);
+      el('telegramBotStatus').textContent = data.connected ? '已连接' : data.configured ? '连接失败' : '未配置';
+      el('telegramWebhookStatus').textContent = pollingActive ? 'Polling 运行中' : data.webhook_set ? '已设置' : '未设置';
+      el('telegramBindingStatus').textContent = data.bound ? '已绑定' : '未绑定';
+      return true;
+    });
   }
 
   function updateTelegramModeUI(mode, pollingActive) {
@@ -991,6 +1032,7 @@ document.addEventListener("DOMContentLoaded", function () {
   // 订阅管理
   // ============================================
   let editingSubscription = null;
+  let subscriptionRequest = 0;
   const subscriptionRecords = new Map();
   function cancelSubscriptionEdit() {
     editingSubscription = null;
@@ -1032,9 +1074,18 @@ document.addEventListener("DOMContentLoaded", function () {
     el('subscriptionSearchEmpty').hidden = !items.length || visible > 0;
   }
   async function loadSubscriptions() {
+    const request = ++subscriptionRequest;
+    const panel = el('subscriptionResults');
+    panel.setAttribute('aria-busy', 'true');
     const result = await apiRequest("/api/subscriptions");
+    if (request !== subscriptionRequest) return;
     const container = el("subscriptionsList");
-    if (!result?.success) { container.textContent = "订阅加载失败，请刷新页面重试。"; return; }
+    panel.setAttribute('aria-busy', 'false');
+    if (!result?.success) {
+      container.innerHTML = '<p class="subscription-search-empty" role="status">订阅加载失败，请刷新页面重试。</p>';
+      el('subscriptionSearchEmpty').hidden = true;
+      return;
+    }
     subscriptionRecords.clear(); result.data.forEach(sub => subscriptionRecords.set(sub.id, sub));
     container.innerHTML = result.data.length ? result.data.map(sub => `<div class="subscription-item ${sub.enabled === 0 ? "paused" : ""}" data-id="${sub.id}"><div class="subscription-description"><div class="subscription-id">订阅 <span>#${sub.id}</span></div><div class="subscription-keywords">${[sub.keyword1, sub.keyword2, sub.keyword3].filter(Boolean).map(word => `<span class="tag tag-blue">${escapeHtml(word)}</span>`).join("") || '<span class="tag">按作者 / 分类订阅</span>'}</div><div class="subscription-filters"><span class="subscription-state">${sub.enabled === 0 ? "已暂停" : "监控中"}</span>${sub.creator ? `<span>作者 ${escapeHtml(sub.creator)}</span>` : ""}${sub.category ? `<span>${escapeHtml(getCategoryName(sub.category))}</span>` : ""}</div>${sub.exclude_keywords ? `<div class="subscription-exclusions">屏蔽：${escapeHtml(sub.exclude_keywords)}</div>` : ""}</div><div class="subscription-controls"><button type="button" class="btn btn-secondary btn-xs edit-sub">${renderIcon('edit')}编辑</button><button class="btn btn-secondary btn-xs toggle-sub" data-enabled="${sub.enabled === 0 ? 1 : 0}">${renderIcon(sub.enabled === 0 ? 'play' : 'pause')}${sub.enabled === 0 ? "恢复" : "暂停"}</button><button class="btn btn-danger btn-xs delete-sub">${renderIcon('trash')}删除</button></div></div>`).join("") : '<div class="empty-state-small"><div class="empty-title">还没有订阅</div><p class="form-hint">添加关键词、作者或分类，开始接收有价值的动态。</p></div>';
     filterSubscriptions();
@@ -1081,9 +1132,9 @@ document.addEventListener("DOMContentLoaded", function () {
   }
   async function loadMatchingScope() {
     const result = await apiRequest('/api/config');
-    el('subscriptionMatchScope').textContent = result?.success
+    setValue(el('subscriptionMatchScope'), result?.success
       ? result.data.only_title ? '当前范围：仅标题。' : '当前范围：标题、RSS 摘要、作者和分类。'
-      : '匹配范围可在 Telegram 设置中查看。';
+      : '匹配范围可在 Telegram 设置中查看。');
   }
   function initSubscriptions() {
     el('cancelSubscriptionEdit').addEventListener('click', cancelSubscriptionEdit);
@@ -1217,22 +1268,27 @@ document.addEventListener("DOMContentLoaded", function () {
     history.scrollRestoration = 'manual';
     addEventListener('popstate', () => navigate(location.pathname, false));
   }
-  async function loadAccount() {
+  function loadAccount() {
     const version = identityVersion;
-    const result = await apiRequest('/auth/account');
-    if (result?.success) {
+    loadSettings(['accountDetails', 'accountSessionSettings'], async () => {
+      const result = await readAccount();
+      if (!result?.success) return false;
       el('accountUsername').value = result.data.username;
       if (version === identityVersion) showIdentity(result.data.username, sessionId, result.data.avatar);
       el('sessionHours').value = String(result.data.session_expiry_hours);
       window.SeekFeedControls.refreshSelects();
-    }
-    const response = await apiRequest('/auth/sessions');
-    if (!response?.success) return;
-    el('sessionsList').innerHTML = response.data.map(session => {
-      const agent = session.userAgent || '未知浏览器';
-      const browser = /Edg/.test(agent) ? 'Microsoft Edge' : /Firefox/.test(agent) ? 'Firefox' : /Chrome/.test(agent) ? 'Chrome' : /Safari/.test(agent) ? 'Safari' : '浏览器 / 客户端';
-      return `<div class="session-item"><span class="session-icon">${renderIcon('user')}</span><div class="session-details"><strong>${browser}${session.current ? '<span class="tag tag-blue">当前设备</span>' : ''}</strong><p class="session-ip">登录 IP · ${escapeHtml(session.ipAddress || "未记录（重新登录后记录）")}</p><p>登录于 ${escapeHtml(new Date(session.createdAt).toLocaleString('zh-CN'))}</p><p>到期于 ${escapeHtml(new Date(session.expiresAt).toLocaleString('zh-CN'))}</p></div><button type="button" class="btn btn-secondary btn-xs revoke-session" data-session-id="${escapeHtml(session.id || '')}" aria-label="退出${escapeHtml(session.current ? '当前设备' : browser + '，' + (session.ipAddress || '未记录 IP'))}">退出</button></div>`;
-    }).join('');
+      return true;
+    });
+    return loadSettings(['sessionsList'], async () => {
+      const result = await apiRequest('/auth/sessions');
+      if (!result?.success) return false;
+      el('sessionItems').innerHTML = result.data.map(session => {
+        const agent = session.userAgent || '未知浏览器';
+        const browser = /Edg/.test(agent) ? 'Microsoft Edge' : /Firefox/.test(agent) ? 'Firefox' : /Chrome/.test(agent) ? 'Chrome' : /Safari/.test(agent) ? 'Safari' : '浏览器 / 客户端';
+        return `<div class="session-item"><span class="session-icon">${renderIcon('user')}</span><div class="session-details"><strong>${browser}${session.current ? '<span class="tag tag-blue">当前设备</span>' : ''}</strong><p class="session-ip">登录 IP · ${escapeHtml(session.ipAddress || "未记录（重新登录后记录）")}</p><p>登录于 ${escapeHtml(new Date(session.createdAt).toLocaleString('zh-CN'))}</p><p>到期于 ${escapeHtml(new Date(session.expiresAt).toLocaleString('zh-CN'))}</p></div><button type="button" class="btn btn-secondary btn-xs revoke-session" data-session-id="${escapeHtml(session.id || '')}" aria-label="退出${escapeHtml(session.current ? '当前设备' : browser + '，' + (session.ipAddress || '未记录 IP'))}">退出</button></div>`;
+      }).join('') || '<p class="form-hint">暂无活跃设备。</p>';
+      return true;
+    });
   }
   function initAccount() {
     const upload = el('avatarUploadBtn'), remove = el('avatarRemoveBtn'), fileInput = el('avatarFile');
